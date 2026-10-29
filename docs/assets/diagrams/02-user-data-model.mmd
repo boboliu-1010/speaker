@@ -1,0 +1,16 @@
+erDiagram
+    accounts {
+        TEXT user_id PK
+        TEXT google_sub UK "旧用户可空"
+        TEXT email UK
+        TEXT display_name
+        TEXT status "active 或 disabled"
+        INTEGER auth_version
+        INTEGER last_login_at "可空"
+        INTEGER created_at
+        INTEGER updated_at
+    }
+    accounts ||--o{ browser_sessions : sessions
+    accounts ||--o{ device_preferences : preferences
+    accounts ||--o{ recordings : owns
+    accounts |o--o{ audit_events : audit_scope

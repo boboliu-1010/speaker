@@ -11,73 +11,33 @@ CREATE TABLE schema_migrations (
   version INTEGER PRIMARY KEY, applied_at INTEGER NOT NULL, checksum TEXT NOT NULL
 );
 
+-- 基本用户：内部 user_id 负责数据归属，google_sub 仅保存已验证身份的稳定标识。
+-- 没有邀请、组织、密码或 OAuth 流程表；旧用户允许 google_sub 为空以便迁移。
 CREATE TABLE accounts (
   user_id TEXT PRIMARY KEY, -- 对应原 registry.users.id，跨库不声明 FK
-  email TEXT NOT NULL UNIQUE COLLATE NOCASE,
-  password_hash TEXT, -- Google-only 可空；算法/参数编码在 hash 字符串中
-  status TEXT NOT NULL CHECK(status IN ('invited','active','disabled')),
-  auth_version INTEGER NOT NULL DEFAULT 1 CHECK(auth_version > 0),
+  google_sub TEXT UNIQUE CHECK(google_sub IS NULL OR length(google_sub) BETWEEN 1 AND 255),
+  email TEXT NOT NULL UNIQUE COLLATE NOCASE
+    CHECK(email=trim(email) AND length(email) BETWEEN 3 AND 254 AND instr(email,'@')>1),
+  display_name TEXT NOT NULL DEFAULT '' CHECK(length(display_name)<=100),
+  status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','disabled')),
+  auth_version INTEGER NOT NULL DEFAULT 1 CHECK(auth_version>0),
+  last_login_at INTEGER,
   created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
 );
-
-CREATE TABLE account_tokens (
-  id TEXT PRIMARY KEY,
-  user_id TEXT NOT NULL REFERENCES accounts(user_id),
-  purpose TEXT NOT NULL CHECK(purpose IN ('invite','password_reset')),
-  token_digest TEXT NOT NULL UNIQUE CHECK(length(token_digest)=64),
-  expected_email TEXT NOT NULL COLLATE NOCASE,
-  expires_at INTEGER NOT NULL, used_at INTEGER, revoked_at INTEGER,
-  created_at INTEGER NOT NULL,
-  CHECK(expires_at > created_at)
-);
-CREATE INDEX account_tokens_user ON account_tokens(user_id, purpose, expires_at);
-
-CREATE TABLE oauth_identities (
-  id TEXT PRIMARY KEY,
-  user_id TEXT NOT NULL REFERENCES accounts(user_id),
-  provider TEXT NOT NULL CHECK(provider='google'),
-  issuer TEXT NOT NULL CHECK(issuer='https://accounts.google.com'),
-  subject TEXT NOT NULL CHECK(length(subject) BETWEEN 1 AND 255),
-  provider_email TEXT NOT NULL,
-  email_verified INTEGER NOT NULL CHECK(email_verified=1),
-  created_at INTEGER NOT NULL, last_login_at INTEGER,
-  UNIQUE(issuer,subject), UNIQUE(user_id,provider)
-);
+CREATE INDEX accounts_status ON accounts(status,created_at,user_id);
 
 CREATE TABLE browser_sessions (
   token_digest TEXT PRIMARY KEY CHECK(length(token_digest)=64),
   user_id TEXT NOT NULL REFERENCES accounts(user_id),
   auth_version INTEGER NOT NULL CHECK(auth_version>0),
-  method TEXT NOT NULL CHECK(method IN ('password','google')),
   csrf_digest TEXT NOT NULL CHECK(length(csrf_digest)=64),
   created_at INTEGER NOT NULL, last_seen_at INTEGER NOT NULL,
   idle_expires_at INTEGER NOT NULL, absolute_expires_at INTEGER NOT NULL,
-  reauthenticated_at INTEGER, revoked_at INTEGER, source_label TEXT,
+  revoked_at INTEGER, source_label TEXT,
   CHECK(idle_expires_at<=absolute_expires_at),
   UNIQUE(token_digest,user_id)
 );
 CREATE INDEX sessions_user ON browser_sessions(user_id, revoked_at, absolute_expires_at);
-
-CREATE TABLE oauth_flows (
-  id TEXT PRIMARY KEY,
-  state_digest TEXT NOT NULL UNIQUE CHECK(length(state_digest)=64),
-  nonce_digest TEXT NOT NULL CHECK(length(nonce_digest)=64),
-  browser_digest TEXT NOT NULL CHECK(length(browser_digest)=64),
-  verifier_ciphertext BLOB, -- 密文；加密密钥不在数据库内
-  purpose TEXT NOT NULL CHECK(purpose IN ('login','link','reauth')),
-  target_user_id TEXT REFERENCES accounts(user_id),
-  source_session_digest TEXT,
-  source_auth_version INTEGER,
-  invitation_id TEXT REFERENCES account_tokens(id),
-  return_route TEXT NOT NULL CHECK(return_route IN ('recordings','onboarding','settings')),
-  state TEXT NOT NULL CHECK(state IN ('pending','exchanging','completed','failed','expired')),
-  created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL, consumed_at INTEGER,
-  CHECK(expires_at>created_at),
-  CHECK(purpose='login' OR (target_user_id IS NOT NULL AND source_session_digest IS NOT NULL)),
-  FOREIGN KEY(source_session_digest,target_user_id)
-    REFERENCES browser_sessions(token_digest,user_id)
-);
-CREATE INDEX oauth_flows_expiry ON oauth_flows(state,expires_at);
 
 CREATE TABLE device_preferences (
   device_id TEXT NOT NULL, -- 原 registry device ID

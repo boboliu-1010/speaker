@@ -2,7 +2,6 @@ flowchart TB
     Clip["ReSpeaker Clip"]
     Browser["用户浏览器"]
     App["现有 App"]
-    Google["Google 身份服务"]
     AI["已配置的私有 ASR / 纪要服务"]
     subgraph Boa["一个 Boa 常驻 Python 进程"]
         HTTP["Web / API：会话、归属与删除门禁"]
@@ -21,7 +20,6 @@ flowchart TB
     Clip -->|"Wi-Fi / DTLS UDP 9528"| DTLS
     HTTP -->|"鉴权后访问"| Business
     HTTP -->|"鉴权后读取"| Derived
-    HTTP <-->|"OAuth 登录"| Google
     DTLS --> Raw
     DTLS --> Registry
     Registry -->|"outbox"| Jobs

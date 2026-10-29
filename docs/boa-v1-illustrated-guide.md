@@ -9,7 +9,7 @@
 | 想了解什么 | 阅读顺序 |
 |---|---|
 | 产品/项目负责人：系统做什么，先交付什么 | [1 总览](#overview) → [5 录音解码](#decode) → [12 实施顺序](#implementation) |
-| 后端开发：谁能读，怎样入库，失败怎样恢复 | [2 登录](#oauth) → [4 上传](#ingest) → [6 双写](#publication) → [9 删除恢复](#deletion) → [10 数据模型](#data) |
+| 后端开发：谁能读，怎样入库，失败怎样恢复 | [2 基本用户](#users) → [4 上传](#ingest) → [6 双写](#publication) → [9 删除恢复](#deletion) → [10 数据模型](#data) |
 | Web 开发：页面何时展示哪种状态 | [3 设备绑定](#onboarding) → [7 结果版本](#versions) → [8 播放鉴权](#playback) |
 | 测试/运维：完成的依据与恢复顺序 | 各节“验收判据” → [11 迁移恢复](#migration) → [12 实施顺序](#implementation) |
 
@@ -23,48 +23,42 @@ Server 接收并保管设备录音，Web 管理用户和设备、播放原声并
 
 | 链路 | 输入 → 处理 → 输出 | 边界 |
 |---|---|---|
-| 用户链路 | 浏览器 → HTTPS API → 当前用户的录音、设备与纪要 | Google 只证明登录身份，不授予其他用户数据权限 |
+| 用户链路 | 浏览器 → HTTPS API → 当前用户的录音、设备与纪要 | 当前 user_id 决定数据归属，不引入组织或邀请权限 |
 | 设备链路 | Clip → DTLS 接收 → 原件持久收件与归属索引 | 收件成功不等于整段会议完整，也不等于 AI 完成 |
 | 后台链路 | 已收件原件 → 任务调度 → WAV、MP3、全文与纪要 | 一次仅一个活动处理任务；解码/模型推理不阻塞接收线程 |
 
-**关键边界：** 一个长期运行的 Boa Python 进程，媒体工具可以是短期子进程；私有模型服务独立于主进程。文件存本机持久卷，SQLite 存结构化信息。双写不等于异机备份，Google 登录也不包含 Google Drive 转存。
+**关键边界：** 一个长期运行的 Boa Python 进程，媒体工具可以是短期子进程；私有模型服务独立于主进程。文件存本机持久卷，SQLite 存结构化信息。双写不等于异机备份，不引入云盘转存。
 
 **完成判据：** 两个 HTTPS 入口共用身份和数据目录，后台任务只启动一次；用户隔离、接收和处理分别验证。
 
 对应任务：T01–T03、T08、T21。[图源](assets/diagrams/01-system-architecture.mmd)。
 
-<a id="oauth"></a>
+<a id="users"></a>
 
-## 2. Google 登录：先验证身份，再建立 Boa 会话
+## 2. 基本用户：一个稳定 ID 管住本人的设备与录音
 
-用户始终使用 Boa 自己的会话访问录音。Google 身份通过 `(issuer, sub)` 映射到原用户 ID；邮箱不是账户合并依据。
+新版原型是 Google 登录入口、录音/设备两项导航和账号退出菜单。本轮只设计基本用户表，不展开 OAuth 流程，不建邀请、组织、密码或多身份关系。
 
-**操作前准备：** 部署者配置测试/生产各自的 OAuth client、精确回调域名和端口、私密 secret 文件；用户已有有效 Google 绑定，或持有效邀请。Console 配置缺失与代码错误分别排查。
+![图 2：基本用户与会话、录音的关系](assets/diagrams/02-user-data-model.svg)
 
-![图 2：Google OAuth/OIDC 登录时序](assets/diagrams/02-google-oauth.svg)
-
-| 步骤 | 谁做什么 | 必须留下的结果/校验 |
+| 字段组 | accounts 中的字段 | 作用 |
 |---|---|---|
-| 1 发起 | Web 同源 POST start | 防登录 CSRF；目的只能为 login/link/reauth |
-| 2 建流程 | Server 生成 state、nonce、PKCE verifier | flow 10 分钟有效；摘要、verifier 密文、浏览器绑定可查 |
-| 3 跳转 | 临时 Lax Cookie + Google 授权码流程 | 仅 openid/email；正式 Boa Cookie 仍 Strict |
-| 4 回调 | Server 校验 state、浏览器绑定，并 CAS 领取 flow | 重复 callback 不能同时换取或提交身份 |
-| 5 换令牌 | 后端向固定 Google endpoint 交换 code | 10 秒超时；token 不进浏览器、日志或长期数据库 |
-| 6 验身份 | 验证签名、issuer、audience、有效期、nonce、verified email | 无效声明拒绝；规范化 issuer 后按 sub 找身份 |
-| 7 判资格 | 核对受邀账户、既有绑定及账户状态 | 无邀请不注册；同邮箱不同 sub 不自动合并 |
-| 8 建会话 | 事务提交身份、邀请消费、会话、审计 | 成功后 303 回站内页面，清除流程敏感字段 |
+| 稳定归属 | user_id、google_sub | 内部 owner 主键与唯一的已验证 Google 身份标识；旧用户迁移 google_sub 可空 |
+| 页面资料 | email、display_name | 展示邮箱和昵称；头像首字母可派生，不增头像配置 |
+| 最少状态 | status、auth_version | 可用/禁用及技术会话撤销版本；不是组织角色 |
+| 时间 | created_at、updated_at、last_login_at | 创建、资料修改与最近成功登录时间 |
 
-三种操作不能混用：
+**关键步骤：**
 
-- **login：** 允许已绑定 Google 身份登录，或持有效邀请激活未激活账户。
-- **link：** 用户先完成最近认证，再绑定未归属他人的 Google 身份；不转移数据，不自动延长最近认证时间。
-- **reauth：** Google 返回身份必须与当前账户**已绑定的同一个 issuer/sub** 匹配，才更新最近认证时间。
+1. 上游完成身份验证后，把已验证身份交给用户资料服务；本轮不定义授权跳转和令牌交换。
+2. 按 google_sub 查找用户；首次生成内部 user_id，后续沿用，不按邮箱自动合并。
+3. 录音、设备、导出和会话均关联这个 user_id，用户不能指定其他 owner。
+4. 账号菜单显示邮箱/名字并提供退出；退出撤销会话，保留设备和历史录音。
+5. 旧用户迁移保留旧 user_id；google_sub 尚未核验时不猜填，不凭同邮箱认领旧录音。
 
-**失败恢复：** 用户取消、state 错误、flow 过期或 code 交换失败时返回可重新发起的登录页；不重复使用可能已消费的 code。Google 暂不可用时，既有 Boa 会话继续按自身有效期运行。
+**验收判据：** 用户 ID/身份唯一、无邀请状态、空昵称正常展示、禁用/退出后不可读、跨用户数据不可见。详细字段与约束见 [用户表设计](superpowers/specs/2026-10-29-boa-server-web-v1-design.md#user-model)。
 
-**验收判据：** 真实测试账户完成登录；错误 state/nonce/audience、重复回调、不同账号重新认证、绑定中途撤销会话均被拒绝。模拟签名测试与真实 Google 联调分别记证据。
-
-对应任务：T03–T05。[完整认证设计](superpowers/specs/2026-10-29-boa-server-web-v1-design.md#google-oauth) · [图源](assets/diagrams/02-google-oauth.mmd)。
+对应任务：T03–T05。[图源](assets/diagrams/02-user-data-model.mmd)。
 
 <a id="onboarding"></a>
 
@@ -76,7 +70,7 @@ Web 通过蓝牙配置用户已分配的设备。设备名称只便于选择，�
 
 | 步骤 | 输入与动作 | 成功证据 |
 |---|---|---|
-| 1 管理员准备 | 登记完整 UID，将设备分配给受邀用户 | registry 存在有效 binding/epoch；交接清理锁已满足 |
+| 1 管理员准备 | 登记完整 UID，核验设备对应的用户归属 | registry 存在有效 binding/epoch；交接清理锁已满足 |
 | 2 用户连接 | 用户主动点击浏览器 BLE 选择器 | Web 读到实际硬件 UID 和协议能力 |
 | 3 请求配置 | 当前用户向 Server 请求该设备绑定配置 | owner、UID、binding/epoch 一致，非按短名称猜测 |
 | 4 写入设备 | BLE 写上传目标与凭证，用户填写单 Wi-Fi | Wi-Fi 密码仅在页面/设备链路内，不发到 Boa API |
@@ -279,7 +273,7 @@ Clip 文件是 `uint16 小端长度 + raw Opus 包`，不是已有 Ogg 文件。
 
 | 问题 | 主记录 | 约束/定位方式 |
 |---|---|---|
-| 用户是谁 | accounts + oauth_identities | 原 user_id 保留；issuer/sub 唯一 |
+| 用户是谁 | accounts | 原 user_id 保留；google_sub 唯一 |
 | 录音属于谁 | recordings + recording_segments | owner、来源 session、绑定 epoch 决定归属 |
 | 某次处理用了什么 | processing_runs + run_input_segments | 输入快照、hash、样本偏移；run/segment 必须同录音 |
 | 物理文件在哪 | storage_objects | 路径、独立 hash/size、格式、ready/missing 等状态 |
@@ -326,17 +320,17 @@ Clip 文件是 `uint16 小端长度 + raw Opus 包`，不是已有 Ogg 文件。
 
 | 里程碑 | 完成什么 | 必须拿到的验收证据 |
 |---|---|---|
-| M1 账户与页面 | T00–T05 | 数据底座、隔离、邀请/密码、Google 回调、三个主导航 |
+| M1 账户与页面 | T00–T05 | 数据底座、基本用户、会话隔离、两个导航与账号退出 |
 | M2 第一条业务闭环 | T06–T14 | 上传→业务入库→raw/WAV 双保留→MP3→播放→删除恢复；崩溃重启能恢复 |
 | M3 AI 产品能力 | T15–T19 | 实际私有服务转写/纪要、原文引用、搜索、TXT/DOCX 和页面状态 |
 | M4 候选发布 | T20–T23 | 设备配置、受控手动 OTA、打包、迁移/恢复、容量和分层验收 |
 
-每项任务按“失败用例 → 看到失败 → 最小实现 → 目标测试通过 → 独立提交”执行。Google、AI、设备和目标主机未准备好时，明确标记哪一层尚未验收，不将模拟成功当作真实完成。
+每项任务按“失败用例 → 看到失败 → 最小实现 → 目标测试通过 → 独立提交”执行。AI、设备和目标主机未准备好时，明确标记哪一层尚未验收，不将模拟成功当作真实完成。
 
 **关键交付检查：**
 
 1. raw ACK、录音完整性、WAV 发布、播放 ready、全文 ready、纪要 ready 分别有状态和证据。
-2. 单元/集成测试、浏览器操作、Google 联调、真实 Clip 上传、真实 OTA、AI 样本质量、远程部署、备份恢复分别报告。
+2. 单元/集成测试、浏览器操作、真实 Clip 上传、真实 OTA、AI 样本质量、远程部署、备份恢复分别报告。
 3. 不扩展为无固件支持的远程设置、多 Wi-Fi、自动升级或“失败自动恢复”承诺。
 
 继续实施请按 [完整任务计划](superpowers/plans/2026-10-29-boa-server-web-v1-implementation-plan.md) 的 T00–T23 执行，而不是仅按图跳过测试和迁移步骤。[图源](assets/diagrams/12-implementation-order.mmd)。

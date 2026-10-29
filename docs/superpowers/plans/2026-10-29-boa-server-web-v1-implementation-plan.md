@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 交付带 Google 登录、SQLite 产品数据、可靠录音解码双写、网页播放/全文/纪要及设备管理的第一版 Boa Voice。
+**Goal:** 交付带基本用户、SQLite 产品数据、可靠录音解码双写、网页播放/全文/纪要及设备管理的第一版 Boa Voice。
 
 **Architecture:** 沿用一个 Python 常驻进程、现有 DTLS 接收器、SQLite 和原生静态 Web。原件接收是事实来源，业务库通过持久事件及对账建立投影；解码工具采用受控子进程，AI 使用可配置私有端点。先建立权限、删除屏障、任务 fencing 和文件发布恢复，再接产品页面。
 
-**Tech Stack:** 现有 Python 3.12+ / FastAPI / Uvicorn / SQLite / pyOpenSSL / cryptography / 原生 ES modules / Node test runner / pytest；OAuth、媒体工具和 DOCX 依赖仅在所属任务引入并锁定。
+**Tech Stack:** 现有 Python 3.12+ / FastAPI / Uvicorn / SQLite / pyOpenSSL / cryptography / 原生 ES modules / Node test runner / pytest；媒体工具和 DOCX 依赖仅在所属任务引入并锁定。
 
 **Spec:** [完整设计](../specs/2026-10-29-boa-server-web-v1-design.md)、[业务库参考 SQL](../specs/2026-10-29-boa-v1-business-schema.sql)、[registry 扩展参考 SQL](../specs/2026-10-29-boa-v1-registry-additions.sql)。参考 SQL 不是可直接应用到旧库的迁移。
 
@@ -20,23 +20,23 @@
 
 ## Global Constraints
 
-- 本文仅拆开发任务；尚未执行产品代码、数据迁移、Google 授权、固件刷写或部署。
+- 本文仅拆开发任务；尚未执行产品代码、数据迁移、固件刷写或部署。
 - 现有实现基线为 [`BofAI/reSpeaker_Clip`](https://github.com/BofAI/reSpeaker_Clip)（本机检出 `/Users/bobo/code/respeaker-boa-integration`）；本仓库 [`boboliu-1010/speaker`](https://github.com/boboliu-1010/speaker) 先管理设计/计划。执行时先使用 using-git-worktrees 技能建立隔离工作区，再将这三份设计附件和本计划的固定提交快照带入实施分支；在实施记录中注明文档仓库 commit，避免两份文档独立漂移，不在两个目录各维护一份产品实现。
 - 保留 `python -m server`、9528 API/UDP DTLS、9529 Web、单数据根目录锁；不得多 worker 共用数据目录。
 - 复用旧用户 ID、binding/epoch、raw 路径、固件索引、DTLS v3 帧格式和持久 ACK 语义；不等待解码/AI 才确认 raw 收件。
 - 每连接 `foreign_keys=ON`、`busy_timeout=5000`、`synchronous=FULL`；业务库 WAL；新时间字段 UTC Unix 毫秒，旧库秒字段只在桥接时转换。
-- 受邀账户；Google 身份键 issuer/sub；仅 `openid email`；不申请 Drive/Gmail 或 refresh token；不得按同邮箱自动合并。
-- 正式会话 Secure/HttpOnly/Strict，闲置 30 天、绝对 90 天；OAuth 临时浏览器 Cookie Lax，flow 10 分钟；敏感绑定操作要求 5 分钟内重新认证。
+- 按新版原型只保留基本用户：accounts 的内部 user_id 与唯一 google_sub；无邀请、组织、本地密码或多身份表；OAuth 协议流程不在本轮范围。
+- 正式会话 Secure/HttpOnly/Strict，闲置 30 天、绝对 90 天；会话与用户资料分表，退出只撤当前会话，不删用户/设备/录音。
 - 原件与片段 WAV 双保留；WAV 默认 16 kHz / mono / signed PCM16 LE；播放 MP3；raw 单段 8 MiB，连续快照建议上限 8 小时。
 - 旧固件 session 完整性未知；静默 10 分钟仅触发处理，不证明完整；缺号暂停整段 AI，禁止补静音伪造连续录音。
 - 单个活动处理任务，租约 60 秒、每 15 秒续期；初次失败后最多重试 3 次，间隔 30 秒/2 分钟/10 分钟。
 - 原件不因 AI 失败删除；回收站 7 天；会话 WAV 在转写完成 7 天后可回收；导出 24 小时过期。
-- 不提交录音、私钥、token、邀请链接、OAuth secret；不扩展为团队协作、公开分享、自动 OTA 或固件协议开发。
+- 不提交录音、私钥、token、登录凭证；不扩展为团队协作、公开分享、自动 OTA 或固件协议开发。
 
 ## Review Focus
 
 1. 历史数据库的部分迁移、缺目录和时间单位混杂：必须停在可恢复状态，不能把秒解释为毫秒。归属 T01/T06/T22。
-2. 多标签 OAuth、浏览器返回/重复回调、登录中途禁用账户：不得串号、误绑定或刷新被撤销会话。归属 T03/T04/T05。
+2. 同邮箱不同身份、重复用户同步、旧用户映射和多标签退出：不得串号、误合并或恢复已撤销会话。归属 T03/T04/T05。
 3. 删除/恢复与在途收件、后台发布、旧 outbox 乱序并发：迟到片段和旧 lease 不得复活数据。归属 T02/T06/T09/T14。
 4. 压缩文件体积小但解码极长、截断包、错误声道、MP3 编码延迟：有界失败且全文 seek 不漂移。归属 T10/T11/T13。
 5. AI 返回貌似成功的畸形 JSON、越界引用或旧输入结果：不能发布错误纪要或覆盖新版本，原声始终可用。归属 T15/T16/T19。
@@ -50,7 +50,7 @@
 | 阶段 | 任务 | 交付结果 | 必须前置 |
 |---|---|---|---|
 | A 基础与权限 | T00 基线、T01 迁移、T02 删除屏障 | 不改协议的数据底座与统一读取门禁 | 按编号 |
-| B 登录 | T03 账户、T04 Google、T05 Web 框架 | 邀请登录并进入三个主导航 | T01/T02；Google 配置只阻塞真实联调 |
+| B 用户 | T03 基本用户/会话、T04 用户约束与旧 ID 映射、T05 Web 框架 | 两个主导航与账号退出 | T01/T02；不含 OAuth 协议开发 |
 | C 收件投影 | T06 事件、T07 聚合 | raw 上传自动进入业务录音 | T01/T02/T03 |
 | D 解码播放 | T08 任务、T09 发布、T10 解码、T11 合并、T12 API、T13 Web | raw→WAV→MP3→网页播放闭环 | T06/T07；其余按编号 |
 | E 数据生命周期 | T14 删除/恢复/清理 | 已删除内容不会被迟到上传或任务复活 | T02/T06/T09/T12 |
@@ -62,7 +62,6 @@
 
 **外部前置项，在 T00 登记并提前准备：**
 
-- Google 测试 OAuth client、精确回调域名/端口、同意屏幕、测试账户与服务器出网；secret 通过私密文件提供。
 - 经授权的录音样本、至少一个可操作 Clip、BLE 浏览器环境；升级固件需具备正确签名和兼容 profile。
 - 私有 ASR 与纪要端点、模型、认证、同步/异步协议和样本质量基准。未提供时先做 adapter/契约测试，不能宣称 P3 AI 验收完成。
 - 发布主机、持久卷和备份目标；这些只影响最终部署/恢复实测，不阻塞离线开发。
@@ -76,13 +75,13 @@
 | 路径 | 职责 |
 |---|---|
 | `server/boa/product/{__init__,contracts,db,migrations}.py` 与 `migrations/*.sql` | 产品装配、公共数据类型、数据库、版本化迁移 |
-| `product/{access,accounts,auth,oauth}.py` | 统一门禁、邀请/密码、会话、Google 身份 |
+| `product/{access,accounts,auth}.py` | 统一门禁、基本用户资料、会话与旧 ID 映射 |
 | `product/{events,recordings,jobs,publication}.py` | 来源同步、聚合、持久任务、文件发布日志 |
 | `product/{decode,media,media_http,idempotency}.py` | raw 解码、连续时间轴/MP3、鉴权 Range、HTTP 幂等键 |
 | `product/{lifecycle,asr,summary,search,exports,audit,devices,admin}.py` | 对应产品能力 |
 | `server/boa/{boa_app,registry,receiver,web_sessions,frontend,manage,run}.py` | 接入新能力，保持旧调用兼容 |
 | `server/storage/{app,store}.py` | App 完成收件通知、删除门禁；不改变旧上传契约 |
-| `server/web/product/index.html`、`style.css` 及 `{app,api-client,auth,router,polling,recordings-list,recording-detail,player,insights,devices,settings,admin}.mjs` | 新产品 Web 页面、样式和功能模块 |
+| `server/web/product/index.html`、`style.css` 及 `{app,api-client,auth,router,polling,recordings-list,recording-detail,player,insights,devices,account-menu}.mjs` | 新产品 Web 页面、样式和功能模块 |
 | `server/web/{app,clip-config,clip-binding,binding-configuration,smp}.mjs` | 复用旧 BLE/固件模块，最小必要适配 |
 | `scripts/{migrate-boa-v1,verify-boa-v1,backup-boa-v1}.py` | 隔离迁移、验收、停机快照工具 |
 | `server/requirements.txt`、`scripts/package-boa-server.sh`、`server/boa/DEPLOYMENT.md` | 锁依赖、发布包和部署说明 |
@@ -99,7 +98,7 @@ T01 定义并由后续任务引用以下契约；不得各模块自己定义第�
 - `SourceLocks` 在 contracts 中为协议类型，要求 `hold(key: SourceKey) -> ContextManager`；T01 测试可注入无并发 stub，T02 提供真实锁池，避免数据库任务先依赖尚未实现的锁模块。
 - `ProductError(code: str, http_status: int, retryable: bool=False)`，HTTP 统一错误序列化带 request_id；不泄露路径/正文。
 
-测试命令在实施根目录执行。T00 先建立 `.venv-boa`；后文 `PY=.venv-boa/bin/python` 是文档简写，命令直接使用完整相对路径。新增 Python fixture 统一提供 `ctx`（临时库与 fake clock）、`two_users`（alice/bob）、`client`（TestClient）、`source_factory`（仅合成内容）、`faults`（命名中断点）；需要某 fixture 的任务负责扩展它。测试中的真实录音和 Google secret 通过私有临时目录输入，不写入仓库。
+测试命令在实施根目录执行。T00 先建立 `.venv-boa`；后文 `PY=.venv-boa/bin/python` 是文档简写，命令直接使用完整相对路径。新增 Python fixture 统一提供 `ctx`（临时库与 fake clock）、`two_users`（alice/bob）、`client`（TestClient）、`source_factory`（仅合成内容）、`faults`（命名中断点）；需要某 fixture 的任务负责扩展它。测试中的真实录音和登录凭证 通过私有临时目录输入，不写入仓库。
 
 ---
 
@@ -113,7 +112,7 @@ T01 定义并由后续任务引用以下契约；不得各模块自己定义第�
 - [ ] 按 using-git-worktrees 工作流隔离源仓库，检查适用 AGENTS，记录基线 SHA/工作区状态；将设计和计划复制进该分支文档目录。
 - [ ] 用现有 requirements 建 `.venv-boa`；记录 Python/SQLite/Node 和现有媒体工具版本。执行 `.venv-boa/bin/python -m pytest server/tests server/boa/tests server/storage/tests -q`、`node --test server/web/tests/*.test.mjs`，结果原样记录；环境缺失单列，不能写成测试通过。
 - [ ] 建临时数据、fake clock、故障注入 fixture；区分 `RIFF-test-audio` 等旧传输测试字节和真正可解码的音频样本，不拿前者做音频验收。
-- [ ] 登记 Google/AI/Clip/备份目标是否可用；合成音频 fixture 不含任何用户内容，真实样本仅列私有引用及授权范围。
+- [ ] 登记已有身份适配器、AI/Clip/备份目标是否可用；合成音频 fixture 不含任何用户内容，真实样本仅列私有引用及授权范围。
 - [ ] 提交 `docs: establish boa v1 implementation baseline`；验收为清单与命令可复现，无需为文档新增形式化测试。
 
 ### T01：版本化 SQLite 迁移与公共契约
@@ -138,39 +137,39 @@ T01 定义并由后续任务引用以下契约；不得各模块自己定义第�
 - [ ] 重跑目标测试和 `server/boa/tests/test_service.py`、`server/storage/tests/test_api.py`；全部 PASS。此任务只建立屏障底座，用户删除 API 在 T14 开放。
 - [ ] 提交 `feat: enforce source access and deletion barriers`。
 
-## B. 账户与 Google 登录
+## B. 基本用户与 Web
 
-### T03：邀请、密码、生产会话与认证兼容层
+### T03：基本用户资料与会话兼容层
 
-**文件：** 新增 `product/accounts.py`、`auth.py`、`audit.py`（基础 append）、`test_auth.py`；修改 `manage.py`、`web_sessions.py`、`boa_app.py`、`requirements.txt`。\
-**前置：** T01/T02。**接口：** `AuthService.principal(request: Request) -> Actor`；`issue_session(user_id: str, method: str) -> dict`；`require_recent(actor: Actor, max_age_ms: int=300000) -> None`；`AccountService.issue_invite(user_id: str, email: str) -> str`；`Audit.append(actor: Actor, action: str, resource_id: str | None, outcome: str) -> None`。
+**文件：** 新增 `product/accounts.py`、`auth.py`、`audit.py`（基础 append）、`test_auth.py`；修改 `web_sessions.py`、`boa_app.py`。\
+**前置：** T01/T02。**接口：** `AuthService.principal(request: Request) -> Actor`；`issue_session(user_id: str) -> dict`；`AccountService.sync_verified_user(google_sub: str, email: str, display_name: str) -> str`；`Audit.append(actor: Actor, action: str, resource_id: str | None, outcome: str) -> None`。
 
-- [ ] 写 `test_invite_consumed_once`、`test_password_rotation_revokes_other_sessions`、`test_id_mode_disabled_does_not_disable_production_session`、`test_csrf_and_cross_tab_identity_mismatch`；断言 24h 邀请、30d/90d 会话边界、Google-only 不走普通重置创建密码、限速返回 429。
+- [ ] 写 `test_verified_identity_reuses_user_id`、`test_logout_revokes_session_not_recordings`、`test_id_mode_disabled_does_not_disable_production_session`、`test_csrf_and_cross_tab_identity_mismatch`；断言用户状态只有 active/disabled、30d/90d 边界、禁用立即拒绝、无密码或邀请分支。
 - [ ] 运行 `.venv-boa/bin/python -m pytest server/boa/tests/product/test_auth.py -q`，确认 FAIL。
-- [ ] 锁定受维护密码哈希实现并测实机耗时；完成设计第 10 节密码/邀请/会话端点、CSRF 引导与错误包；CLI 显式设首管理员并将邀请只写私密文件。旧 Bearer 和显式开发 ID 模式通过兼容适配器保留，不能将任意密码会话固定成 user 或 developer。
-- [ ] 用 fake clock 验证到期/刷新边界与账户禁用即时拒绝；运行目标测试及原 `test_web_sessions.py`、`test_device_configurations.py`、`test_firmware_web.py`，全部 PASS。
-- [ ] 提交 `feat: add invited accounts and production sessions`。
+- [ ] 只消费上游已验证身份资料，按 google_sub 创建/查找基本用户并建立会话；实现本人资料、当前会话、退出和 CSRF 门禁。旧 Bearer/显式开发 ID 模式保持兼容；新建业务用户与原 registry 用户映射必须可重放，冲突拒绝，不按邮箱自动合并。授权跳转、回调、令牌交换不在此任务实现。
+- [ ] fake clock 验证会话到期、退出与禁用；目标测试及原 `test_web_sessions.py`、`test_device_configurations.py`、`test_firmware_web.py` PASS；无真实身份适配器时明确只完成数据消费契约。
+- [ ] 提交 `feat: add basic users and session compatibility`。
 
-### T04：Google OAuth 登录、绑定、重新认证
+### T04：用户表约束、旧用户映射与数据归属回归
 
-**文件：** 新增 `product/oauth.py`、`test_oauth.py`；修改 `auth.py`、`accounts.py`、`requirements.txt`、部署配置文档。\
-**前置：** T03。**接口：** `GoogleAuth.start(request: Request, purpose: str, return_route: str) -> Response`；`GoogleAuth.callback(request: Request) -> Response`；`unlink_google(actor: Actor) -> None`。ID token 验证通过固定 issuer/client 配置的适配器注入测试。
+**文件：** 新增 `server/boa/tests/product/test_users.py`；扩展 `product/accounts.py`、`product/migrations.py` 和旧用户迁移记录。\
+**前置：** T03。**接口：** `AccountService.get_user(user_id: str) -> dict`；`import_legacy_user(user_id: str, email: str, display_name: str='') -> str`；与 T03 的 sync_verified_user 共用同一用户主表。
 
-- [ ] 写 `test_state_nonce_audience_replay_rejected`、`test_same_email_never_merges_accounts`、`test_reauth_requires_existing_subject`、`test_multitab_flow_and_revocation`；断言错误身份不更新 reauthenticated_at、link 不刷新最近认证、解绑唯一方法 409、两个有效标签 flow 不相互覆盖。
-- [ ] 运行 `.venv-boa/bin/python -m pytest server/boa/tests/product/test_oauth.py -q`，确认 FAIL。
-- [ ] 实现设计第 17 节全部端点：scope、PKCE S256、state/nonce、Lax 临时 Cookie、10 分钟加密 verifier、pending→exchanging CAS、token 交换 10 秒超时、Strict Boa 会话、站内 redirect 白名单。使用维护中的 OAuth/OIDC 实现并锁依赖；无真实 secret 也可跑本地签名/JWKS fixture 测试。
-- [ ] 重跑测试 PASS；若已提供测试 client，在实际浏览器完成邀请→Google→Boa→退出→重新认证；记录该项为真实联调，配置未到则保留明确未验收项。
-- [ ] 提交 `feat: add google oidc authentication`。
+- [ ] 写 `test_google_sub_unique_and_email_conflict_is_not_merge`、`test_legacy_user_keeps_owner_and_nullable_sub`、`test_empty_display_name_and_disabled_user`；断言同一身份不建第二个 user_id，冲突邮箱不迁移录音，旧用户无 sub 仍可迁移资料。
+- [ ] 运行 `.venv-boa/bin/python -m pytest server/boa/tests/product/test_users.py -q`，确认 FAIL。
+- [ ] 按设计第 17 节落实 9 个基本字段、唯一键、状态约束、时间单位与同一 owner 规则；旧身份关联必须有可信核验记录，不能根据邮箱猜填 google_sub。不添加邀请、组织、角色层级或多身份映射功能。
+- [ ] 重跑 PASS；在旧用户夹具验证迁移前后设备/原件/录音 user_id 与 hash 不变，跨用户录音/媒体/导出仍 404。
+- [ ] 提交 `test: enforce basic user identity and ownership constraints`。
 
-### T05：产品 Web 入口、登录与三个主导航
+### T05：产品 Web 入口、两个主导航与账号菜单
 
-**文件：** 新增 `server/web/product/index.html`、`style.css`、`{app,api-client,auth,router,polling,settings}.mjs`、`server/web/tests/product-auth.test.mjs`；修改 `frontend.py`、`boa_app.py`、旧 Web 的身份适配入口。\
+**文件：** 新增 `server/web/product/index.html`、`style.css`、`{app,api-client,auth,router,polling,account-menu}.mjs`、`server/web/tests/product-auth.test.mjs`；修改 `frontend.py`、`boa_app.py`、旧 Web 的身份适配入口。\
 **前置：** T03/T04。**接口：** `createApiClient({fetcher,onIdentityChanged}) -> {request,reset}`；`mountAuth({root,api,onSession}) -> {dispose}`；`startPolling({load,activeMs,hiddenMs}) -> {stop}`。
 
-- [ ] 写 JS 用例 `stale response cannot replace new session`、`oauth disabled leaves password available`、`hidden tab backs off to 30000 ms`；断言身份变化 Abort、媒体清空回调被触发、轮询恢复立即刷新。
+- [ ] 写 JS 用例 `stale response cannot replace new session`、`account menu shows email and logout only`、`hidden tab backs off to 30000 ms`；断言身份变化 Abort、媒体清空回调被触发、轮询恢复立即刷新。
 - [ ] 运行 `node --test server/web/tests/product-auth.test.mjs`，确认 FAIL。
-- [ ] `/` 服务新产品静态入口，hash 路由包含 recordings/devices/settings；保留 `/firmware/` 和 API 旧入口。接邀请、密码/Google 登录、账号状态、30d 提示与退出；不加入 bundler 或第三方远程脚本。
-- [ ] 重跑 JS 与 Python `test_frontend.py`，PASS；真实浏览器验证窄窗口、刷新/后退、双标签退出、Google 取消和后端离线提示。
+- [ ] `/` 服务新产品静态入口，hash 路由只包含 recordings/devices；保留 `/firmware/` 和 API 旧入口。按新版原型接已有 Google 登录入口的结果适配、账号邮箱与退出，不扩展本地密码、邀请、设置或身份绑定页面；不加入 bundler 或第三方远程脚本。
+- [ ] 重跑 JS 与 Python `test_frontend.py`，PASS；真实浏览器验证窄窗口、刷新/后退、双标签退出、登录取消和后端离线提示。
 - [ ] 提交 `feat: add boa product web shell and login`。
 
 ## C. 接收与业务录音
@@ -324,18 +323,18 @@ T01 定义并由后续任务引用以下契约；不得各模块自己定义第�
 - [ ] 目标测试 PASS；用无敏感内容长会议样本打开 DOCX 检查中文、列表、章节及页间布局；不要只检查 ZIP 头就声称可读。
 - [ ] 提交 `feat: add private recording exports and audit history`。
 
-### T19：全文、纪要、搜索导出和设置 Web
+### T19：全文、纪要、搜索导出和账号菜单
 
-**文件：** 新增 `server/web/product/insights.mjs`、`server/web/tests/product-insights.test.mjs`；修改 product 的详情、列表、播放器、settings 与 style。\
+**文件：** 新增 `server/web/product/insights.mjs`、`server/web/tests/product-insights.test.mjs`；修改 product 的详情、列表、播放器、account-menu 与 style。\
 **前置：** T13/T15/T16/T17/T18。**接口：** `mountInsights({root,api,recordingId,player}) -> {dispose}`；使用 T13 的 `player.seek(ms)`，禁止以当前 run 替代旧纪要的 run。
 
 - [ ] 写 `summary reference opens matching run`、`transcript ready renders while summary failed`、`search resets stale cursor`、`copy request is not shown as verified clipboard evidence`。
 - [ ] 运行 `node --test server/web/tests/product-insights.test.mjs`，确认 FAIL。
-- [ ] 详情显示概要/结论/待办/章节与分页全文；点击句子/引用 seek；搜索输入防抖并取消旧请求；异步导出状态与失败重试；设置显示 Google 绑定、本地密码、退出其他会话和审计。AI 未配置、重试等待、旧内容均有明确状态。
-- [ ] 目标 JS PASS；真实 Chrome 验证长全文、旧 run 引用、播放器底部留白、键盘操作、导出文件、Google-only 账户设置与跨标签撤销。
+- [ ] 详情显示概要/结论/待办/章节与分页全文；点击句子/引用 seek；搜索输入防抖并取消旧请求；异步导出状态与失败重试；账号菜单仅显示基本邮箱/名字与退出，不新增复杂账号设置或邀请入口。AI 未配置、重试等待、旧内容均有明确状态。
+- [ ] 目标 JS PASS；真实 Chrome 验证长全文、旧 run 引用、播放器底部留白、键盘操作、导出文件、基本账号菜单与跨标签退出。
 - [ ] 提交 `feat: complete recording insights and account settings web`。
 
-## G. 设备与管理员
+## G. 设备与维护诊断
 
 ### T20：设备引导、配网、手动 OTA 与移除
 
@@ -348,14 +347,14 @@ T01 定义并由后续任务引用以下契约；不得各模块自己定义第�
 - [ ] 目标测试与现有 binding/SMP/Wi-Fi 回归 PASS；真实 Clip 分别验证配网→收件→解绑，以及在获准刷写时执行 OTA→重连 image hash/active/confirmed 核验，证据分开。
 - [ ] 提交 `feat: integrate device onboarding and verified manual ota`。
 
-### T21：管理员工作台、健康与打包配置
+### T21：维护诊断、健康与打包配置
 
-**文件：** 新增 `product/admin.py`、`test_admin.py`、`server/web/product/admin.mjs`、`server/web/tests/product-admin.test.mjs`；修改 `manage.py`、`run.py`、`scripts/package-boa-server.sh`、部署说明。\
+**文件：** 新增 `product/admin.py`、`test_admin.py`；修改 `manage.py`、`run.py`、`scripts/package-boa-server.sh`、部署说明。\
 **前置：** T03/T08/T14/T18/T20。**接口：** `install_admin_routes(app: FastAPI, ctx: ProductContext, auth: AuthService) -> None`；`health_snapshot(actor: Actor) -> dict`。
 
 - [ ] 写 `test_admin_role_checked_on_every_request`、`test_public_health_reveals_no_private_state`、`test_low_disk_blocks_derived_work_not_fakes_ack`；断言移除角色即时 403、secret/ticket/正文不出现在诊断响应或日志。
-- [ ] 运行 `.venv-boa/bin/python -m pytest server/boa/tests/product/test_admin.py -q` 与 `node --test server/web/tests/product-admin.test.mjs`，确认 FAIL。
-- [ ] 管理员邀请/禁用/设备分配、任务错误、固件现有发布入口与管理 health；公网 health 仅存活。磁盘低于 10% 或 5 GiB 较大者限制派生任务；包包含迁移与本地资源版本，排除录音/数据库/密钥；配置无 AI 不无限处理中。
+- [ ] 运行 `.venv-boa/bin/python -m pytest server/boa/tests/product/test_admin.py -q`，确认 FAIL。
+- [ ] 受控维护通道的用户状态、设备登记、任务错误、固件现有发布入口与管理 health，不新增普通用户管理工作台；公网 health 仅存活。磁盘低于 10% 或 5 GiB 较大者限制派生任务；包包含迁移与本地资源版本，排除录音/数据库/密钥；配置无 AI 不无限处理中。
 - [ ] 目标测试 PASS；包在干净临时目录解压启动、核对 manifest、两个监听只一套 runtime；一人角色变更、多标签场景复核。
 - [ ] 提交 `feat: add product administration and operational diagnostics`。
 
@@ -368,18 +367,18 @@ T01 定义并由后续任务引用以下契约；不得各模块自己定义第�
 
 - [ ] 写 `test_restore_preserves_owners_hashes_and_barriers`、`test_rollback_never_overwrites_post_upgrade_raw`、`test_migration_dry_run_writes_nothing`；断言 ID/绑定/hash/文件数/总字节和删除屏障一致，真实 root 不被修改。
 - [ ] 运行 `.venv-boa/bin/python -m pytest server/boa/tests/product/test_recovery.py -q`，确认 FAIL。
-- [ ] 在隔离副本迁移并回填 sources/outbox；旧录音标 unknown；人工关联邮箱后再发邀请。停机整体快照包含库及 WAL、原件、固件、私密配置；备份加密与权限检查；派生文件可重建但不能漏掉归属证据。回退前保留上线后新增 raw，禁止整根粗暴覆盖。
+- [ ] 在隔离副本迁移并回填 sources/outbox；旧录音标 unknown；核对基本资料、保留旧 user_id；缺少身份核验则 google_sub 留空。停机整体快照包含库及 WAL、原件、固件、私密配置；备份加密与权限检查；派生文件可重建但不能漏掉归属证据。回退前保留上线后新增 raw，禁止整根粗暴覆盖。
 - [ ] 目标测试 PASS；用真实旧数据的私密副本演练，记录迁移时间、恢复耗时与检查清单。日备 7 份/周备 4 份，RPO≤24h/RTO≤4h 仅在实测达标后报告达标。
 - [ ] 提交 `ops: add migration backup and recovery runbooks`。
 
 ### T23：全链路、容量与候选发布验收
 
 **文件：** 新增 `scripts/verify-boa-v1.py`、`server/boa/tests/product/test_end_to_end.py`、`docs/development/boa-v1-acceptance.md`；修订打包说明。\
-**前置：** T22；真实 Google/AI/设备/目标主机决定相应证据能否完成。**产出：** 候选包、哈希、分层验收报告和未完成项；此任务不自动部署或实际刷写。
+**前置：** T22；已有身份适配器、真实 AI/设备/目标主机决定相应证据能否完成。**产出：** 候选包、哈希、分层验收报告和未完成项；此任务不自动部署或实际刷写。
 
-- [ ] 先写集成失败场景：邀请→Google/密码→Clip/App 收件→业务录音→WAV/MP3→播放→ASR→纪要→搜索导出→删除/恢复；断言另一账户所有路径不可读，媒体/全文/纪要各自状态正确。
+- [ ] 先写集成失败场景：已验证基本用户→Clip/App 收件→业务录音→WAV/MP3→播放→ASR→纪要→搜索导出→删除/恢复；断言另一账户所有路径不可读，媒体/全文/纪要各自状态正确。
 - [ ] 执行 `.venv-boa/bin/python -m pytest server/tests server/boa/tests server/storage/tests -q`、`.venv-boa/bin/python -m unittest tools.upload.tests.test_dtls_receiver -v`、`node --test server/web/tests/*.test.mjs`，修复新回归；不把 missing dependency 当测试 PASS。
-- [ ] 启动候选包，真实浏览器/Google、真实 Clip 收件与哈希、授权样本 AI、真实 OTA（获准时）、恢复演练分别执行；目标环境验证断网/重启/删除并发。每项保存对应证据，不混为一个“端到端通过”。
+- [ ] 启动候选包，真实浏览器与现有登录接入、真实 Clip 收件与哈希、授权样本 AI、真实 OTA（获准时）、恢复演练分别执行；目标环境验证断网/重启/删除并发。每项保存对应证据，不混为一个“端到端通过”。
 - [ ] 固定硬件下测试 10 并发网页用户+1 处理任务的普通列表/详情 p95≤500ms；网络模拟覆盖 20% 丢包但内容仍一致，报告窗口/超时/重试参数与完成率，不承诺所有网络状况必达。至少 10 条代表性中文录音人工评估关键人名数字、漏句、定位、纪要出处；评估阈值与标注先确认。
 - [ ] 候选包 SHA、源码 SHA、依赖/工具版本、数据迁移版本、证据表齐全后提交 `release: prepare boa voice v1 acceptance candidate`；真实外部依赖未就绪时保留对应未验收项，不能标正式发布完成。
 
@@ -389,12 +388,12 @@ T01 定义并由后续任务引用以下契约；不得各模块自己定义第�
 
 | 里程碑 | 任务范围 | 可以验证什么 | 仍不能声称什么 |
 |---|---|---|---|
-| M1 登录可用 | T00–T05 | 账户隔离、邀请、Google、产品主导航 | 录音业务闭环 |
+| M1 用户与页面 | T00–T05 | 基本用户唯一性、会话隔离、两个主导航与账号退出 | 录音业务闭环 |
 | M2 录音可用 | T06–T14 | 上传→raw/WAV/MP3→网页播放→删除/恢复，双写崩溃恢复 | AI 质量或设备 OTA 已验证 |
 | M3 AI 可用 | T15–T19 | 全文、纪要引用、搜索、导出与状态降级 | 未接真实 provider 时不能称 AI 完成 |
 | M4 候选发布 | T20–T23 | 设备功能、迁移恢复、容量与分层证据 | 未部署不称已上线，未实机不称已验收 |
 
-建议先以 **M2 作为第一条必须跑通的产品闭环**；Google 配置缺失时可用受邀密码账户验证 M2，但 M1 的 Google 真实验收仍保留未完成。AI 或设备工作不应拖住 raw 安全收件、解码双写和播放链路。
+建议先以 **M2 作为第一条必须跑通的产品闭环**；开发时可用受控的已验证用户夹具检查数据链路，真实登录适配接入单独记录。AI 或设备工作不应拖住 raw 安全收件、解码双写和播放链路。
 
 ## 提交与验证约定
 
@@ -411,7 +410,7 @@ T01 定义并由后续任务引用以下契约；不得各模块自己定义第�
 |---|---|
 | 单进程、双监听、调度与配置 | T00/T08/T21 |
 | SQLite DDL、迁移、跨用户 FK、时间单位 | T01/T02/T06/T22 |
-| Google OAuth、密码、邀请、会话、管理员引导 | T03/T04/T05/T21 |
+| 基本用户、旧 ID 映射、会话与账号菜单 | T03/T04/T05/T21 |
 | Clip/App 接收、完整性、晚到片段、版本 | T06/T07 |
 | 原件/WAV 双保留、样本轴、MP3、双写恢复 | T08/T09/T10/T11 |
 | 录音 API、Range、媒体 ticket、Web | T12/T13 |
@@ -424,4 +423,4 @@ T01 定义并由后续任务引用以下契约；不得各模块自己定义第�
 
 ## 实施交接
 
-当前交付是任务计划。建议单人按顺序执行，先 M1/M2，再 AI 与设备收尾；涉及共享事务和兼容入口较多，稳定接口后再考虑并行。执行前需确认采用本计划及执行方式；若由当前 agent 直接逐项实施，使用 executing-plans；若用户选择子代理实施，使用 subagent-driven-development 并遵守当前多代理授权规则。Google/AI/主机等外部信息只在依赖它的验收前必需，不应反复阻塞可独立完成的开发。
+当前交付是任务计划。建议单人按顺序执行，先 M1/M2，再 AI 与设备收尾；涉及共享事务和兼容入口较多，稳定接口后再考虑并行。执行前需确认采用本计划及执行方式；若由当前 agent 直接逐项实施，使用 executing-plans；若用户选择子代理实施，使用 subagent-driven-development 并遵守当前多代理授权规则。已有身份适配器、AI/主机等外部信息只在依赖它的验收前必需，不应反复阻塞可独立完成的开发。

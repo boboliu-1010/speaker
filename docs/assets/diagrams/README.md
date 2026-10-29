@@ -7,7 +7,7 @@
 | 编号 | 图源 | 说明 |
 |---|---|---|
 | 01 | [系统架构](01-system-architecture.mmd) | 用户、设备、单进程服务、磁盘与私有推理端点 |
-| 02 | [Google OAuth](02-google-oauth.mmd) | 发起、回调、身份校验与 Boa 会话建立 |
+| 02 | [基本用户表](02-user-data-model.mmd) | 用户、会话、设备和录音的数据关系；不展开认证流程 |
 | 03 | [设备接入](03-device-onboarding.mmd) | 管理员登记、BLE 配置、读回、真实收件 |
 | 04 | [原件与 outbox](04-raw-ingest-outbox.mmd) | 持久 ACK、来源索引、业务投影和收据 |
 | 05 | [解码与双保留](05-decode-and-retain.mmd) | raw、WAV、MP3 与完整性判断 |
