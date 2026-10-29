@@ -21,7 +21,7 @@ ReSpeaker Clip 配套 Server/Web 的精简设计与实施文档。以[当前原�
 ## 第一版只做这些
 
 - 基本用户、账号退出；两个页面：录音、设备。
-- 用户添加设备、BLE 激活配置与 Wi-Fi、设备改名/移除；真实能力未具备时明确标记。
+- 用户添加设备、BLE 激活；从 Clip 扫描返回的周围 Wi-Fi 列表选网并设置，设备改名/移除。没有手填 SSID 或 Mac/Server 扫描路径。
 - 日期筛选、基础播放、文字/复制；下载 WAV、Markdown、VTT。
 - raw 与一份当前 WAV 双保留，SQLite 元数据与文件可靠发布，私有 ASR 输出 cues/VTT。
 

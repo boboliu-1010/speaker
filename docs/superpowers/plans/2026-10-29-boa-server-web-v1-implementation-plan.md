@@ -20,7 +20,7 @@
 - WAV 16 kHz / mono / PCM16 LE；raw 单段 8 MiB、连续处理默认 8 小时上限；旧协议无整段闭合证据，静默 10 分钟只是处理触发。
 - SQLite 每连接 FK=ON、busy_timeout=5000、synchronous=FULL；UTC 毫秒；部署业务时区默认 Asia/Shanghai；原件不因错误或移除设备删除。
 - 一个活动任务；lease 60 秒、15 秒续期；最多重试 3 次，间隔 30 秒/2 分钟/10 分钟。任务完成检查当前输入版本/lease，不做历史结果切换页面。
-- 设备 Wi-Fi 原型最多 5 个，支持扫描/手动添加/删除，密码仅 BLE；缺少固件能力就如实降级并保留未验收项，不用模拟数据声称实现。
+- Wi-Fi 只用 Clip 经 BLE 返回的周围扫描列表：选择 SSID、输入密码、BLE 设置；不从 Mac/Server 扫描，不手填 SSID。已保存网络最多 5 个按真实能力展示；没有 Clip 扫描能力则标未完成，不回退手填。
 
 ## Review Focus
 
@@ -163,14 +163,14 @@
 - [ ] 目标测试 PASS；Chrome 试听/拖动、复制全文、下载 WAV/MD/VTT 并核对中文/时间戳和 MIME；新 WAV 就绪时隐藏不同版本文字，切换账号中断旧请求。
 - [ ] 提交 `feat: add simple transcript detail and wav md vtt downloads`。
 
-## S11：设备卡片和能力感知的 Wi-Fi 管理
+## S11：设备卡片与基于 Clip 扫描的 Wi-Fi 配置
 
-**Files：** 扩展 `product/devices.py`、`server/web/product/devices.mjs` 和既有 BLE adapter；新增 `product-wifi.test.mjs`、`test_device_views.py`。**接口：** BLE adapter `capabilities()`、`scanWifi()`、`saveWifi(ssid,password)`、`deleteWifi(ssid)`；真实命令映射以现有固件为准，缺能力返回 unsupported。
+**Files：** 扩展 `product/devices.py`、`server/web/product/devices.mjs` 和既有 BLE adapter；新增 `product-wifi.test.mjs`、`test_device_views.py`。**接口：** BLE adapter `capabilities()`、`scanWifi() -> {ssid,rssi,security}[]`、`saveWifi(selectedSsid,password)`、`readWifiStatus()`、`deleteWifi(ssid)`；扫描与连接状态由 Clip 真实返回，缺能力为 unsupported。
 
-- [ ] 写 `scanned networks are not saved networks`、`at most five saved networks`、`remote wifi saved is not connection verified`、`password never sent to server`；后端验证别名/归属/移除保留录音，状态来源不明不显示在线。
+- [ ] 写 `wifi list comes from clip scan over ble`、`ssid must be selected from scan results`、`missing scan does not enable manual ssid`、`saved is not connected`、`at most five saved networks`、`password never sent to server`；后端验证别名/归属/移除保留录音，状态来源不明不显示在线。
 - [ ] 运行 `node --test server/web/tests/product-wifi.test.mjs`、`.venv-boa/bin/python -m pytest server/boa/tests/product/test_device_views.py -q`，确认 FAIL。
-- [ ] 设备卡片与原型对齐：改名、固件版本、带时间状态、Wi-Fi 添加/删除和移除；没有 OTA/维修/远程设置。网络扫描和最多 5 个按固件能力启用，手动远处网络只显示待验证；最少支持现有单网络手动写入的真实降级。
-- [ ] 模拟边界测试 PASS；实机分别验扫描/保存/删除/重连/移除，不能把 mock 当真实 5 网络支持；缺自动激活、多 Wi-Fi、遥测分别登记为外部能力缺项。
+- [ ] 设备卡片保留改名、版本、状态、Wi-Fi 管理和移除；Wi-Fi 操作固定为连接 BLE→请求 Clip 扫描→选择返回的 SSID→输入密码→BLE 写入→读取保存/连接结果。空列表/超时重扫、密码错误重输；没有手动 SSID、远处网络或本机扫描入口。没有 Clip 扫描能力就禁用新增配置并标缺项，已保存项仍可按真实能力查看/删除。
+- [ ] 模拟边界测试 PASS；实机验证扫描列表确实来自目标 Clip、选网/密码写入/连接结果、删除/重连/移除；不能把 mock 当扫描或 5 网络支持。缺扫描则该配置闭环未验收，不能以手填方式完成；自动激活、多 Wi-Fi、遥测缺项分别记录。
 - [ ] 提交 `feat: align device cards and wifi management with prototype`。
 
 ## S12：整体回归、迁移恢复与候选包

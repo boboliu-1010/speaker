@@ -12,8 +12,11 @@ sequenceDiagram
     U->>C: 写入凭证和上传目标，校准时间
     C-->>U: 读回配置
     U->>S: 配置确认
-    U->>C: 扫描或手动添加 Wi-Fi，密码只走 BLE
-    C-->>U: 已保存 / 已验证 / 不支持
-    Note over U,C: 最多 5 个以真实固件能力为准；没有能力不显示假成功
+    U->>C: BLE 请求 Clip 扫描周围 Wi-Fi
+    C-->>U: SSID / 信号 / 安全类型列表
+    U->>U: 用户选择列表中的 SSID，输入密码
+    U->>C: BLE 写入选中 SSID 和密码
+    C-->>U: 保存结果与实际连接状态
+    Note over U,C: 不能手填 SSID；缺 Clip 扫描则不能完成配置，不能假成功
     C->>S: 之后真实上传录音
     Note over U,S: 移除撤上传凭证，历史录音仍属于原用户
