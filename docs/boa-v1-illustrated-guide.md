@@ -16,9 +16,9 @@
 
 <a id="users"></a>
 
-## 3. 用户
+## 3. 四张业务表
 
-![基本用户与归属](assets/diagrams/02-user-data-model.svg)
+![用户、录音、片段、任务四表](assets/diagrams/02-user-data-model.svg)
 
 ![Google 登录与内存边界](assets/diagrams/09-google-memory-login.svg)
 

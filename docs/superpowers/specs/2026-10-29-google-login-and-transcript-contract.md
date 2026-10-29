@@ -49,7 +49,7 @@
 - 每 60 秒及 map 操作时删除过期项；LoginFlow 最多 1000，Session 最多 10000。满额先清过期项，仍满则 503 `auth_capacity_exceeded`，不驱逐有效会话。start 每 IP 每分钟最多 30 次，超过 429；IP 来自可信连接/显式受信代理，不信任任意转发头。
 - Google 请求总超时 10 秒；code 交换失败不重复使用，返回可重新发起的登录错误。state/绑定/nonce/token 无效为 400 `login_invalid_or_expired`，Google 取消为 `login_cancelled`，端点不可达为 503 `login_unavailable`。对外不返回 code/token/供应方原始响应。
 - `/auth/session` 会话缺失或到期为 401；每次鉴权重新查 accounts.status/auth_version，禁用返回 403 并删会话，auth_version 不匹配返回 401。写操作要求同源 Origin + `X-CSRF-Token`；GET 不产生业务写入，登录 start/callback 的临时状态变化除外。对登录路由关闭 query/body/Cookie 的访问日志和代理追踪，回调无第三方资源，使用 `Referrer-Policy: no-referrer` 与 no-store。
-- 服务单进程且持数据目录锁；多 worker 启动拒绝。重启丢会话是预期行为，不增加 Redis。独立设备 DTLS 凭证、已入库的 jobs/outbox 与录音不依赖网页会话。
+- 服务单进程且持数据目录锁；多 worker 启动拒绝。重启丢会话是预期行为，不增加 Redis。独立设备 DTLS 凭证、已入库的 jobs/来源索引 与录音不依赖网页会话。
 
 配置项：`GOOGLE_CLIENT_ID`、`GOOGLE_CLIENT_SECRET`、`PUBLIC_WEB_ORIGIN`（精确 HTTPS origin）、由 origin 和固定路径导出的回调 URI。Google Console 登记值必须完全相同；配置缺失时接口返回 503 `login_not_configured`，Web 显示登录不可用，不开放模拟登录入口。
 
@@ -67,7 +67,7 @@
 
 | 字段 | 格式 | 示例 |
 |---|---|---|
-| recording_id + input_revision | 录音与输入版本 | demo-recording / 1 |
+| recording_id + revision | API 录音与版本，数据库使用 id/transcript_revision | demo-recording / 1 |
 | cue_index | 从 1 开始的连续整数 | 1 |
 | start_ms / end_ms | 相对当前 WAV 的整数毫秒 | 0 / 2400 |
 | speaker | 稳定匿名标签或 NULL | A |
@@ -78,33 +78,33 @@
 
 ### 格式与边界
 
-SQLite 每句一行存 `transcript_cues`，以 `(recording_id,input_revision,cue_index)` 为主键、复合外键验证 owner。`text` 保存识别内容，不做总结、改写或 HTML/VTT 转义，不存带 `<v>` 的字幕字符串。统一 CRLF 为 LF，拒绝 NUL/非法编码与纯空白句；原有标点、中文和换行保留。speaker 只能为 A/B/C…稳定映射或 NULL，不能猜真实姓名；Web 用 textContent 渲染。文字是用户数据，不写日志或跟踪系统。
+SQLite 在 `recordings.transcript_json` 存一份 `{schema_version:1,time_unit:"ms",cues:[...]}`，录音 owner 与 transcript_revision 在同一行，不再建逐句表。`text` 保存识别内容，不做总结、改写或 HTML/VTT 转义，不存带 `<v>` 的字幕字符串。统一 CRLF 为 LF，拒绝 NUL/非法编码与纯空白句；原有标点、中文和换行保留。speaker 只能为 A/B/C…稳定映射或 NULL，不能猜真实姓名；Web 用 textContent 渲染。文字是用户数据，不写日志或跟踪系统。
 
-API 外层固定为 `schema_version:1, recording_id, revision, time_unit:"ms", cues:[], next_cursor`；`revision` 对应表内 input_revision，cue 字段与 SQL 同名。owner 不在客户端传入，也不暴露给其他用户。不将 API JSON 再存一列副本，不保存供应方完整 response；v1 只保留展示/导出必需内容。
+API 外层固定为 `schema_version:1, recording_id, revision, time_unit:"ms", cues:[], next_cursor`；`revision` 对应 recordings.transcript_revision，并须等于当前 audio_revision；不能直接使用可能领先的 input_revision，cue 字段名固定为 cue_index/start_ms/end_ms/speaker/text。owner 不在客户端传入，也不暴露给其他用户。不存 API 分页 envelope 副本，不保存供应方完整 response；v1 只保留展示/导出必需内容。
 
-供应方秒数在 adapter 中转为整数毫秒；校验 `0 <= start_ms < end_ms <= duration_ms`，最大 1ms 精度误差可夹到音频边界，夹后仍须 start < end。按 start_ms 与供应方稳定顺序排序后生成连续 cue_index；合法多人重叠保留。单句最多 10000 字符、每录音最多 100000 cues，超限报 `transcript_limit_exceeded`，不静默截断。数字/类型/文本不合法则整批失败，不发布部分文字。
+供应方秒数在 adapter 中转为整数毫秒；校验 `0 <= start_ms < end_ms <= duration_ms`，最大 1ms 精度误差可夹到音频边界，夹后仍须 start < end。按 start_ms 与供应方稳定顺序排序后生成连续 cue_index；合法多人重叠保留。单句最多 10000 字符、每录音最多 100000 cues、持久 JSON 编码后最多 8 MiB UTF-8，超限报 `transcript_limit_exceeded`，不静默截断。数字/类型/文本不合法则整批失败，不发布部分文字。
 
 静音时允许 **0 cues**：transcript_state=ready，JSON cues=[]，VTT 为 `WEBVTT\n\n`，Markdown 仅日期标题，Web 显示“未识别到文字”。ASR 未配置、失败与成功无文字是不同状态；用户仍可播放 WAV。此处不额外增加“空文本”表。
 
 ### 原子发布
 
 1. ASR 读取冻结的同版本 WAV，校验并准备 cues；任务持有效 lease。
-2. 从同组 cues 生成 UTF-8 VTT，转义 `& < >`，清理会破坏 cue 分隔的文本空行；text 原文不受影响。文件名/路径由 Server 生成。VTT 经 file_publications 的临时文件、hash、fsync、rename 流程持久化。
-3. 持录音锁，在**一个 SQLite 事务**内检查 lease、当前 input_revision/audio_revision，插入同版本 cues、将 VTT 对象设为 ready、更新 vtt_object_id/transcript_revision/transcript_state，并将任务标为 succeeded。任一失败全部回滚，读者不能看到半批 cues。
-4. 相同任务重放不产生重复句子；失效 lease 不得覆盖新输入。针对尚未提交的同版本尝试，只在事务内替换待发布 cues；已成功的相同版本任务不自动重跑。新输入先隐藏不匹配的旧文字。
+2. 从同组 cues 生成 UTF-8 VTT，转义 `& < >`，清理会破坏 cue 分隔的文本空行；text 原文不受影响。文件名/路径由 Server 生成。VTT 经当前 transcribe jobs 行保存的临时/最终路径、size/hash、publication_state 完成 fsync/rename 持久化；不另建文件或发布表。
+3. 持录音锁，在**一个 SQLite 事务**内检查 lease、当前 input_revision/audio_revision，整体写入 transcript_json、更新 vtt_job_id/transcript_revision/transcript_state，并将对应 jobs 文件设 publication_state=ready、任务设 succeeded。任一失败全部回滚，读者不能看到半批 cues。
+4. 相同任务重放不产生重复句子；失效 lease 不得覆盖新输入。针对尚未提交的同版本尝试，只在事务内替换待发布 transcript_json；已成功的相同版本任务不自动重跑。新输入先隐藏不匹配的旧文字。
 
 ### 恢复与读取
 
 | 中断位置 | 恢复动作 |
 |---|---|
 | cues 仅在内存 | 任务租约回收，重跑同版本 ASR |
-| VTT rename 后、cues 提交前 | 废弃未提交派生发布记录，重新 ASR 并整体发布；不能仅凭文件 hash 补 ready |
+| VTT rename 后、cues 提交前 | 将 jobs 内未提交的文件尝试标 abandoned，重新 ASR 并整体发布；不能仅凭文件 hash 补 ready |
 | cues/VTT/ready 已提交、进程退出 | SQLite 直接读文字，VTT 直接下载；不重跑成功任务 |
 | 成功后 VTT 文件缺失/损坏 | 保留已存 cues，当前 VTT 下载报暂不可用；维护侧从已提交同版本 cues 经文件发布恢复，不重新 ASR |
 | 音频更新或请求版本不符 | 409 recording_revision_changed；Web 取消旧请求后重新加载 |
 
-恢复时不删除任何 raw；废弃的派生产物只有在无当前指针/在途读取引用后才清理。旧内部 cues 可在新版本成功且无在途读取后清理，不对用户提供历史选择器，不引入清理平台。
+恢复时不删除任何 raw；废弃的派生产物只有在无当前指针/在途读取引用后才清理。当前 JSON 仅在新音频对应转写成功时整体替换；已开启的旧 SQLite 读取快照按 WAL 规则完成，不对用户提供历史选择器，不引入清理平台。
 
-JSON 每页最多 200 cues，游标绑定录音/版本。每个请求在同一 SQLite 读取快照核对 owner、当前 audio_revision、transcript_revision 和 ready 状态；不匹配拒绝。复制全部文字要取完同版本全部页才写剪贴板。VTT 已持久保存，Markdown 从同一 SQLite 快照的 cues 按 cue_index 流式生成；三者使用相同 speaker 和文字。JSON/VTT/MD 为当前音频同版本，响应均标注 revision，下载附件固定 UTF-8 与安全 filename。
+JSON 每页最多 200 cues，游标绑定录音/版本。每个请求在同一 SQLite 读取快照核对 owner、当前 audio_revision、transcript_revision 和 ready 状态；不匹配拒绝。复制全部文字要取完同版本全部页才写剪贴板。VTT 已持久保存，JSON 分页/Markdown 从同一 SQLite 快照的 transcript_json.cues 按数组顺序读取；可使用 json_each 分页或迭代，避免构造整批 Python cue 对象。Markdown 按句生成；三者使用相同 speaker 和文字。JSON/VTT/MD 为当前音频同版本，响应均标注 revision，下载附件固定 UTF-8 与安全 filename。
 
 </details>

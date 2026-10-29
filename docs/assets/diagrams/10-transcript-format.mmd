@@ -1,10 +1,9 @@
 flowchart LR
     WAV["当前 WAV + revision"] --> ASR["ASR 结果校验"]
-    ASR --> Row["SQLite transcript_cues
-recording_id / owner / input_revision
-cue_index / start_ms / end_ms
-speaker / text：UTF-8 原文"]
+    ASR --> Row["recordings.transcript_json
+schema_version / time_unit
+cues：时间、说话人、原文"]
     Row --> JSON["JSON v1：Web 阅读 / 复制"]
-    Row --> VTT["UTF-8 WEBVTT：字幕文件持久保存"]
-    Row --> MD["Markdown：按需下载"]
-    Same["同版本、同组句子；无说话人用 null；静音用空数组"] -.-> Row
+    Row --> VTT["WEBVTT 文件；索引并入 jobs"]
+    Row --> MD["Markdown 按需生成"]
+    Same["文字不另建表；JSON 最多 8 MiB；无说话人 null"] -.-> Row

@@ -10,8 +10,8 @@ sequenceDiagram
     R->>F: 写入，fsync，持久检查点
     R-->>C: 只 ACK 已持久偏移
     R->>F: 完整 hash，rename，目录 fsync
+    R->>D: sources ready 持久；本行就是待投影项
     R-->>C: COMPLETE：原件已可靠收下
-    R->>D: 完整来源状态 + outbox 同事务
-    D->>B: 对账消费：录音、原件引用、source_receipt
-    B-->>D: 业务提交后标 consumed
-    Note over D,B: 重复事件只生效一次；不等待 WAV / ASR / VTT 才确认设备
+    D->>B: business 同事务：录音 + segments 原件/幂等收据
+    B-->>D: 业务提交后标 sources.projected_at
+    Note over D,B: 启动分批全量对账；重复来源只生效一次；不等待 WAV / ASR / VTT 才确认设备

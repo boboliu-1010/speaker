@@ -6,15 +6,15 @@
 |---|---|
 | [00 产品范围](00-product-overview.mmd) | 两个页面和基础操作 |
 | [01 系统架构](01-system-architecture.mmd) | 一个进程、最少处理链 |
-| [02 用户关系](02-user-data-model.mmd) | 9 字段基本用户与持久归属 |
+| [02 用户关系](02-user-data-model.mmd) | 四表关系，用户仍为 9 字段 |
 | [03 设备向导](03-device-onboarding.mmd) | 可信发放、凭证/校时、Wi-Fi |
 | [04 收件](04-raw-ingest-outbox.mmd) | raw ACK 与 SQLite 投影 |
 | [05 解码](05-decode-and-retain.mmd) | raw 加一份 WAV，取消 MP3/重复 WAV |
 | [06 文件发布](06-file-database-publication.mmd) | fsync/rename/ready 与恢复 |
-| [07 VTT](07-transcript-vtt.mmd) | cues、VTT、Markdown 同源 |
+| [07 VTT](07-transcript-vtt.mmd) | 录音行 JSON、VTT、Markdown 同源 |
 | [08 Wi-Fi 配置](08-wifi-configuration.mmd) | Clip 扫描、用户选网、BLE 写入 |
 | [09 Google 登录](09-google-memory-login.mmd) | OIDC 与内存状态/会话边界 |
-| [10 文本格式](10-transcript-format.mmd) | SQLite 原文与 JSON / VTT / MD 同源 |
+| [10 文本格式](10-transcript-format.mmd) | transcript_json 原文与 JSON / VTT / MD 同源 |
 | [12 实施顺序](12-implementation-order.mmd) | S01–S12；文件编号保留以减少链接变动 |
 
 使用 Mermaid CLI 12.0.0、[主题配置](mermaid.config.json)和本机受信任 Chrome 渲染；工具是文档构建依赖，不是产品运行依赖。

@@ -4,7 +4,7 @@
 
 **Goal:** 按新原型完成 Google 登录/内存会话、基本用户、设备添加/Wi-Fi、录音日期列表、WAV 播放、转写文字与 MD/VTT 下载。
 
-**Architecture:** Python 单进程 + SQLite + 静态 Web，复用既有 DTLS 和 BLE。只处理原件→WAV→ASR/cues/VTT，持久任务与文件发布记录负责最少的故障恢复，不引入纪要、搜索、回收站或导出平台。
+**Architecture:** Python 单进程 + SQLite + 静态 Web，复用既有 DTLS 和 BLE。只处理原件→WAV→ASR/cues/VTT，jobs 同行保存任务、文件元数据与发布状态，负责最少的故障恢复，不引入纪要、搜索、回收站或导出平台。
 
 **Tech Stack:** 现有 Python/FastAPI/Uvicorn/SQLite、原生 ES modules、pytest、Node test runner、受控媒体工具、私有 ASR adapter。
 
@@ -20,6 +20,7 @@
 - 本轮只更新文档。旧 T00–T23 计划作废，重排为 **S01–S12，12 个任务、60 个步骤**，不沿用旧任务号的含义。
 - 文档仓库为 boboliu-1010/speaker；实施基线为 BofAI/reSpeaker_Clip，本机此前检出 `/Users/bobo/code/respeaker-boa-integration`。实施时先核对当前源码和 AGENTS，使用 using-git-worktrees 建隔离工作区，并记录文档 commit。
 - 保留单进程、一个目录锁、9529 Web、9528 HTTPS/UDP DTLS、v3 原始帧/ACK；不把 ASR 放在接收线程。
+- 新增业务表仅 accounts / recordings / recording_segments / jobs；registry 新增 0 表。转写只存 recordings.transcript_json，文件发布只存 jobs，迁移版本用 PRAGMA user_version。
 - 用户表只有既定 9 个字段；两个导航“录音、设备”，账号菜单邮箱/退出；Google Code/OIDC 接入和内存会话在 S02；本地密码/邀请/组织不在任务中。
 - raw 与 WAV 双保留；同一 WAV 用于播放、ASR、下载；不存 MP3、持久分段 WAV、重复 ASR WAV；VTT 是转写产物，MD 由同组 cues 即时生成。
 - WAV 16 kHz / mono / PCM16 LE；raw 单段 8 MiB、连续处理默认 8 小时上限；旧协议无整段闭合证据，静默 10 分钟只是处理触发。
@@ -39,7 +40,7 @@
 
 | 顺序 | 任务 | 前置 | 可审查交付 |
 |---|---|---|---|
-| 1 | S01 基线与精简 SQL 迁移 | 无 | 10 张业务表、1 张 registry 增量、旧数据夹具 |
+| 1 | S01 基线与精简 SQL 迁移 | 无 | 4 张业务表、registry 仅加列/索引、旧数据夹具 |
 | 2 | S02 Google 登录与内存会话 | S01 | Google 登录、用户唯一性、内存会话与 owner 门禁 |
 | 3 | S03 设备激活与归属适配 | S02 | 现有可信发放/绑定适配，改名/移除 API |
 | 4 | S04 Web 框架与添加向导 | S02/S03 | 两导航、账号菜单、四步向导 |
@@ -59,7 +60,7 @@
 公共契约在 S01 定义：
 
 - `Actor(user_id: str, auth_version: int)`：由服务端认证取得，不接受请求指定 owner。
-- `SourceEvent(event_id, owner, namespace, source_id, session, epoch, segment_no, relative_path, size, sha256, created_at_ms)`：只包含服务端已确认来源。
+- `SourceEvent(owner, namespace, source_id, session, epoch, segment_no, relative_path, size, sha256, created_at_ms)`：只包含服务端已确认来源。
 - `InputSnapshot(recording_id, owner, revision, sources: tuple[SourceEvent, ...])`：按片段号冻结，hash 列表进 job.input_json。
 - `Lease(job_id, recording_id, revision, token, expires_at_ms)`：存储/发布都引用同一个 fence。
 - `Cue(cue_index: int, start_ms: int, end_ms: int, speaker: str | None, text: str)`：JSON、VTT、MD 的共同结构。
@@ -77,7 +78,7 @@
 
 - [ ] 核对源码 SHA/AGENTS、建立隔离工作区和 `.venv-boa`，执行原 Python/Node 测试并记录现有失败；这一步不把环境缺失当通过。
 - [ ] 写 `test_schema_has_only_minimal_tables`、`test_legacy_ids_and_time_units_survive_migration`，运行 `.venv-boa/bin/python -m pytest server/boa/tests/product/test_db.py -q`，确认新要求 FAIL。
-- [ ] 参考 SQL 转为真实版本化迁移，保留旧 registry/上传库；新业务库 10 表、registry source_outbox，连接 PRAGMA、毫秒桥接与公共契约一次统一。
+- [ ] 参考 SQL 转为真实版本化迁移，保留旧 registry/上传库；新业务库 4 表、PRAGMA user_version 原子更新；registry 只加 bindings 别名列和 sources.projected_at，不新增表。同步把 registry.py 中 bindings/sources 的位置式 INSERT 改成显式列名，验证加列后兼容；毫秒桥接与公共契约一次统一。
 - [ ] 重跑目标测试 PASS，FK/integrity、旧库夹具升级、失败重跑、未知高版本拒绝均验证；不对真实数据根试迁移。
 - [ ] 仅提交代码/合成 fixture/文档，提交 `feat: establish minimal recording data model`。
 
@@ -107,7 +108,7 @@
 
 - [ ] 写 `test_activation_requires_trusted_enrollment`、`test_same_owner_activation_is_idempotent`、`test_other_owner_cannot_claim`、`test_remove_revokes_upload_but_keeps_audio`。
 - [ ] 运行 `.venv-boa/bin/python -m pytest server/boa/tests/product/test_devices.py -q`，确认 FAIL。
-- [ ] 把原型自动激活接到既有可信登记/发放和 binding/epoch/读回 API，凭据只给本人并 no-store。别名只写 device_preferences；移除先撤凭证，离线清理保留既有锁。UID 不是认证，不自创邀请/激活码/远程信任机制。
+- [ ] 把原型自动激活接到既有可信登记/发放和 binding/epoch/读回 API，凭据只给本人并 no-store。别名写既有 registry.bindings.display_name，WHERE 同时核对本人 owner、binding_id、active；移除先撤凭证，离线清理保留既有锁。UID 不是认证，不自创邀请/激活码/远程信任机制。
 - [ ] 目标测试及原绑定回归 PASS；若现有发放/固件不能提供可靠证据，记录自动激活真实联调未完成，而不是给未知设备放行。
 - [ ] 提交 `feat: adapt trusted device activation and removal`。
 
@@ -128,16 +129,16 @@
 
 </details>
 
-## S05：收件 outbox、聚合和上传状态
+## S05：来源投影、片段幂等和上传状态
 
 <details>
 <summary>展开文件、接口与验收步骤</summary>
 
 **Files：** `product/recordings.py`、`test_sources.py`；修改 `registry.py`、`receiver.py` 和 App 完成适配。**接口：** `import_ready(ctx, event: SourceEvent) -> str`、`sync_receiving(ctx) -> int`、`snapshot(actor: Actor, recording_id: str) -> InputSnapshot`。
 
-- [ ] 写 `test_raw_ack_does_not_wait_for_business`、`test_ready_event_replay_changes_revision_once`、`test_receiving_has_no_ready_file`、`test_gap_and_new_epoch_not_merged`。
+- [ ] 写 `test_raw_ack_does_not_wait_for_business`、`test_ready_event_replay_changes_revision_once`、`test_receiving_has_no_ready_file`、`test_gap_and_new_epoch_not_merged`、`test_projected_marker_never_hides_restore_gap`、`test_same_source_hash_conflict_rejected`。
 - [ ] 运行 `.venv-boa/bin/python -m pytest server/boa/tests/product/test_sources.py -q`，确认 FAIL。
-- [ ] raw/identity/fsync/ACK 保持旧语义；ready 来源与 outbox 同库事务，business 投影和收据同库事务。扫描 receiving 显示真实上传中，ready 才生成原件对象/增版本；App 仅兼容既有接口。
+- [ ] raw/identity/fsync/ACK 保持旧语义；sources ready 行本身就是待投影项，不另建 outbox；business 片段行同时存 raw 元数据与收据，唯一 namespace/source_id，条件 receiving→ready 与录音增版本同事务。先提交 business 再标 sources.projected_at；启动按 500 条分页对账全部 ready 来源。receiving 不生成 ready 文件/任务；App 仅兼容既有接口。
 - [ ] 在 raw 后、registry 后、business 后、消费标记前故障注入并重启，均不丢原件、不重复录音；原 DTLS/HTTP 回归 PASS。
 - [ ] 提交 `feat: project raw recordings through replayable source events`。
 
@@ -148,11 +149,11 @@
 <details>
 <summary>展开文件、接口与验收步骤</summary>
 
-**Files：** `product/jobs.py`、`files.py`、`test_jobs.py`、`test_files.py`；修改服务 lifespan。**接口：** `enqueue(snapshot: InputSnapshot, kind: str) -> str`、`claim(now_ms: int) -> Lease | None`、`publish(lease: Lease, object_id: str, tmp: Path, metadata: dict) -> str`、`recover(ctx) -> int`。
+**Files：** `product/jobs.py`、`files.py`、`test_jobs.py`、`test_files.py`；修改服务 lifespan。**接口：** `enqueue(snapshot: InputSnapshot, kind: str) -> str`、`claim(now_ms: int) -> Lease | None`、`publish(lease: Lease, tmp: Path, metadata: dict) -> str`、`recover(ctx) -> int`。
 
 - [ ] 写 `test_single_active_job`、`test_expired_lease_cannot_publish`、`test_rename_before_commit_recovers`、`test_new_revision_fences_old_output`。
 - [ ] 运行 `.venv-boa/bin/python -m pytest server/boa/tests/product/test_jobs.py server/boa/tests/product/test_files.py -q`，确认 FAIL。
-- [ ] 实现 decode/transcribe 去重、60 秒 lease/15 秒续期、有界重试；prepared→临时 fsync→预期 hash→同盘独占 rename/目录 fsync→ready；WAV 可核 hash 恢复，VTT/cues 的联合提交恢复由 S08 验证。用输入版本和租约控制发布，不创建多套运行历史表。
+- [ ] jobs 一行含任务、文件路径/hash/size、publication_state；decode 仅 WAV、transcribe 仅 VTT。实现按 recording/revision/kind 去重、SQL 部分唯一索引限制一个 running、60 秒 lease/15 秒续期、有界重试；prepared→临时 fsync→预期 hash→同盘独占 rename/目录 fsync→ready；WAV 可核 hash 恢复，VTT/cues 的联合提交恢复由 S08 验证。用输入版本和租约控制发布，不创建多套运行历史表。
 - [ ] 对发布边界中断、磁盘满、hash 冲突、文件缺失、双监听重复启动运行时做测试，PASS；服务退出停止领新任务，15 秒后留待重启恢复。
 - [ ] 提交 `feat: add minimal durable processing and file publication`。
 
@@ -167,7 +168,7 @@
 
 - [ ] 写 `test_raw_packet_framing_to_16000_mono_pcm16`、`test_bad_packet_preserves_raw`、`test_gap_does_not_get_silence`、`test_range_owner_and_logout`；1 秒合成样本应得 16000 样本，Range 合法 206、非法 416。
 - [ ] 运行 `.venv-boa/bin/python -m pytest server/boa/tests/product/test_decode.py server/boa/tests/product/test_audio_http.py -q`，确认 FAIL。
-- [ ] 按实际 raw profile 解包/封装并解码，临时分段后合一份 WAV；raw 不改写，样本数/独立 hash 入库；S06 发布当前音频。WAV 同时供播放、ASR、下载，不生成 MP3。Cookie/Bearer + owner 直接鉴权，不加 ticket 系统。
+- [ ] 按实际 raw profile 解包/封装并解码，临时分段后合一份 WAV；raw 元数据只在 recording_segments；样本数/独立 hash 随 WAV jobs 行入库；S06 发布当前音频。WAV 同时供播放、ASR、下载，不生成 MP3。Cookie/Bearer + owner 直接鉴权，不加 ticket 系统。
 - [ ] 目标测试和授权真实样本解码/试听分别通过；验证长录音拖动、超时/体积限制、并发新片段和旧音频仍可安全读取，记录 pre-skip 时间来源限制。
 - [ ] 提交 `feat: decode and serve persistent recording wav`。
 
@@ -180,10 +181,10 @@
 
 **Files：** `product/transcript.py`、`test_transcript.py`、`test_vtt.py`；复用 `docs/examples/recording.vtt` 为人工示例，不提交真实音频。**接口：** `ASR.transcribe(wav: Path, request_id: str) -> list[Cue]`、`validate_cues(cues: list[Cue], duration_ms: int) -> list[Cue]`、`render_vtt(cues: list[Cue]) -> bytes`、`publish_transcript(lease: Lease, cues: list[Cue]) -> None`。
 
-- [ ] 写 `test_vtt_header_utf8_milliseconds_and_voice`、`test_invalid_time_rejected_but_valid_overlap_kept`、`test_untrusted_text_escaped`、`test_old_transcript_not_on_new_wav`；示例应解析出 2 个 cue，结尾 5800ms，speaker A/B，空白文本 cue/逆序/越界拒绝；全程静音允许 0 cues。增加 `test_plain_text_roundtrip_and_json_vtt_same_cues`、`test_restart_loads_text_without_asr`、`test_vtt_file_without_cue_commit_is_reprocessed`。
+- [ ] 写 `test_vtt_header_utf8_milliseconds_and_voice`、`test_invalid_time_rejected_but_valid_overlap_kept`、`test_untrusted_text_escaped`、`test_old_transcript_not_on_new_wav`；示例应解析出 2 个 cue，结尾 5800ms，speaker A/B，空白文本 cue/逆序/越界拒绝；全程静音允许 0 cues。增加 `test_plain_text_roundtrip_and_json_vtt_same_cues`、`test_restart_loads_text_without_asr`、`test_vtt_file_without_cue_commit_is_reprocessed`、`test_missing_vtt_rebuilds_from_stored_json`、`test_json_limit_never_truncates_text`。
 - [ ] 运行 `.venv-boa/bin/python -m pytest server/boa/tests/product/test_transcript.py server/boa/tests/product/test_vtt.py -q`，确认 FAIL。
-- [ ] 按 v1 JSON 契约固定 cue_index 和整数毫秒，text 为未转义原文，speaker 可空；接一套实际私有 ASR adapter，未配置明确 not_configured；校验后生成 UTF-8 VTT，按 S06 持久发布，并把 cues/文件指针/文字 ready 原子提交。当前 audio_revision 与 transcript_revision 一致才对外显示；没有说话人就不编造。
-- [ ] 目标测试 PASS，重启后直接从 SQLite 读文字、由同版本 cues 导出 MD；VTT 已落盘但 cues 未提交的故障必须重跑而非补假 ready。浏览器实际解析示例 VTT；真实端点用授权样本检查时间/文本/分离质量。缺端点时只记契约通过；ASR 失败仍可播放 WAV，无纪要模型任务。
+- [ ] 按 v1 JSON 契约固定 cue_index 和整数毫秒，整份 transcript_json 不超过 8 MiB UTF-8，text 为未转义原文，speaker 可空；接一套实际私有 ASR adapter，未配置明确 not_configured；校验后生成 UTF-8 VTT，按 S06 持久发布，并把 recordings.transcript_json、vtt_job_id、文字 ready 与 jobs 成功原子提交。当前 audio_revision 与 transcript_revision 一致才对外显示；没有说话人就不编造。
+- [ ] 目标测试 PASS，重启后直接从 recordings.transcript_json 读文字、由同版本 cues 导出 MD；缺失 VTT 从 JSON 重建且 ASR 调用次数不增加；VTT 已落盘但 cues 未提交的故障必须重跑而非补假 ready。浏览器实际解析示例 VTT；真实端点用授权样本检查时间/文本/分离质量。缺端点时只记契约通过；ASR 失败仍可播放 WAV，无纪要模型任务。
 - [ ] 提交 `feat: add timestamped transcripts and webvtt output`。
 
 </details>

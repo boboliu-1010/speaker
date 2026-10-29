@@ -13,11 +13,14 @@ flowchart LR
 
 | 自查发现 | 已写入的修正 | 归属任务 |
 |---|---|---|
+| 技术表分拆过多 | 文件元数据/发布并入 jobs，原件/收据并入 segments，文字 JSON 并入 recordings，别名与待投影标记复用 registry | S01/S03/S05/S06/S08 |
+| registry 加列会破坏现有位置式 INSERT | 已定位 bindings/sources 写入；S01 必须改为显式列名并回归旧接口 | S01/S03/S05 |
+| 合并收据可能重复增版本或漏恢复 | 来源唯一键、首次 ready 条件更新、跨库先业务后标记、启动全量分批对账 | S05/S12 |
 | 旧设计仍有持久会话表 | 删除 browser_sessions；用户持久，登录事务/会话在有界内存 | S01–S02 |
 | Google 回调遇到 Strict 临时 Cookie 会丢绑定 | 临时 Cookie Lax；本站会话 Strict；同源固定 HTTPS 回调 | S02 |
 | 只比较 state 或邮箱不足以确认身份 | 浏览器绑定、一次消费、PKCE、nonce、token 校验；仅 sub 映射 | S02 |
 | 内存重启失效可能被误认为设备掉线 | 网页重登；DTLS 凭证、录音与持久任务独立 | S02/S12 |
-| “文字存在 VTT”不等于结构化原文落库 | transcript_cues 保存原文/整数毫秒/speaker/版本，JSON v1 同名 | S08/S10 |
+| “文字存在 VTT”不等于结构化原文落库 | recordings.transcript_json 保存原文/整数毫秒/speaker，版本与 owner 同行，JSON v1 同名 | S08/S10 |
 | VTT 文件先发布，崩溃后 cues 可能没提交 | 只凭 hash 不补 ready；重跑 ASR 再原子提交 cues/文件指针 | S06/S08 |
 | 静音可能被当成识别失败 | 允许 0 cues，区分 ready 空结果、failed、not_configured | S08–S10 |
 | 多请求分页可能混用音频版本 | 强制 revision 与游标绑定；复制取齐后才写剪贴板 | S07/S10 |
@@ -26,7 +29,7 @@ flowchart LR
 <details>
 <summary>验证证据与剩余验收</summary>
 
-文档级验证结果见本次提交：业务库 10 表（accounts 9 字段），registry 仅增 source_outbox；SQL 外键/约束/事务、JSON 与 VTT 示例语义、相对链接/锚点、12 组图源与 SVG、S01–S12 共 60 步保持一致。自查为作者评审，不代表独立安全审计或代码测试通过。
+文档级验证结果见本次提交：业务库 4 表（accounts 9 字段），registry 复用 bindings/sources、新增 0 表；19 项约束拒绝检查、原件投影幂等、JSON 分页/回滚、SQL 外键/完整性、既有 registry schema 加列夹具、JSON 与 VTT 示例语义、相对链接/锚点、12 组图源与 SVG、S01–S12 共 60 步保持一致。自查为作者评审，不代表独立安全审计或代码测试通过。
 
 | 验收项 | 当前证据 | 实施后必须取得 |
 |---|---|---|
@@ -37,6 +40,6 @@ flowchart LR
 | 设备与录音隔离 | owner/复合 FK 设计 | 跨用户 API、Range、下载、禁用与旧 Bearer 回归 |
 | 容量与备份 | 单进程、有界内存、停机备份设计 | 实测长录音、容量、隔离恢复与迁移回退 |
 
-设计结论：保持一个服务、10 张业务表、两类持久任务、两个页面。当前可作为开发输入；真实 Google 配置、可信设备发放、固件扫描与 ASR 端点是明确的联调前提，尚未验收。
+设计结论：保持一个服务、4 张新增业务表、两类持久任务、两个页面。当前可作为开发输入；JSON 合并的取舍是缺少逐句索引，8 MiB 上限与分页读取需在实施中实测；真实 Google 配置、可信设备发放、固件扫描与 ASR 端点是明确的联调前提，尚未验收。
 
 </details>

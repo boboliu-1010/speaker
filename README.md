@@ -8,4 +8,6 @@
 
 [Google 登录与转写格式](docs/superpowers/specs/2026-10-29-google-login-and-transcript-contract.md) · [自我评审](docs/2026-10-29-design-self-review.md)
 
+**新增业务表：4 张；registry 复用既有表，不再新增表。**
+
 当前为设计文档，尚未实施产品代码。[原型核对](docs/2026-10-29-prototype-review.md) · [图源维护](docs/assets/diagrams/README.md)

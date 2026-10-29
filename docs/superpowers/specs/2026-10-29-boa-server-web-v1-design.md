@@ -111,7 +111,7 @@ Web 的 `/api/boa/v1` 在 9529 同源转交同进程处理；浏览器不直接�
 
 ### 设备卡片
 
-改名只改用户别名，不改 UID/凭证。固件版本仅展示，不增加升级入口。在线、电量、待上传数必须有来源和采样时间；只有最近收件证据时显示“最近收件/状态未知”，不能假装在线。移除先撤销服务端上传凭证，尝试清理在线 BLE 上传配置；离线清理失败沿用既有交接锁。**已上传录音保留原 owner**，重新添加走受控绑定。
+改名写既有 registry.bindings.display_name，更新时同时核对 owner、binding_id 与 active；未命名回退既有显示名/设备 ID。别名随绑定隔离，不另建 device_preferences，不改 UID/凭证。固件版本仅展示，不增加升级入口。在线、电量、待上传数必须有来源和采样时间；只有最近收件证据时显示“最近收件/状态未知”，不能假装在线。移除先撤销服务端上传凭证，尝试清理在线 BLE 上传配置；离线清理失败沿用既有交接锁。**已上传录音保留原 owner**，重新添加走受控绑定。
 
 </details>
 
@@ -127,9 +127,9 @@ Web 的 `/api/boa/v1` 在 9529 同源转交同进程处理；浏览器不直接�
 
 保持 v3 原协议：数据 fsync → 持久检查点 → 整文件 size/hash 校验 → rename/目录 fsync。只有 raw 和可恢复归属的身份元数据持久后才回 COMPLETE，不等待 WAV、ASR 或 VTT。设备撤销后不能继续写入；旧绑定的历史文件仍属原用户。
 
-registry 完整来源状态与 `source_outbox` 同事务写。消费者在 business 单事务建立/更新 recording、片段、raw 对象、source_receipt，再标原事件 consumed。文件已落盘但索引失败，可从既有 identity/raw 对账；业务已提交但未标消费，重复事件不重复增版本。
+既有 registry 的 `sources` ready 行就是持久待投影项，新增 projected_at 标记，不再建 outbox 表。消费者在 business 单事务建立/更新 recording 与 recording_segments；同一片段行保存 raw 路径/size/hash，并以唯一 `(source_namespace,source_id)` 兼作来源收据。业务事务成功后才标 projected_at。文件已落盘但索引失败，可从既有 identity/raw 对账；业务已提交但未标记时重放，ready→ready 且 hash 相同不重复增版本，hash 冲突拒绝。启动分批核对全部 ready 来源，不能只信标记。
 
-录音按 `(source_kind, source_namespace, binding_epoch, source_session)` 聚合；新 ready 片段才递增 input_revision，重复 source 不增加。App 原上传接口只作为兼容来源，不添加文件上传页面。可定期读取已有 receiving 索引创建上传中的录音元信息，未收完整时不生成 raw ready 对象/处理任务。
+录音按 `(source_kind, source_namespace, binding_epoch, source_session)` 聚合；新 ready 片段才递增 input_revision，重复 source 不增加。App 原上传接口只作为兼容来源，不添加文件上传页面。可定期读取已有 receiving 索引创建上传中的录音元信息，未收完整时不标片段 ready、不生成处理任务。
 
 旧协议没有总片段清单，所以显示“已收到 N 个片段/完整性未知”，不伪造 3/5 或整段完成。收到连续片段后静默 10 分钟可处理当前已收内容，这不是结束证据；有缺号则等待补齐，不补静音、不生成虚假完整时间轴。后续片段到达更新输入版本并重做派生内容；不做用户可选择的历史版本功能。
 
@@ -148,7 +148,7 @@ registry 完整来源状态与 `source_outbox` 同事务写。消费者在 busin
 - Clip raw 格式为 `uint16 little-endian length + raw Opus packet`；先检查包边界/时长/声道，再正确封装或用受控解码器处理，不能直接当 Ogg 或 WAV。
 - 校验 raw hash 后解码为 **16 kHz、mono、PCM16 little-endian WAV**。逐段临时解码，再按冻结片段顺序合为一份 `recording.wav`，记录样本数、长度和独立 hash。
 - 一份已发布 WAV 同时用于原型播放、ASR 和下载，不另存 MP3、长期片段 WAV 或第二份 ASR WAV。临时分段文件成功后清理；原始文件始终保留。
-- 内部存储路径按对象 ID 与输入版本不可变；更新不覆盖正在播放的文件。当前指针只指向 ready 文件；旧派生文件在任务与读取不再使用后可清理，raw 不参与此清理。
+- 内部存储路径按 raw 来源或 job/attempt 与输入版本确定，不覆盖已发布路径；更新不覆盖正在播放的文件。当前指针只指向 jobs 中 ready 的文件；旧派生文件在任务与读取不再使用后可清理，raw 不参与此清理。
 - Ogg granule 的 48 kHz 时基与 PCM 16 kHz 区分；raw 没有 pre-skip 元数据时保留当前样本策略并标明时间来源。禁止隐式丢样、补音或把解码错误当正常音频。
 
 单 raw 段遵守既有 8 MiB 上限，连续录音处理默认上限 8 小时。16 kHz mono PCM16 约 115.2 MB/小时，先检查磁盘预算与工具超时；超限留 raw 并给出可恢复失败。原型“音频原文件（.wav）”实际是**设备原件解码所得 WAV**，不是原始 Opus 改后缀，建议按钮文字为“下载音频（.wav）”。
@@ -157,7 +157,7 @@ registry 完整来源状态与 `source_outbox` 同事务写。消费者在 busin
 
 <a id="dual-write"></a>
 
-## 7. 最少的后台任务与双写恢复
+## 7. 任务兼作文件索引与发布恢复
 
 ![文件和 SQLite 发布](../../assets/diagrams/06-file-database-publication.svg)
 
@@ -169,15 +169,17 @@ registry 完整来源状态与 `source_outbox` 同事务写。消费者在 busin
 
 | 步骤 | 操作 | 可见性 |
 |---|---|---|
-| 1 | DB 保存 staged 对象、prepared 发布记录、输入快照和 lease | 不可下载 |
+| 1 | jobs 一行保存输入快照、lease、临时/最终路径与 publication_state=prepared | 不可下载 |
 | 2 | 事务外写临时文件，检查 size/hash，flush/fsync | 不可下载 |
-| 3 | DB 记录预期 size/hash；持录音锁检查当前 input_revision 和 lease | 不可下载 |
+| 3 | jobs 记录预期 size/hash；持录音锁检查当前 input_revision 和 lease | 不可下载 |
 | 4 | 同文件系统独占 rename，相关目录 fsync | 文件存在仍不算 ready |
-| 5 | DB 再检查 fence，同事务提交对象 ready、录音指针和下一阶段状态 | 当前用户可读 |
+| 5 | DB 再检查 fence，同事务提交 jobs 成功/文件 ready、录音指针和下一阶段状态 | 当前用户可读 |
 
-文件与 SQLite 不是一个原子事务；靠发布记录恢复，不靠“同时写成功”的假设。WAV rename 后 DB 提交前崩溃，重启任务用新 lease 校验文件后补提交；VTT 同时依赖 cues，若 cues 事务未提交则重跑 ASR 并重新整体发布，不能套用仅校验文件的补提交。输入已过期则不改当前指针。ready 文件缺失则标 missing：WAV 由 raw 重建，VTT 优先由已提交的同版本 cues 重建；原件缺失单独告警。不同 hash 的同路径对象拒绝覆盖。
+文件与 SQLite 不是一个原子事务；靠 jobs 内的发布字段恢复，不靠“同时写成功”的假设。WAV rename 后 DB 提交前崩溃，重启任务用新 lease 校验文件后补提交；VTT 同时依赖 cues，若 cues 事务未提交则重跑 ASR 并重新整体发布，不能套用仅校验文件的补提交。输入已过期则不改当前指针。jobs 对应文件缺失则标 publication_state=missing：WAV 由 raw 重建，VTT 优先由已提交的同版本 cues 重建；原件缺失单独告警。不同 hash 的同路径对象拒绝覆盖。
 
-任务 input_json 冻结原件清单和媒体/ASR 配置版本；运行环境不匹配时不偷偷换工具执行。需因配置变化重做时由维护流程建立新输入修订，禁止同 revision 悄悄改变时间轴。
+每个 decode 任务只发布一份 WAV，每个 transcribe 任务只发布一份 VTT，文件 MIME 由 kind 派生；不建通用 storage_objects/file_publications。原件元数据在 recording_segments，不复制到 jobs。
+
+任务 input_json 冻结原件清单和媒体/ASR 配置版本，transcribe 还固定所消费的 wav_job_id 与 WAV hash；运行环境不匹配时不偷偷换工具执行。需因配置变化重做时由维护流程建立新输入修订，禁止同 revision 悄悄改变时间轴。
 
 单个活动任务，60 秒 lease、15 秒续期；瞬时错误最多重试 3 次，间隔 30 秒/2 分钟/10 分钟。解码超时 10 分钟、ASR 最长 60 分钟作为可配置初值。启动先恢复来源索引/事件，再恢复文件发布和过期任务；API/接收线程不等待模型执行。
 
@@ -198,10 +200,10 @@ ASR 消费当前 WAV，返回 cue 的 start_ms/end_ms/text 和可空 speaker。�
 ### 8.1 生成与存储
 
 1. 校验 JSON 片段：文本非空、毫秒为整数、`0 <= start < end`、时间不超当前 WAV 时长（允许最多 1ms 表示精度误差），起点不倒序。合法的多人重叠允许保留。
-2. 准备待发布 cues，每行带 recording_id、owner 和 input_revision；在步骤 5 的最终事务中写入 `transcript_cues`。它是结构化文字主源，**识别出的原文必须存入 SQLite**，VTT 和 Markdown 均由同一批 cues 生成。采用 UTF-8 纯文本、整数毫秒和可空 speaker，完整 JSON/字段/空结果约定见[转写格式](2026-10-29-google-login-and-transcript-contract.md#transcript-format)及[JSON 示例](../../examples/transcript.json)。不把 VTT 标签或转义后的 HTML 存进 text。
+2. 准备版本化 JSON `{schema_version:1,time_unit:"ms",cues:[...]}`，在步骤 5 的最终事务中整体写入 `recordings.transcript_json`，关联 transcript_revision；不另建 transcript_cues 表。它是唯一结构化文字主源，**识别出的原文必须存入 SQLite**，VTT 和 Markdown 均由同一批 cues 生成。采用 UTF-8 纯文本、整数毫秒和可空 speaker，完整 JSON/字段/空结果约定见[转写格式](2026-10-29-google-login-and-transcript-contract.md#transcript-format)及[JSON 示例](../../examples/transcript.json)。不把 VTT 标签或转义后的 HTML 存进 text。
 3. 生成 UTF-8 `transcript.vtt`，使用 `WEBVTT` 文件头、空行、稳定 cue 编号、`HH:MM:SS.mmm --> HH:MM:SS.mmm` 和可选 voice 标签。说明依据：[W3C WebVTT 格式](https://www.w3.org/TR/webvtt1/)。
 4. 用户文本的 `& < >` 转义，空白行规范化，speaker 标签只来自受控映射，不将 ASR 内容当任意 HTML/VTT 控制块。
-5. VTT 通过相同文件发布流程校验/持久，随后在短事务中提交 cues、VTT 对象指针和 transcript_revision/state；中断时不显示文字 ready，重启可重做。若仅有已 rename 的 VTT 而 cues 事务未提交，不能只凭文件 hash 补 ready：废弃该次未提交的派生产物并用同版本 WAV 重跑 ASR，新的 cues/VTT 重新一起发布；raw/WAV 保留。
+5. VTT 通过相同文件发布流程校验/持久，随后在短事务中提交 transcript_json、vtt_job_id 指针和 transcript_revision/state；中断时不显示文字 ready，重启可重做。若仅有已 rename 的 VTT 而 cues 事务未提交，不能只凭文件 hash 补 ready：废弃该次未提交的派生产物并用同版本 WAV 重跑 ASR，新的 cues/VTT 重新一起发布；raw/WAV 保留。
 
 ASR 耗时不影响 WAV 播放。新 WAV 发布后，只展示与 audio_revision 相同的 cues/VTT；旧文字不贴到新时间轴。没有用户历史版本切换：处理中提示等待即可。当前输入更新期间仍可保留上一份音频与同版本文字，标“更新中”；新音频替换时旧文字先隐藏。
 
@@ -225,7 +227,7 @@ WEBVTT
 
 ### 8.3 下载
 
-原型保留 WAV 与 `.md`；按用户追加要求，在同一个导出菜单加 `.vtt`，不增加新页面。WAV/VTT 为已存对象，Markdown 按当前 cues 流式生成：日期标题和 A/B 文字，不夹带摘要。没有 Word、TXT、异步导出记录、过期链接或公开分享链接。
+原型保留 WAV 与 `.md`；按用户追加要求，在同一个导出菜单加 `.vtt`，不增加新页面。WAV/VTT 为磁盘文件，其索引在对应 jobs 行，Markdown 按当前 cues 流式生成：日期标题和 A/B 文字，不夹带摘要。没有 Word、TXT、异步导出记录、过期链接或公开分享链接。
 
 </details>
 
@@ -268,27 +270,37 @@ Wi-Fi 扫描/保存/删除通过 BLE，不设计对应 Server 密码接口。处
 
 <a id="sqlite-model"></a>
 
-## 10. SQLite：保留 10 张表
+## 10. SQLite：4 张新增业务表
+
+![四表关系](../../assets/diagrams/02-user-data-model.svg)
+
+| 表 | 一条记录承载什么 |
+|---|---|
+| accounts | 基本用户与 Google sub，仍为 9 字段 |
+| recordings | 录音状态、版本、当前文件任务指针、完整转写 JSON |
+| recording_segments | 原始片段 + raw 路径/size/hash + 幂等来源收据 |
+| jobs | decode/transcribe 任务 + 派生文件元数据 + 发布/恢复状态 |
 
 <details>
-<summary>展开实现细则</summary>
+<summary>合并清单与保留边界</summary>
 
-| 表 | 用途 |
+| 原设计 | 合并到 |
 |---|---|
-| schema_migrations | 迁移版本 |
-| accounts | 9 字段基本用户 |
-| device_preferences | 本人设备别名，身份/凭证仍在 registry |
-| recordings | 日期、来源、最少状态、输入与当前音频/文字版本、对象指针 |
-| storage_objects | raw/WAV/VTT 的路径、独立 hash/size 与 staged/ready/missing 状态 |
-| recording_segments | 来源片段与原件引用；receiving 与 ready 分开 |
-| source_receipts | 完整来源事件幂等消费 |
-| jobs | 两类任务及冻结 source/hash 列表、lease/重试 |
-| file_publications | 文件发布记录和崩溃恢复 |
-| transcript_cues | 时间戳、speaker 与文字，按录音/输入版本排序 |
+| transcript_cues | recordings.transcript_json；没有全文搜索/逐句编辑需求，无需逐句表 |
+| source_receipts | recording_segments 唯一 namespace/source_id 与 imported_at |
+| storage_objects：raw | recording_segments 的 raw 路径/size/hash |
+| storage_objects：WAV/VTT、file_publications | jobs 的文件路径/size/hash/publication_state |
+| device_preferences | 既有 registry.bindings 的 display_name/name_updated_at |
+| schema_migrations | SQLite PRAGMA user_version；每次迁移与版本更新同事务 |
+| 新增 source_outbox | 既有 registry.sources ready 行 + projected_at |
 
-registry 只增加 source_outbox，不加删除墓碑、清理历史或多份用户索引。数据库内用同 owner/同 recording 复合 FK，跨库不伪造 FK；每连接启用 foreign_keys、5 秒 busy timeout、synchronous FULL，业务库 WAL。音频不入 BLOB。
+**本次新增业务表从 10 减至 4；registry 新增 0 张表。** 既有 registry 的凭证、绑定和清理锁仍然保留，不把整个系统宣称成只有 4 张表。参考 DDL 尚未生产部署，不执行删表式真实数据迁移。
 
-不建 OAuth/token/browser_sessions 表；登录事务和会话是进程内有界 map。也不建 summaries、summary_references、recording_search、exports、media_tickets、audit_events、tombstones、processing_runs 或 media_assets。普通结构化日志用于排障，不把它扩成产品审计平台。
+保留这四表的理由：用户跨录音复用；录音包含多个独立原件；同一录音可同时存在旧版本处理任务与新版本等待任务。jobs 因而保留独立行，原始片段不能塞进单个录音字段。文字当前只有一版展示，可放一个有界 JSON：最多 8 MiB UTF-8、100000 cues、每句 10000 字符，超限明确失败，不截断。API 仍按 200 cues 分页；实现可用 SQLite json_each 在固定快照取页，避免每个请求构造全部句子；导出逐句迭代。没有额外的 JSON 文件副本或逐句表。
+
+recordings 的 wav_job_id/vtt_job_id 用 owner/录音/版本复合 FK 指向 jobs；文件发布与文件读取同时验证 job.kind、state/publication_state、size/hash；文字 API 独立读取录音当前 JSON，不因 VTT 文件缺失而丢掉已存文字。原件来源唯一约束负责幂等，条件更新 receiving→ready 与 input_revision 递增同事务。每次启动对账全部 registry ready 来源，分批 500 条异步执行，不阻塞 DTLS。
+
+迁移脚本保存在 Git，业务库通过 PRAGMA user_version 顺序升级并拒绝未知高版本；实施中同时把既有 registry.py 的 bindings/sources 位置式 INSERT 改为显式列名，防止 ALTER ADD COLUMN 后旧写入因列数变化失败；加入真实旧 schema 升级夹具。registry 增量先检查既有列，沿用其迁移所有权，不覆盖其他组件版本号。每连接 foreign_keys=ON、busy_timeout=5000、synchronous=FULL；业务库 WAL。音频不入 BLOB。登录事务/会话仍只在内存。
 
 </details>
 
