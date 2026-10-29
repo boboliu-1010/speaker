@@ -93,10 +93,10 @@ p.text(1005, 588, ['认证临时状态保存在内存', '任务与录音保存�
 p.save('01-system-architecture')
 
 # Persistence ownership view for receive and projection.
-p = Plate('收件与数据投影', '原件持久化与业务索引分别承担确认和读取职责', 760)
+p = Plate('原件存储与双写投影', '原件与来源索引完成持久化后确认设备；业务投影可恢复', 760)
 p.card(40, 160, 250, 370, '设备 / 接收器', ['设备凭证与归属校验', '已持久偏移 ACK', 'size / SHA-256 检查', 'raw 与 identity 持久化', '完整来源就绪后 COMPLETE'], TEAL)
-p.entity(335, 160, 415, 'registry.sources', ['source_id / owner / binding', 'session / segment / object_id', 'size / sha256', 'state = ready', 'projected_at = NULL 或提交时间'])
-p.entity(795, 160, 445, '业务库', ['recordings：来源聚合与输入版本', 'recording_segments：raw 元数据', '唯一键：namespace + source_id', 'imported_at：首次导入时间', '同一事务更新片段与录音版本'])
+p.entity(335, 160, 415, 'registry.sources', ['id / owner / binding', 'session / segment / object_id', 'size / sha256', 'state = ready', 'projected_at = NULL 或提交时间'])
+p.entity(795, 160, 445, '业务库', ['recordings：来源聚合与输入版本', 'recording_segments：raw 元数据', '唯一键：source_namespace + source_id', 'imported_at：首次导入时间', '同一事务更新片段与录音版本'])
 p.rect(335, 430, 905, 100, '#edf3ff', '#d3e0f7')
 p.text(357, 465, '跨库提交规则', 20, BLUE, '600')
 p.text(357, 500, '业务提交成功后填写 projected_at；重放时核对来源唯一键与 hash。', 18)
@@ -107,13 +107,13 @@ p.text(62, 675, '设备接收确认与 WAV / ASR 任务独立运行。', 18, MUT
 p.save('04-raw-ingest-outbox')
 
 # State matrix makes file/database commit and failure handling visible.
-p = Plate('文件发布与恢复状态', 'jobs 保存发布元数据；recordings 保存当前版本指针', 805)
+p = Plate('文件与数据库双写', '文件落盘后，jobs / 录音指针 / 转写 JSON 按事务发布', 805)
 xs = [40, 205, 490, 760, 1010]
 heads = ['提交阶段', '磁盘文件', 'jobs', 'recordings', '恢复动作']
 for x, h in zip(xs, heads):p.text(x + 12, 165, h, 19, INK, '600')
 rows = [
  ('准备', ['临时路径 / 最终路径'], ['prepared', '记录 lease'], ['保留当前指针'], ['回收过期 lease']),
- ('生成', ['临时文件 fsync', '记录预期 size/hash'], ['prepared', '元数据已保存'], ['保留当前指针'], ['重做未完成产物']),
+ ('生成', ['临时文件 fsync', '记录 size/hash/sample_count'], ['prepared', '元数据已保存'], ['保留当前指针'], ['重做未完成产物']),
  ('文件落盘', ['rename + 目录 fsync'], ['prepared', '最终文件可校验'], ['等待事务提交'], ['WAV 校验后补提交', 'VTT 结合文字事务处理']),
  ('事务完成', ['最终 WAV / VTT'], ['succeeded / ready'], ['更新版本与指针', '转写同时写 JSON'], ['直接读取已存结果']),
 ]
@@ -126,4 +126,23 @@ p.text(60, 671, '转写恢复规则', 22, TEAL, '600')
 p.text(60, 709, 'VTT 已落盘、JSON 未提交：重跑 ASR 后整体发布。JSON 已提交、VTT 丢失：从 JSON 重建 VTT。', 18)
 p.save('06-file-database-publication')
 
-print('Generated 3 design SVG plates.')
+# Owner-scoped access, private storage, and independent recovery copy.
+p = Plate('音频存储与访问边界', '用户通过媒体接口读取；服务账号管理加密数据卷与独立备份', 825)
+p.card(40, 190, 245, 212, 'Web 用户', ['本站 Cookie', '录音 ID + revision', 'WAV / JSON / VTT / MD'], BLUE)
+p.rect(345, 150, 550, 290, PALE)
+p.text(368, 188, '媒体与录音服务', 25, INK, '600')
+p.card(367, 211, 246, 190, '访问校验', ['会话与账号状态', 'owner 与录音版本', '文件状态 / 类型 / size'], BLUE)
+p.card(633, 211, 240, 190, '保存与发布', ['受限解码与识别', '文件 fsync / hash', 'SQLite 事务发布'], TEAL)
+p.rect(345, 505, 550, 236, '#eaf5f1', '#c4ded5')
+p.text(368, 544, '加密数据卷 · 专用服务账号', 24, TEAL, '600')
+p.text(368, 591, ['raw 原件 / WAV / VTT', 'SQLite：归属、文件元数据、原文 JSON', '目录 0700 / 文件 0600', '文件通过服务端 ID 定位'], 19, INK)
+p.card(960, 150, 280, 218, '受控 ASR', ['固定端点与目标白名单', 'HTTPS / 本机受控访问', '校验后传入 WAV', '本次处理后清理临时副本'], TEAL)
+p.card(960, 505, 280, 236, '独立加密备份', ['一致性快照与 size/hash', '默认每日，最近 7 份', '验证后标记备份成功', '密钥与备份分开授权', '校验归属后恢复'], BLUE)
+p.line(285, 288, 345, 288, BLUE, 2);p.text(289, 270, 'HTTPS', 14, BLUE)
+p.line(895, 268, 960, 268, TEAL, 2)
+p.line(620, 440, 620, 505, TEAL, 2)
+p.line(895, 610, 960, 610, BLUE, 2)
+p.text(40, 793, '双写保证文件与索引一致；独立备份提供存储卷损坏后的恢复点。', 19, MUTED)
+p.save('07-storage-security')
+
+print('Generated 4 design SVG plates.')

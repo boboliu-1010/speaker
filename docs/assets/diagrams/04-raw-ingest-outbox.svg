@@ -1,9 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1280" height="760" viewBox="0 0 1280 760">
-<title>收件与数据投影</title>
+<title>原件存储与双写投影</title>
 <rect width="1280" height="100%" fill="white"/>
 <g font-family="PingFang SC,Microsoft YaHei,Noto Sans CJK SC,Arial,sans-serif">
-<text x="40" y="55" font-size="30" font-weight="600" fill="#17283f">收件与数据投影</text>
-<text x="40" y="88" font-size="17" font-weight="400" fill="#607088">原件持久化与业务索引分别承担确认和读取职责</text>
+<text x="40" y="55" font-size="30" font-weight="600" fill="#17283f">原件存储与双写投影</text>
+<text x="40" y="88" font-size="17" font-weight="400" fill="#607088">原件与来源索引完成持久化后确认设备；业务投影可恢复</text>
 <line x1="40" y1="112" x2="1240" y2="112" stroke="#d8e0ea" stroke-width="1.5"/>
 <rect x="40" y="160" width="250" height="370" rx="8" fill="white" stroke="#d8e0ea"/>
 <rect x="40" y="160" width="5" height="370" rx="0" fill="#087f74" stroke="#087f74"/>
@@ -17,7 +17,7 @@
 <rect x="335" y="160" width="415" height="48" rx="0" fill="#17283f" stroke="#17283f"/>
 <text x="353" y="192" font-size="21" font-weight="600" fill="white">registry.sources</text>
 <rect x="336" y="208" width="413" height="31" rx="0" fill="#f3f6fa" stroke="#f3f6fa"/>
-<text x="351" y="230" font-size="16" font-weight="400" fill="#17283f">source_id / owner / binding</text>
+<text x="351" y="230" font-size="16" font-weight="400" fill="#17283f">id / owner / binding</text>
 <text x="351" y="261" font-size="16" font-weight="400" fill="#17283f">session / segment / object_id</text>
 <rect x="336" y="270" width="413" height="31" rx="0" fill="#f3f6fa" stroke="#f3f6fa"/>
 <text x="351" y="292" font-size="16" font-weight="400" fill="#17283f">size / sha256</text>
@@ -31,7 +31,7 @@
 <text x="811" y="230" font-size="16" font-weight="400" fill="#17283f">recordings：来源聚合与输入版本</text>
 <text x="811" y="261" font-size="16" font-weight="400" fill="#17283f">recording_segments：raw 元数据</text>
 <rect x="796" y="270" width="443" height="31" rx="0" fill="#f3f6fa" stroke="#f3f6fa"/>
-<text x="811" y="292" font-size="16" font-weight="400" fill="#17283f">唯一键：namespace + source_id</text>
+<text x="811" y="292" font-size="16" font-weight="400" fill="#17283f">唯一键：source_namespace + source_id</text>
 <text x="811" y="323" font-size="16" font-weight="400" fill="#17283f">imported_at：首次导入时间</text>
 <rect x="796" y="332" width="443" height="31" rx="0" fill="#f3f6fa" stroke="#f3f6fa"/>
 <text x="811" y="354" font-size="16" font-weight="400" fill="#17283f">同一事务更新片段与录音版本</text>

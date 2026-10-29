@@ -7,7 +7,7 @@ v1 · 2026-10-29
 - 用户通过 Google 登录；Server 维护本站 session，业务数据按 owner 归属。
 - 设备绑定到用户，Server 发放上传配置；Wi-Fi 由 Clip 扫描并经 BLE 设置。
 - Web 查询本人的设备和录音，取得音频、文字和导出链接。
-- 业务库使用 accounts、recordings、recording_segments、jobs 四张表；[音频处理设计](docs/audio-processing.md)单独说明解码、转写、VTT 和恢复。
+- 业务库使用 accounts、recordings、recording_segments、jobs 四张表；[音频处理设计](docs/audio-processing.md)负责音频文件存储、文件/数据库双写、转写/VTT、安全读取和恢复。
 
 [对象与表](#data-model) · [Web API](#web-api) · [登录与会话](#oauth) · [设备规则](#ble) · [SQL](#sql)
 
@@ -79,8 +79,10 @@ v1 · 2026-10-29
 | 设备 | device_id、device_uid、binding_id、epoch、display_name、firmware、capabilities、telemetry；身份字段按上表映射，设备能力取自已验证读回或固件资料，缺失为 null |
 | configuration | 沿用上传配置：device_id、device_uid、owner_id、binding_id、epoch、revision、endpoint、device_token；身份值与外层响应一致 |
 | 录音列表 | recordings 的 id、time_source、recorded_at、received_at、duration_ms、audio_state、transcript_state；preview_text 从当前同版本 JSON 的第一句提取，未就绪时为空 |
-| 录音详情 | 列表字段，加 integrity、input_revision、audio_revision、transcript_revision、links |
+| 录音详情 | 列表字段，加 integrity、input_revision、audio_revision、transcript_revision、audio_error_code、transcript_error_code、links |
 | links | audio、transcript、vtt、markdown；Server 按就绪状态构造带 revision 的地址，未就绪项为 null；文件可用性由媒体接口复核 |
+
+audio_error_code 取当前 input_revision 的失败 decode 任务，transcript_error_code 取当前 audio_revision 的失败 transcribe 任务；值为对应 jobs.error_code，未失败时为 null。
 
 telemetry 的 online、battery、pending 分别返回 `{value,sampled_at,source}`；缺少有效来源时 value=null。时间统一为 UTC Unix 毫秒。配置/凭证响应使用 no-store。
 

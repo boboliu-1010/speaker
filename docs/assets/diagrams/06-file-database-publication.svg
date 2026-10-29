@@ -1,9 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1280" height="805" viewBox="0 0 1280 805">
-<title>文件发布与恢复状态</title>
+<title>文件与数据库双写</title>
 <rect width="1280" height="100%" fill="white"/>
 <g font-family="PingFang SC,Microsoft YaHei,Noto Sans CJK SC,Arial,sans-serif">
-<text x="40" y="55" font-size="30" font-weight="600" fill="#17283f">文件发布与恢复状态</text>
-<text x="40" y="88" font-size="17" font-weight="400" fill="#607088">jobs 保存发布元数据；recordings 保存当前版本指针</text>
+<text x="40" y="55" font-size="30" font-weight="600" fill="#17283f">文件与数据库双写</text>
+<text x="40" y="88" font-size="17" font-weight="400" fill="#607088">文件落盘后，jobs / 录音指针 / 转写 JSON 按事务发布</text>
 <line x1="40" y1="112" x2="1240" y2="112" stroke="#d8e0ea" stroke-width="1.5"/>
 <text x="52" y="165" font-size="19" font-weight="600" fill="#17283f">提交阶段</text>
 <text x="217" y="165" font-size="19" font-weight="600" fill="#17283f">磁盘文件</text>
@@ -20,7 +20,7 @@
 <rect x="40" y="294" width="1200" height="100" rx="0" fill="white" stroke="#d8e0ea"/>
 <text x="52" y="330" font-size="16" font-weight="400" fill="#17283f">生成</text>
 <text x="217" y="330" font-size="16" font-weight="400" fill="#17283f">临时文件 fsync</text>
-<text x="217" y="356" font-size="16" font-weight="400" fill="#17283f">记录预期 size/hash</text>
+<text x="217" y="356" font-size="16" font-weight="400" fill="#17283f">记录 size/hash/sample_count</text>
 <text x="502" y="330" font-size="16" font-weight="400" fill="#17283f">prepared</text>
 <text x="502" y="356" font-size="16" font-weight="400" fill="#17283f">元数据已保存</text>
 <text x="772" y="330" font-size="16" font-weight="400" fill="#17283f">保留当前指针</text>
