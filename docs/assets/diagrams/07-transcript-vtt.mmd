@@ -1,0 +1,11 @@
+flowchart TB
+    WAV["当前已发布 WAV 与 audio_revision"] --> ASR["私有 ASR：文本 / 时间戳 / 可空 speaker"]
+    ASR --> Validate["校验时长、顺序、重叠与文本"]
+    Validate --> Cues["准备同一组 Cue，不先显示 ready"]
+    Cues --> File["生成 UTF-8 WebVTT，转义文本"]
+    File --> Persist["VTT 文件校验、fsync、可靠发布"]
+    Persist --> Commit["SQLite 同事务提交 cues、VTT 指针、文字 ready"]
+    Commit --> Web["文字显示 / 复制"]
+    Commit --> MD["按同组 cues 即时生成 Markdown"]
+    Commit --> Download["鉴权下载 .vtt"]
+    Check["发布前：lease 与输入版本有效，文字与音频同版本"] -.-> Commit

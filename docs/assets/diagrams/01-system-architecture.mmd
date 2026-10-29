@@ -1,30 +1,18 @@
 flowchart TB
-    Clip["ReSpeaker Clip"]
-    Browser["用户浏览器"]
-    App["现有 App"]
-    AI["已配置的私有 ASR / 纪要服务"]
-    subgraph Boa["一个 Boa 常驻 Python 进程"]
-        HTTP["Web / API：会话、归属与删除门禁"]
-        DTLS["设备鉴权与 DTLS 接收线程"]
-        Jobs["来源对账与单任务调度"]
+    Browser["浏览器：录音 / 设备 / 账号退出"] --> API
+    Clip["Clip：Wi-Fi 上传"] --> DTLS
+    subgraph Boa["一个 Boa Python 常驻进程"]
+        API["HTTPS API 与静态 Web"]
+        DTLS["DTLS 接收与持久确认"]
+        Jobs["来源对账 + 单任务调度"]
     end
-    subgraph Disk["同机持久数据卷"]
-        Raw["原始录音与身份元数据"]
-        Registry["registry.sqlite3 / 既有上传索引"]
-        Business["business.sqlite3"]
-        Derived["片段 WAV / 会话 WAV / MP3 / 导出"]
-    end
-    Media["受控媒体工具子进程"]
-    Browser -->|"HTTPS 9529，同源 API"| HTTP
-    App -->|"HTTPS 9528"| HTTP
-    Clip -->|"Wi-Fi / DTLS UDP 9528"| DTLS
-    HTTP -->|"鉴权后访问"| Business
-    HTTP -->|"鉴权后读取"| Derived
-    DTLS --> Raw
-    DTLS --> Registry
-    Registry -->|"outbox"| Jobs
-    Jobs <-->|"业务投影、任务与结果"| Business
-    Jobs --> Media
-    Raw --> Media
-    Media --> Derived
-    Jobs <-->|"私有端点"| AI
+    Data["本机持久卷：SQLite + raw / WAV / VTT"]
+    Tool["受控 WAV 解码子进程"]
+    ASR["配置的私有 ASR 服务"]
+    API <-->|"会话与 owner 鉴权"| Data
+    DTLS --> Data
+    Data --> Jobs
+    Jobs --> Tool
+    Tool --> Data
+    Jobs <-->|"转写；不生成纪要"| ASR
+    ASR -->|"cues 与 VTT 经校验发布"| Data

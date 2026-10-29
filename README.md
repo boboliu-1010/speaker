@@ -1,35 +1,32 @@
-# Boa Voice — Server & Web
+# 录音助手 — Server & Web
 
-ReSpeaker Clip 配套 Server + Web 第一版的设计与实施文档。
+ReSpeaker Clip 配套 Server/Web 的精简设计与实施文档。以[当前原型](https://comfy-faloodeh-ec9b57.netlify.app/)和用户补充的 VTT 要求为范围；当前只管理文档，尚未实施产品代码或生产迁移。
 
-当前阶段：设计与任务规划。产品代码尚未在此仓库实现，参考 SQL 尚未应用到真实数据。
+先看[原型核对与删减](docs/2026-10-29-prototype-review.md)，再读[图解](docs/boa-v1-illustrated-guide.md)。
 
-建议先读 [架构图解与关键步骤](docs/boa-v1-illustrated-guide.md)，再查完整设计和开发任务。图解按“目的 → 配图 → 操作步骤 → 成功判据 → 失败恢复”组织，覆盖 12 条主要视图与流程。
-
-![Boa Voice Server 与 Web 架构总览](docs/assets/diagrams/01-system-architecture.svg)
+![精简架构](docs/assets/diagrams/01-system-architecture.svg)
 
 ## 文档导航
 
 | 文档 | 内容 |
 |---|---|
-| [架构图解与关键步骤](docs/boa-v1-illustrated-guide.md) | 12 张 SVG 配图，逐步解释基本用户、绑定、收件、解码、双写恢复、播放、删除、数据模型、迁移和实施顺序 |
-| [完整设计](docs/superpowers/specs/2026-10-29-boa-server-web-v1-design.md) | 产品范围、Server/Web 架构、基本用户表、录音解码转存与双写恢复、API、SQLite 模型、部署迁移和验收 |
-| [业务库参考 SQL](docs/superpowers/specs/2026-10-29-boa-v1-business-schema.sql) | 基本用户、会话、录音、处理任务、文件发布、全文、纪要、审计和检索 |
-| [registry 扩展参考 SQL](docs/superpowers/specs/2026-10-29-boa-v1-registry-additions.sql) | 来源 outbox、Clip/App 删除屏障和删除事件 |
-| [实施计划](docs/superpowers/plans/2026-10-29-boa-server-web-v1-implementation-plan.md) | T00–T23 共 24 项开发任务、依赖、接口、验证步骤和里程碑 |
+| [原型核对](docs/2026-10-29-prototype-review.md) | 实际页面、保留/删除项及固件能力差距 |
+| [架构图解](docs/boa-v1-illustrated-guide.md) | 8 张图与关键步骤；包含完整 VTT 示例 |
+| [Server/Web 设计](docs/superpowers/specs/2026-10-29-boa-server-web-v1-design.md) | 基本用户、设备、收件、WAV、转写/VTT、API、恢复 |
+| [业务库 SQL](docs/superpowers/specs/2026-10-29-boa-v1-business-schema.sql) | 11 张表：用户/会话/归属/任务/文件/cues |
+| [registry SQL](docs/superpowers/specs/2026-10-29-boa-v1-registry-additions.sql) | 只增来源完成 outbox |
+| [实施计划](docs/superpowers/plans/2026-10-29-boa-server-web-v1-implementation-plan.md) | S01–S12，共 12 项任务、60 个步骤 |
+| [VTT 示例](docs/examples/recording.vtt) | 人工编写的带时间戳与 A/B 说话人的字幕示例 |
 
-## 第一版路线
+## 第一版只做这些
 
-- 沿用 Python 单进程、SQLite 和静态 Web，复用现有 DTLS v3 接收与 BLE/OTA 能力。
-- 按新版原型仅保留基本用户资料与会话，认证流程不展开，原始录音和解码 WAV 双保留，MP3 用于网页播放。
-- 优先跑通上传、入库、解码双写、播放、删除与恢复；随后接入私有 ASR、纪要、搜索和导出。
+- 基本用户、账号退出；两个页面：录音、设备。
+- 用户添加设备、BLE 激活配置与 Wi-Fi、设备改名/移除；真实能力未具备时明确标记。
+- 日期筛选、基础播放、文字/复制；下载 WAV、Markdown、VTT。
+- raw 与一份当前 WAV 双保留，SQLite 元数据与文件可靠发布，私有 ASR 输出 cues/VTT。
 
-现有实现基线来自 [`BofAI/reSpeaker_Clip`](https://github.com/BofAI/reSpeaker_Clip)，设计读取的提交为 `77ae7fc`。实施前需核对该源码仓库的当前状态和分支约定。
+不开发纪要、全文搜索、Word、录音回收站、复杂账号/管理页面、OTA/维修或 MP3。OAuth 流程不展开，保留现有可信登录结果的接入边界。
 
-## 文档维护
+源码基线来自 [BofAI/reSpeaker_Clip](https://github.com/BofAI/reSpeaker_Clip)。此仓库先管理设计，实施在核对后的源仓库隔离工作区执行，引用固定文档 commit。历史大版本文档由 Git 保留，旧 T00–T23 不再是当前待办。
 
-此仓库为设计和计划的版本管理入口；修改设计时同步核对 SQL 附件与实施计划。SQL 文件是结构参考，真正迁移需要在实现仓库编写版本化迁移并验证旧数据兼容。
-
-图形以 Mermaid `.mmd` 维护可编辑源文件，同时提交 SVG，直接在文档中展示；更新流程时同步更新图源与导出图。渲染方式见 [配图维护说明](docs/assets/diagrams/README.md)。
-
-提交仅包含文档与参考 SQL。真实录音、数据库、登录凭证、设备令牌和签名材料保存在仓库之外。
+图源 `.mmd` 与 SVG 一起提交，见[维护说明](docs/assets/diagrams/README.md)。SQL 是设计参考，真实迁移需验证旧数据。录音、数据库、凭证和签名材料不提交。

@@ -1,18 +1,19 @@
 sequenceDiagram
     autonumber
-    participant A as 管理员
-    participant S as Boa Server
-    participant W as 用户 Web
+    participant U as 用户 Web
     participant C as Clip
-    A->>S: 预登记 UID，分配用户与设备绑定
-    W->>C: 用户点击后选择 BLE 设备
-    C-->>W: 读取完整硬件 UID 与能力
-    W->>S: 当前用户请求该 UID 的绑定配置
-    S->>S: 校验用户归属、UID、绑定与清理锁
-    S-->>W: 当前绑定的上传配置
-    W->>C: BLE 写入配置与用户输入的 Wi-Fi
-    C-->>W: 读回 binding_id、epoch、revision
-    W->>S: 上报配置读回确认
-    C->>S: 之后通过 Wi-Fi / DTLS 上传真实录音
-    S-->>W: 展示已校验收件及时间
-    Note over S,C: 配置确认与真实收件是两类独立证据
+    participant S as Server
+    participant P as 可信设备登记或发放能力
+    U->>C: 用户选择 BLE 设备，读 UID / 能力
+    U->>S: 请求本人设备激活，提交既有可信依据
+    S->>P: 验证设备可发放与归属，不信任单独 UID
+    P-->>S: 允许本人绑定，或拒绝
+    S-->>U: 本人 binding / 上传配置
+    U->>C: 写入凭证和上传目标，校准时间
+    C-->>U: 读回配置
+    U->>S: 配置确认
+    U->>C: 扫描或手动添加 Wi-Fi，密码只走 BLE
+    C-->>U: 已保存 / 已验证 / 不支持
+    Note over U,C: 最多 5 个以真实固件能力为准；没有能力不显示假成功
+    C->>S: 之后真实上传录音
+    Note over U,S: 移除撤上传凭证，历史录音仍属于原用户

@@ -1,24 +1,18 @@
 sequenceDiagram
     autonumber
-    participant J as 持租约任务
-    participant B as business.sqlite3
-    participant F as 派生文件磁盘
-    participant A as 权威屏障与来源锁
-    J->>B: 建 staged 对象与 prepared 发布日志
-    J->>F: 写临时文件，校验，flush 与 fsync
-    J->>B: 保存 expected size/hash 与样本信息
-    J->>A: 持发布锁，核对 lease、输入版本和删除 epoch
-    J->>F: 独占原子 rename，相关目录 fsync
-    alt rename 后、DB 提交前崩溃
-        Note over J,A: 原进程退出释放锁，未发布 ready
-        J->>B: 重启恢复任务领取新 lease，读取发布日志
-        J->>F: 校验最终文件与预期 hash
-        J->>A: 重新持锁并检查当前版本与屏障
-        J->>B: 有效则补提交，否则登记过期对象并清理
-        J->>A: 释放恢复任务的发布锁
-    else 正常执行
-        J->>B: 再核对 fence，同事务写 ready、asset、阶段指针
-        J->>A: 释放发布锁
-        B-->>J: committed；只向用户暴露 ready 对象
+    participant J as 持 lease 的任务
+    participant B as SQLite
+    participant F as 派生文件
+    J->>B: staged 对象 + prepared 发布记录
+    J->>F: 事务外生成临时文件，校验并 fsync
+    J->>B: 保存预期 size/hash
+    J->>J: 持录音锁，核对当前输入版本与 lease
+    J->>F: 独占 rename，相关目录 fsync
+    alt 正常提交
+        J->>B: 再检查 fence；同事务 ready 与录音指针
+    else 文件已发布但数据库提交前崩溃
+        J->>B: 恢复任务领取新 lease，读取 prepared
+        J->>F: 核对最终文件 hash
+        J->>B: 当前版本才补提交，旧版本不覆盖新结果
     end
-    Note over J,F: 文件操作与 SQLite 不构成一个原子事务，依靠日志恢复
+    Note over B,F: 文件存在不等于 ready；raw 不参与临时文件清理

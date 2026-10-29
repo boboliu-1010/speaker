@@ -1,41 +1,23 @@
-# 配图维护说明
+# 精简版配图
 
-本目录保存 Boa Voice 第一版文档的 12 组配图。每组 `.mmd` 为 Mermaid 源文件，同名 `.svg` 为实际渲染的展示文件；正文引用 SVG，便于在 GitHub 和普通 Markdown 阅读器中查看。
+保留 8 组图源与同名 SVG，正文直接引用 SVG。旧票据播放、删除/回收站、纪要版本和大模型关系图随对应功能删除；历史可从 Git 查看。
 
-## 图形索引
+| 图源 | 说明 |
+|---|---|
+| [01 系统架构](01-system-architecture.mmd) | 一个进程、最少处理链 |
+| [02 用户关系](02-user-data-model.mmd) | 9 字段基本用户与录音/会话 |
+| [03 设备向导](03-device-onboarding.mmd) | 可信发放、凭证/校时、Wi-Fi |
+| [04 收件](04-raw-ingest-outbox.mmd) | raw ACK 与 SQLite 投影 |
+| [05 解码](05-decode-and-retain.mmd) | raw 加一份 WAV，取消 MP3/重复 WAV |
+| [06 文件发布](06-file-database-publication.mmd) | fsync/rename/ready 与恢复 |
+| [07 VTT](07-transcript-vtt.mmd) | cues、VTT、Markdown 同源 |
+| [12 实施顺序](12-implementation-order.mmd) | S01–S12；文件编号保留以减少链接变动 |
 
-| 编号 | 图源 | 说明 |
-|---|---|---|
-| 01 | [系统架构](01-system-architecture.mmd) | 用户、设备、单进程服务、磁盘与私有推理端点 |
-| 02 | [基本用户表](02-user-data-model.mmd) | 用户、会话、设备和录音的数据关系；不展开认证流程 |
-| 03 | [设备接入](03-device-onboarding.mmd) | 管理员登记、BLE 配置、读回、真实收件 |
-| 04 | [原件与 outbox](04-raw-ingest-outbox.mmd) | 持久 ACK、来源索引、业务投影和收据 |
-| 05 | [解码与双保留](05-decode-and-retain.mmd) | raw、WAV、MP3 与完整性判断 |
-| 06 | [文件与数据库发布](06-file-database-publication.mmd) | staged、fsync、rename、ready、崩溃恢复 |
-| 07 | [结果版本](07-result-versioning.mmd) | 媒体/全文/纪要独立发布及旧结果引用 |
-| 08 | [鉴权播放](08-authorized-playback.mmd) | 会话绑定 ticket、Range、续期与撤销 |
-| 09 | [删除恢复](09-delete-restore.mmd) | 权威屏障、epoch、回收站、GC 和墓碑 |
-| 10 | [核心数据关系](10-core-data-model.mmd) | 业务库核心实体及输入/输出关系 |
-| 11 | [迁移恢复](11-migration-and-recovery.mmd) | 停机快照、隔离迁移、恢复与安全回退 |
-| 12 | [实施顺序](12-implementation-order.mmd) | T00–T23 推荐顺序及外部联调资源 |
-
-## 更新流程
-
-1. 修改相应 `.mmd`，与完整设计、SQL 和实施计划核对。
-2. 使用 Mermaid CLI **12.0.0** 重新导出同名 SVG；渲染工具不属于产品运行依赖。
-3. 使用已提交的 [mermaid.config.json](mermaid.config.json)，全局 `htmlLabels=false` 且 `flowchart.htmlLabels=false`，输出标准 SVG 文字；字体使用支持中文的本机字体。颜色统一浅绿/灰与深色文字，避免远程字体与外部图片依赖。
-4. 以图片打开 SVG，检查中文、连线、分支和文字裁切；流程图布局、时序顺序与表格逐项对照。
-5. 提交 `.mmd` 和 `.svg`，正文链接或说明变化时一同提交。
-
-示例命令（在已经安装 mmdc 的文档渲染环境运行）：
+使用 Mermaid CLI 12.0.0、[主题配置](mermaid.config.json)和本机受信任 Chrome 渲染；工具是文档构建依赖，不是产品运行依赖。
 
 ```sh
-mmdc -i 01-system-architecture.mmd -o 01-system-architecture.svg \
+mmdc -i 07-transcript-vtt.mmd -o 07-transcript-vtt.svg \
   -b white -c mermaid.config.json -p /path/to/puppeteer-config.json
 ```
 
-`puppeteer-config.json` 按本机环境指定受信任 Chrome 的 executablePath。临时浏览器配置、工具安装目录和浏览器绝对路径不提交到此仓库；通用主题配置随图源一起管理。
-
-SVG 使用白底，避免在深色页面中出现深色文字叠透明背景而不可读。
-
-图只表示设计流程，不是运行证据。新增功能是否完成，以各任务的测试与真实联调记录为准。
+保持白底、中文字体与 htmlLabels=false，避免深色页面透明底文字不可读。更新图源后重新渲染、目视检查，并同步设计/任务；不提交临时浏览器配置或其本机路径。

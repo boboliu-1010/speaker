@@ -3,18 +3,15 @@ sequenceDiagram
     participant C as Clip
     participant R as 接收器
     participant F as 原件磁盘
-    participant D as registry.sqlite3
-    participant P as 业务投影消费者
-    participant B as business.sqlite3
-    C->>R: OPEN / DATA，设备凭证与片段 size/hash
-    R->>D: 验证绑定、归属及删除屏障
-    R->>F: 写 partial，数据 fsync，发布持久检查点
-    R-->>C: 仅确认已持久的偏移
-    R->>F: 整文件 hash 校验，rename，目录 fsync
-    R-->>C: COMPLETE，表示原始片段持久收件
-    R->>D: 同事务写完整来源索引与 source_outbox
-    P->>D: 拉取未消费来源事件
-    P->>B: 同事务写录音、片段、raw 对象、收据与任务
-    P->>D: 标记事件已消费
-    Note over F,D: raw 已落盘但索引失败，可从持久 identity 恢复
-    Note over D,B: 业务提交后未标消费，重放相同事件不会重复入库
+    participant D as registry
+    participant B as business
+    C->>R: OPEN / DATA，设备凭证与 size/hash
+    R->>D: 核验有效绑定和 owner
+    R->>F: 写入，fsync，持久检查点
+    R-->>C: 只 ACK 已持久偏移
+    R->>F: 完整 hash，rename，目录 fsync
+    R-->>C: COMPLETE：原件已可靠收下
+    R->>D: 完整来源状态 + outbox 同事务
+    D->>B: 对账消费：录音、原件引用、source_receipt
+    B-->>D: 业务提交后标 consumed
+    Note over D,B: 重复事件只生效一次；不等待 WAV / ASR / VTT 才确认设备

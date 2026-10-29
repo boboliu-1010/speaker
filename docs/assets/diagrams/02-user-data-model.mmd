@@ -11,6 +11,7 @@ erDiagram
         INTEGER updated_at
     }
     accounts ||--o{ browser_sessions : sessions
-    accounts ||--o{ device_preferences : preferences
+    accounts ||--o{ device_preferences : aliases
     accounts ||--o{ recordings : owns
-    accounts |o--o{ audit_events : audit_scope
+    recordings ||--o{ recording_segments : sources
+    recordings ||--o{ transcript_cues : timed_text
