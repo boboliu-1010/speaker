@@ -1,0 +1,13 @@
+flowchart TB
+    Delete["用户删除录音"] --> Lock["获取完整 SourceKey 的锁"]
+    Lock --> Barrier["registry：epoch 递增，屏障开启，写删除事件"]
+    Barrier --> Deny["所有新读取、上传完成和任务发布受阻"]
+    Barrier --> Biz["business：回收站、撤 ticket、取消任务、移除索引"]
+    Biz --> Window{"7 天内恢复？"}
+    Window -->|"是"| Restore["CAS 检查删除 epoch，重建业务可见数据"]
+    Restore --> Clear["registry 再递增 epoch 并解除屏障"]
+    Clear --> Visible["允许新请求；删除前旧任务仍不能发布"]
+    Window -->|"否，保留期到期"| GC["对象 deleting，删文件并目录 fsync，再标 deleted"]
+    GC --> Tomb["保留 session 墓碑；迟到片段不能复活录音"]
+    Retry["业务提交失败或事件乱序"] -.-> Authority["按 registry 当前 epoch / enabled 对账"]
+    Authority -.-> Biz

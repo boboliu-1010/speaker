@@ -1,0 +1,17 @@
+flowchart TB
+    Raw["已持久原件：保留 size / SHA-256"] --> Verify{"原件完整且格式受支持？"}
+    Verify -->|"否"| Fail["标记损坏或不支持，保留原件"]
+    Verify -->|"Clip raw Opus"| Parse["uint16 LE 长度 + Opus 包校验"]
+    Verify -->|"App 标准音频"| Probe["真实容器 / 编码探测"]
+    Parse --> PCM["逐段解码：16 kHz / mono / PCM16 WAV"]
+    Probe --> PCM
+    PCM --> Check["核对样本数、时长、长度与 WAV hash"]
+    Check --> Segment["可靠发布片段 decoded.wav"]
+    Segment --> Keep["raw 与片段 WAV 持久双保留"]
+    Segment --> Continuity{"从片段 1 开始连续？"}
+    Continuity -->|"否"| Gap["显示缺片；可单段播放，暂停整段 AI"]
+    Continuity -->|"是"| Snapshot["冻结输入版本与样本时间轴"]
+    Snapshot --> Session["合并 asr.wav"]
+    Session --> MP3["生成 playback.mp3，核对 seek 时间映射"]
+    MP3 --> Play["发布媒体即可播放，不等待 AI"]
+    Session --> ASR["私有 ASR 输入"]

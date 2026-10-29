@@ -1,0 +1,18 @@
+erDiagram
+    accounts ||--o{ oauth_identities : identity
+    accounts ||--o{ browser_sessions : sessions
+    accounts ||--o{ recordings : owns
+    recordings ||--o{ recording_segments : originals
+    recordings ||--o{ processing_runs : versions
+    recording_segments ||--o{ run_input_segments : frozen_input
+    processing_runs ||--o{ run_input_segments : consumes
+    recordings ||--o{ storage_objects : files
+    processing_runs |o--o{ jobs : schedules
+    jobs ||--o{ file_publications : publishes
+    storage_objects ||--o| file_publications : recovery_log
+    storage_objects ||--o{ media_assets : usage
+    processing_runs ||--o{ media_assets : outputs
+    processing_runs ||--o{ transcript_segments : text
+    processing_runs ||--o| summaries : summary
+    summaries ||--o{ summary_references : citations
+    transcript_segments ||--o{ summary_references : referenced

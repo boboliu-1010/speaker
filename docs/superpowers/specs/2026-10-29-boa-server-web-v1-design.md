@@ -7,6 +7,21 @@
 文档管理仓库：[`boboliu-1010/speaker`](https://github.com/boboliu-1010/speaker)。\
 代码基线：[`BofAI/reSpeaker_Clip`](https://github.com/BofAI/reSpeaker_Clip)，本次读取 HEAD `77ae7fc`，工作区状态检查无修改。本文不表示该提交已经部署或通过真实设备验收。
 
+## 阅读导航
+
+先读 [架构图解与关键步骤](../../boa-v1-illustrated-guide.md)：12 张图将关键链路与成功/失败判据串起来。本文作为字段、约束、协议和验收细则的完整参考。
+
+| 主题 | 对应章节 |
+|---|---|
+| 产品范围与选型 | 第 1–3 节 |
+| [运行架构](#system-architecture)、数据与录音状态 | 第 4–7 节 |
+| Web、权限、API、删除、固件 | 第 8–12 节 |
+| 部署、迁移、验收与评审边界 | 第 13–16 节 |
+| [Google OAuth/OIDC](#google-oauth) | 第 17 节 |
+| [录音解码与转存](#recording-decode) | 第 18 节 |
+| [双写一致性与恢复](#dual-write) | 第 19 节 |
+| [SQLite 关系与 DDL](#sqlite-model) | 第 20 节 |
+
 ## 1. 产品目标与边界
 
 面向已经获邀的录音设备用户，在电脑浏览器完成设备配置、查看录音、播放原声、阅读全文与纪要。用户日常只接触“录音、设备、设置”三个入口；录音经过 Wi-Fi 自动上传，网页关闭不影响服务器收件和处理。
@@ -70,23 +85,13 @@
 
 本文提出、尚未单独确认的默认项：单人账户数据边界；管理员预登记和分配设备；本地/私有 ASR 优先；云端 AI 默认关闭；30 天闲置会话期限并设 90 天绝对期限；云端录音不自动过期；7 天回收站；20/40 的容量预算。它们可在设计评审时调整。
 
+<a id="system-architecture"></a>
+
 ## 4. 运行架构
 
-```mermaid
-flowchart LR
-    C[Clip] -->|Wi-Fi / DTLS UDP 9528| D[DTLS 接收线程]
-    B[浏览器] -->|HTTPS 9529 同源 API| H[FastAPI 与静态 Web]
-    A[现有 App] -->|HTTPS 9528| H
-    D --> R[原件与现有索引]
-    R --> Q[业务库 / 对账 / 持久任务]
-    H --> Q
-    Q --> W[单任务调度器]
-    W --> P[受控音频工具子进程]
-    W --> S[配置的私有 ASR 与纪要适配器]
-    P --> F[播放资源与导出文件]
-    S --> Q
-    H --> F
-```
+![Boa Voice 单进程系统架构](../../assets/diagrams/01-system-architecture.svg)
+
+图中分别展示用户 HTTPS、设备 DTLS 和后台处理链路。详细操作步骤与边界见 [图解第 1 节](../../boa-v1-illustrated-guide.md#overview)，可编辑图源见 [01-system-architecture.mmd](../../assets/diagrams/01-system-architecture.mmd)。
 
 “单进程”指一个长期运行的 Boa Python 服务；允许它启动有资源限制和超时的短期媒体工具子进程，不新增常驻 worker 服务。CPU 密集解码不能在 ASGI 事件循环或 DTLS 线程运行。大模型推理由配置的本机/私有推理端点执行，不在主进程加载模型。
 
@@ -351,9 +356,15 @@ AI 质量验收：用经授权的至少 10 条代表性中文录音，覆盖单�
 
 上一轮完成独立可实施性审查，修订了缺片处理、管理员建立、session 级删除屏障、各阶段结果发布契约。本轮新增 Google OAuth、解码转存与双写/DDL，也完成独立复核，修订了 App 权威删除屏障、Google reauth 身份条件和同录音复合 FK；复核无剩余关键问题。该结论仅针对文档可实施性，不是源码审查、性能测试或设备验收。实际 AI 服务及质量目标仍需在 P3 实际集成前落实。
 
+<a id="google-oauth"></a>
+
 ## 17. Google OAuth / OIDC 设计
 
 本轮明确加入 Google 登录，保留受邀访问，不因 OAuth 成功而公开注册。采用服务端 Authorization Code + OIDC，服务端处理 code 交换、ID token 验证与 Boa 会话签发；浏览器不保存 Google token。设计依据为 [Google OIDC 文档](https://developers.google.com/identity/openid-connect/openid-connect)与[服务端 OAuth 文档](https://developers.google.com/identity/protocols/oauth2/web-server)。
+
+![Google 登录时序与账户资格校验](../../assets/diagrams/02-google-oauth.svg)
+
+读图顺序：发起并保存 flow → Google 授权 → 回调领取 flow → 交换并验证令牌 → 核对 Boa 资格 → 建立 Boa 会话。成功/失败分支见 [图解第 2 节](../../boa-v1-illustrated-guide.md#oauth)。
 
 ### 17.1 登录流程
 
@@ -391,9 +402,15 @@ AI 质量验收：用经授权的至少 10 条代表性中文录音，覆盖单�
 
 OAuth 验收：真实 Google 测试账户端到端登录；用户取消、错误 state/nonce/aud/issuer、过期 token、重复 callback、绑定时会话撤销、同邮箱不同 sub、邀请竞争、登录 Cookie 策略、唯一登录方式解绑被拒绝。用模拟签名用例验证边界，实际 Google 授权成功单独记证据。
 
+<a id="recording-decode"></a>
+
 ## 18. 录音解码、转存与原始/解码双保留
 
 本设计将“双写”同时覆盖两件事：原始 raw Opus + 解码 WAV 双保留，以及磁盘文件 + SQLite 元数据的可靠发布；另覆盖既有 registry 与新 business 库的投影同步。不把音频 BLOB 再写一份进 SQLite，不把 Google 登录当作 Google Drive 转存授权。第一版转存目标为本机持久数据卷。
+
+![原件解码、双保留与播放转码](../../assets/diagrams/05-decode-and-retain.svg)
+
+关键分支是“来源格式”和“片段连续性”；不支持的格式停止处理，缺片不伪造整段音频。逐步操作与文件保留表见 [图解第 5 节](../../boa-v1-illustrated-guide.md#decode)。
 
 ### 18.1 文件角色
 
@@ -422,9 +439,15 @@ OAuth 验收：真实 Google 测试账户端到端登录；用户取消、错误
 
 App 上传的标准音频走独立输入 profile：保留原始文件为 app_original，通过受限媒体探测核对真实容器/编码、大小与时长，再解码为相同 PCM 标准；不得套用 Clip 的 uint16 包解析器。允许的容器/编码白名单在发布包中固定并有样本测试，未知输入标 unsupported_format，不靠用户 MIME 或后缀判断。App source_id 与 namespace 由已认证服务端决定。
 
+<a id="dual-write"></a>
+
 ## 19. 文件 / SQLite / 跨库双写一致性
 
 SQLite 事务不能原子覆盖普通文件；WAL 下多份数据库也不能被当成整体原子提交。采用“持久原件事实 + 发布日志 + 幂等投影 + 对账”达到可恢复一致性，不能承诺文件与两库同时提交。依据见 [SQLite WAL 文档](https://sqlite.org/wal.html)与[事务文档](https://sqlite.org/lang_transaction.html)。
+
+![文件发布、SQLite 提交与崩溃恢复](../../assets/diagrams/06-file-database-publication.svg)
+
+读图时注意：文件存在不表示 ready；只有持久文件和合法 fencing 条件都满足才可发布业务结果。收件/outbox、双写恢复及删除流程分别见 [图解第 4 节](../../boa-v1-illustrated-guide.md#ingest)、[第 6 节](../../boa-v1-illustrated-guide.md#publication)、[第 9 节](../../boa-v1-illustrated-guide.md#deletion)。
 
 ### 19.1 接收事实与设备 ACK
 
@@ -470,6 +493,8 @@ deletion_outbox 消费者每次读取权威屏障的当前 deletion_epoch/enable
 
 恢复时用 CAS 验证同一 deletion_epoch，先重建业务记录，再解除 registry 屏障；中途崩溃保持不可读，重放恢复完成后可读。epoch 单调递增，解除不回退，以阻止删除前任务在恢复后发布。最终回收以屏障为依据逐对象标 deleting、unlink+目录 fsync、标 deleted；保留墓碑。旧对象晚到不得重新建立存活引用。没有解码成功不影响设备已确认 raw 的收件记录，但不得因此主动删去云端唯一原件。
 
+<a id="sqlite-model"></a>
+
 ## 20. SQLite 实体、约束与 DDL
 
 附带两个**设计用参考 DDL**，尚未应用到真实数据；不是针对现网 schema 的自动迁移：
@@ -479,20 +504,9 @@ deletion_outbox 消费者每次读取权威屏障的当前 deletion_epoch/enable
 
 两库不能建立跨库 FK；`accounts.user_id → registry.users.id`、source/binding ID 对应关系由受控迁移及每次导入核验。业务库内采用 FK、唯一键、CHECK 和同 owner 的复合引用；应用每连接执行 foreign_keys=ON、busy_timeout=5000、synchronous=FULL；WAL 与 schema_version 由受控初始化/迁移建立。不能仅在创建库时启用 foreign_keys 就认为所有连接都生效。
 
-```mermaid
-erDiagram
-    accounts ||--o{ oauth_identities : authenticates
-    accounts ||--o{ browser_sessions : owns
-    accounts ||--o{ recordings : owns
-    recordings ||--o{ recording_segments : contains
-    recordings ||--o{ processing_runs : versions
-    processing_runs ||--o{ jobs : schedules
-    recordings ||--o{ storage_objects : stores
-    storage_objects ||--o| file_publications : publishes
-    storage_objects ||--o{ media_assets : references
-    processing_runs ||--o{ transcript_segments : produces
-    processing_runs ||--o| summaries : produces
-```
+![业务库核心实体与输入输出关系](../../assets/diagrams/10-core-data-model.svg)
+
+读图先沿 accounts→recordings 确定归属，再沿 processing_runs 看输入快照与输出；物理文件和逻辑用途分别由 storage_objects/media_assets 表达。查表顺序与主记录职责见 [图解第 10 节](../../boa-v1-illustrated-guide.md#data)。
 
 关键表职责：oauth_identities 的唯一 issuer/sub 决定身份归属；source_receipts 用 event_id/source_id 消除跨库重复；storage_objects 是物理文件主记录，media_assets 是某个 run 的用途引用；file_publications 保存发布恢复信息，不能用普通 job success 代替；recordings 的三个 current run 指针允许各阶段独立发布；registry session_tombstones 决定删除屏障，business.tombstones 为投影；对外读取和任务发布必须同时遵守。
 

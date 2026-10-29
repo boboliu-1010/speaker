@@ -1,0 +1,24 @@
+sequenceDiagram
+    autonumber
+    participant U as 用户浏览器
+    participant S as Boa Server
+    participant B as business.sqlite3
+    participant G as Google
+    U->>S: 同源 POST start，携带防登录 CSRF 信息
+    S->>B: 保存 10 分钟 flow，state/nonce 摘要与 verifier 密文
+    S-->>U: 临时 Lax Cookie，303 到 Google
+    U->>G: 授权码流程，openid email，PKCE S256
+    G-->>U: 顶层重定向，code 与 state
+    U->>S: GET 固定 callback
+    S->>B: 校验 state/浏览器绑定，CAS pending 到 exchanging
+    S->>G: 后端交换 code，携带 verifier
+    G-->>S: ID token
+    S->>S: 验证签名与 ID token 声明
+    S->>B: 核对身份映射、邀请与账户状态
+    alt 合法身份且账户条件满足
+        S->>B: 同事务提交身份、会话、flow 完成与审计
+        S-->>U: Strict Boa 会话，303 回站内页面
+    else 身份、邀请或会话条件不满足
+        S-->>U: 拒绝登录或绑定，提示重新开始
+    end
+    Note over U,S: Google token 不存浏览器；同邮箱不自动合并账户

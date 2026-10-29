@@ -1,0 +1,13 @@
+flowchart TB
+    Start["记录源码 / schema / 数据清单"] --> Stop["停旧服务，取得维护排他锁"]
+    Stop --> Backup["整体加密快照：库/WAL、原件、身份、固件与私密配置"]
+    Backup --> Copy["在隔离副本应用版本化迁移"]
+    Copy --> Check{"归属、数量、字节、hash、绑定与屏障一致？"}
+    Check -->|"否"| Halt["停止切换，保留旧服务与快照，修正迁移"]
+    Check -->|"是"| New["启新代码，先关闭 AI，验证接收与下载"]
+    New --> Restore["另一个隔离目录演练备份恢复"]
+    Restore --> Report["记录恢复耗时、RPO/RTO 与证据"]
+    New --> Rollback{"需要回退？"}
+    Rollback -->|"是"| Protect["先保存上线后新增 raw 与归属证据"]
+    Protect --> Old["旧代码与快照配套恢复，再对账新增原件"]
+    Rollback -->|"否"| Enable["逐步开放 AI，完成分层验收"]

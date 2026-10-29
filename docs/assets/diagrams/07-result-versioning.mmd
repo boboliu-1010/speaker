@@ -1,0 +1,15 @@
+flowchart TB
+    Receive["收到新片段"] --> Revision["input_revision 递增，冻结新快照"]
+    Revision --> Media["媒体任务"]
+    Media -->|"媒体 ready"| MediaPointer["发布新版媒体指针"]
+    MediaPointer --> Play["新音频可播放"]
+    MediaPointer --> ASR["ASR 任务"]
+    ASR -->|"全文 ready"| TextPointer["发布新版全文指针"]
+    TextPointer --> Search["新全文可读、可搜索"]
+    TextPointer --> Summary["纪要任务"]
+    Summary -->|"schema 与引用合法"| SummaryPointer["发布新版纪要指针"]
+    Summary -->|"失败"| Old["继续显示旧纪要，标注基于较早内容"]
+    Old --> OldText["旧纪要引用打开自己的旧全文快照"]
+    Fence["每次发布：当前输入版本、租约与删除 epoch 均有效"] -.-> MediaPointer
+    Fence -.-> TextPointer
+    Fence -.-> SummaryPointer
