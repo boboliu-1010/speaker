@@ -4,15 +4,18 @@ flowchart TB
     subgraph Boa["一个 Boa Python 常驻进程"]
         API["HTTPS API 与静态 Web"]
         DTLS["DTLS 接收与持久确认"]
+        Auth["Google OIDC + 内存会话"]
         Jobs["来源对账 + 单任务调度"]
     end
     Data["本机持久卷：SQLite + raw / WAV / VTT"]
     Tool["受控 WAV 解码子进程"]
     ASR["配置的私有 ASR 服务"]
-    API <-->|"会话与 owner 鉴权"| Data
+    API <-->|"用户 / owner / 转写原文"| Data
     DTLS --> Data
     Data --> Jobs
     Jobs --> Tool
     Tool --> Data
     Jobs <-->|"转写；不生成纪要"| ASR
     ASR -->|"cues 与 VTT 经校验发布"| Data
+    Google["Google 登录"] <-->|"Code / OIDC"| Auth
+    API <-->|"Cookie 校验"| Auth

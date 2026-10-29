@@ -2,7 +2,7 @@
 
 日期：2026-10-29。状态：设计文档，未实施产品代码或真实数据迁移。
 
-本版按[当前原型](https://comfy-faloodeh-ec9b57.netlify.app/)重新检查登录、添加设备、Wi-Fi、录音列表、详情、导出、设备卡片和移除提示，并纳入用户新增的 **VTT** 要求。本文替代旧版“大而全”的设计；历史保留在 Git，不再将旧功能当作待办。
+本版按[当前原型](https://comfy-faloodeh-ec9b57.netlify.app/)重新检查登录、添加设备、Wi-Fi、录音列表、详情、导出、设备卡片和移除提示，并纳入用户新增的 **VTT 原文持久化、Google OAuth 与内存会话** 要求。本文替代旧版“大而全”的设计；历史保留在 Git，不再将旧功能当作待办。
 
 文档管理：[boboliu-1010/speaker](https://github.com/boboliu-1010/speaker)。现有代码基线：[BofAI/reSpeaker_Clip](https://github.com/BofAI/reSpeaker_Clip)，此前读取 `77ae7fc`；实施前重新检查当前代码，不将原型演示当作真实协议能力。
 
@@ -14,9 +14,14 @@
 
 ## 1. 最小产品范围
 
+![产品范围](../../assets/diagrams/00-product-overview.svg)
+
+<details>
+<summary>展开实现细则</summary>
+
 | 位置 | 保留的功能 |
 |---|---|
-| 登录/账号 | 沿用 Google 登录入口；这里只定义基本用户与已验证身份的接入边界。账号菜单显示邮箱和退出 |
+| 登录/账号 | Google OAuth 2.0 / OIDC 登录；基本用户落库，临时状态与本站会话只在内存。账号菜单显示邮箱和退出 |
 | 录音列表 | 按日期分组、开始/结束日期筛选、时长、转写开头预览、真实上传/处理状态 |
 | 录音详情 | 日期时间标题、文字和 A/B 等说话人标签、基础播放/暂停/进度、复制文字 |
 | 下载 | WAV 音频、Markdown 文字；按用户新增要求提供 WebVTT 文件 |
@@ -24,9 +29,11 @@
 | 设备卡片 | 名称、版本、可信的状态/电量/待上传信息、Wi-Fi 添加/删除、改名、移除 |
 | Server 内部 | 原始文件与 WAV 双保留、SQLite 入库、ASR/VTT、最小持久任务和文件恢复、同用户鉴权 |
 
-不开发：邀请、组织、本地密码、多身份绑定、OAuth 详细流程、纪要/结论/待办/章节、全文搜索、Word/TXT 导出、录音改名/删除/回收站、历史结果切换、审计页面、管理员工作台、OTA/维修面板、公开分享、MP3、副本音频库、独立消息队列或多服务拆分。
+不开发：邀请、组织、本地密码、多身份绑定、纪要/结论/待办/章节、全文搜索、Word/TXT 导出、录音改名/删除/回收站、历史结果切换、审计页面、管理员工作台、OTA/维修面板、公开分享、MP3、副本音频库、独立消息队列或多服务拆分。
 
 维护侧仍可复用既有固件/设备工具，不为它们增加新产品页面或开发任务。录音删除在本版没有入口，云端录音不自动过期；不得以精简为由让原件自动消失。
+
+</details>
 
 <a id="system-architecture"></a>
 
@@ -34,11 +41,19 @@
 
 ![精简架构](../../assets/diagrams/01-system-architecture.svg)
 
+
+<details>
+<summary>展开实现细则</summary>
+
 沿用 Python/FastAPI 单个常驻进程、静态 HTML/CSS/ES modules、SQLite、本机持久目录。Web HTTPS 9529 与 HTTPS API 9528 共享后台，Clip 使用 UDP/DTLS 9528。媒体工具是有超时/资源限制的子进程；ASR 使用配置的私有端点。不开多个 worker 共用目录，不在接收线程或事件循环执行解码。
 
-模块只按职责拆：`users`（资料/会话）、`devices`（既有绑定适配）、`recordings`（来源/列表）、`jobs`（一个活动处理任务）、`files`（持久发布/恢复）、`decode`（WAV）、`transcript`（ASR/cues/VTT）、`routes`（同源 API）。不新增通用工作流平台。
+模块只按职责拆：`auth`（Google 登录/内存会话）、`users`（基本资料）、`devices`（既有绑定适配）、`recordings`（来源/列表）、`jobs`（一个活动处理任务）、`files`（持久发布/恢复）、`decode`（WAV）、`transcript`（ASR/cues/VTT）、`routes`（同源 API）。不新增通用工作流平台。
+
+Web 的 `/api/boa/v1` 在 9529 同源转交同进程处理；浏览器不直接跨端口调用 9528，不启用跨域 Cookie。旧 9528 接口继续服务原有客户端。Google 回调也固定在 9529 的公开 HTTPS origin；反向代理场景只信任显式配置的代理，不从任意 Host/X-Forwarded-* 拼回调地址。
 
 浏览器可见时每 5 秒更新活动录音、每 15 秒更新设备；隐藏后降到 30 秒，恢复时立即更新。采用轮询即可，不增加 WebSocket/SSE。
+
+</details>
 
 <a id="user-model"></a>
 
@@ -46,19 +61,33 @@
 
 ![用户主表](../../assets/diagrams/02-user-data-model.svg)
 
+![Google 登录与内存会话](../../assets/diagrams/09-google-memory-login.svg)
+
+
+<details>
+<summary>展开实现细则</summary>
+
 `accounts` 保留 9 个字段：`user_id`、`google_sub`、`email`、`display_name`、`status`、`auth_version`、`last_login_at`、`created_at`、`updated_at`。内部 user_id 关联所有 owner，既有用户沿用旧 ID；google_sub 唯一，旧用户迁移未核验时允许为空。邮箱唯一但不是自动合并身份的依据；头像首字母从名字/邮箱派生。
 
-状态只有 active/disabled。不建邀请、组织、密码、身份映射或 OAuth 临时状态表。用户资料服务只消费**已经验证**的身份；实际登录接入需可用，但授权协议实现不在本轮细化。不能将客户端任意提交的 sub 当作已验证身份。
+状态只有 active/disabled。登录使用 Google OAuth 2.0 Authorization Code + OpenID Connect；具体契约见[Google 登录与内存边界](2026-10-29-google-login-and-transcript-contract.md#google-login)。不建 OAuth、token、browser_sessions 表。每个请求重新核对 accounts.status/auth_version；已有 Bearer 兼容身份也经过相同门禁，不能绕过禁用。
 
-`browser_sessions` 独立保存会话/CSRF 摘要、auth_version、有效期与撤销时间。Cookie 为 Secure/HttpOnly/Strict；闲置 30 天、绝对 90 天作为技术默认。退出撤销当前会话，保留用户、设备与录音；禁用用户拒绝后续请求。旧 Bearer 接入保持兼容。
+内存保存一次性登录状态（5 分钟）和本站会话（闲置 24 小时、绝对 7 天）；随机 opaque Cookie 引用服务端会话。退出即删除，Server 重启全部失效、用户重新登录，设备上传凭证与后台任务不受影响。登录跳转的临时 Cookie 使用 Secure/HttpOnly/SameSite=Lax，本站会话使用 Secure/HttpOnly/SameSite=Strict，均为 host-only、Path=/；不把内存 map 序列化到磁盘。容量/清理/重放边界见登录契约。
 
-所有读取按服务端身份过滤 owner，跨用户对象统一 404；写请求校验 Origin/CSRF。普通用户不因首次登录获得开发者权限，既有维护通道权限仅为兼容，不复制成新用户角色体系。
+所有读取按服务端身份过滤 owner，跨用户对象统一 404；写请求校验准确 Origin 与会话 CSRF。普通用户不因首次登录获得开发者权限，既有维护通道权限仅为兼容，不复制成新用户角色体系。
+
+</details>
 
 <a id="devices"></a>
 
 ## 4. 设备添加、Wi-Fi 与移除
 
 ![设备添加](../../assets/diagrams/03-device-onboarding.svg)
+
+
+![Clip 扫描与选网](../../assets/diagrams/08-wifi-configuration.svg)
+
+<details>
+<summary>展开实现细则</summary>
 
 1. 用户在空录音页或设备页点击添加，主动打开 BLE 选择器。
 2. 连接后读取完整 UID、固件和能力；不能以 BLE 名称代替 UID。
@@ -84,11 +113,17 @@
 
 改名只改用户别名，不改 UID/凭证。固件版本仅展示，不增加升级入口。在线、电量、待上传数必须有来源和采样时间；只有最近收件证据时显示“最近收件/状态未知”，不能假装在线。移除先撤销服务端上传凭证，尝试清理在线 BLE 上传配置；离线清理失败沿用既有交接锁。**已上传录音保留原 owner**，重新添加走受控绑定。
 
+</details>
+
 <a id="ingest"></a>
 
 ## 5. 收件、录音聚合与原件保留
 
 ![接收与业务入库](../../assets/diagrams/04-raw-ingest-outbox.svg)
+
+
+<details>
+<summary>展开实现细则</summary>
 
 保持 v3 原协议：数据 fsync → 持久检查点 → 整文件 size/hash 校验 → rename/目录 fsync。只有 raw 和可恢复归属的身份元数据持久后才回 COMPLETE，不等待 WAV、ASR 或 VTT。设备撤销后不能继续写入；旧绑定的历史文件仍属原用户。
 
@@ -98,11 +133,17 @@ registry 完整来源状态与 `source_outbox` 同事务写。消费者在 busin
 
 旧协议没有总片段清单，所以显示“已收到 N 个片段/完整性未知”，不伪造 3/5 或整段完成。收到连续片段后静默 10 分钟可处理当前已收内容，这不是结束证据；有缺号则等待补齐，不补静音、不生成虚假完整时间轴。后续片段到达更新输入版本并重做派生内容；不做用户可选择的历史版本功能。
 
+</details>
+
 <a id="recording-decode"></a>
 
 ## 6. raw + WAV 双保留
 
 ![解码流水线](../../assets/diagrams/05-decode-and-retain.svg)
+
+
+<details>
+<summary>展开实现细则</summary>
 
 - Clip raw 格式为 `uint16 little-endian length + raw Opus packet`；先检查包边界/时长/声道，再正确封装或用受控解码器处理，不能直接当 Ogg 或 WAV。
 - 校验 raw hash 后解码为 **16 kHz、mono、PCM16 little-endian WAV**。逐段临时解码，再按冻结片段顺序合为一份 `recording.wav`，记录样本数、长度和独立 hash。
@@ -112,11 +153,17 @@ registry 完整来源状态与 `source_outbox` 同事务写。消费者在 busin
 
 单 raw 段遵守既有 8 MiB 上限，连续录音处理默认上限 8 小时。16 kHz mono PCM16 约 115.2 MB/小时，先检查磁盘预算与工具超时；超限留 raw 并给出可恢复失败。原型“音频原文件（.wav）”实际是**设备原件解码所得 WAV**，不是原始 Opus 改后缀，建议按钮文字为“下载音频（.wav）”。
 
+</details>
+
 <a id="dual-write"></a>
 
 ## 7. 最少的后台任务与双写恢复
 
 ![文件和 SQLite 发布](../../assets/diagrams/06-file-database-publication.svg)
+
+
+<details>
+<summary>展开实现细则</summary>
 
 只需 decode、transcribe 两类持久任务；VTT 随 transcribe 生成，Markdown 下载即时生成，不创建导出任务系统。
 
@@ -128,11 +175,13 @@ registry 完整来源状态与 `source_outbox` 同事务写。消费者在 busin
 | 4 | 同文件系统独占 rename，相关目录 fsync | 文件存在仍不算 ready |
 | 5 | DB 再检查 fence，同事务提交对象 ready、录音指针和下一阶段状态 | 当前用户可读 |
 
-文件与 SQLite 不是一个原子事务；靠发布记录恢复，不靠“同时写成功”的假设。rename 后 DB 提交前崩溃，重启任务用新 lease 校验文件后补提交；输入已过期则不改当前指针。ready 文件缺失则标 missing，派生文件由 raw 重建，原件缺失单独告警。不同 hash 的同路径对象拒绝覆盖。
+文件与 SQLite 不是一个原子事务；靠发布记录恢复，不靠“同时写成功”的假设。WAV rename 后 DB 提交前崩溃，重启任务用新 lease 校验文件后补提交；VTT 同时依赖 cues，若 cues 事务未提交则重跑 ASR 并重新整体发布，不能套用仅校验文件的补提交。输入已过期则不改当前指针。ready 文件缺失则标 missing：WAV 由 raw 重建，VTT 优先由已提交的同版本 cues 重建；原件缺失单独告警。不同 hash 的同路径对象拒绝覆盖。
 
 任务 input_json 冻结原件清单和媒体/ASR 配置版本；运行环境不匹配时不偷偷换工具执行。需因配置变化重做时由维护流程建立新输入修订，禁止同 revision 悄悄改变时间轴。
 
 单个活动任务，60 秒 lease、15 秒续期；瞬时错误最多重试 3 次，间隔 30 秒/2 分钟/10 分钟。解码超时 10 分钟、ASR 最长 60 分钟作为可配置初值。启动先恢复来源索引/事件，再恢复文件发布和过期任务；API/接收线程不等待模型执行。
+
+</details>
 
 <a id="vtt"></a>
 
@@ -140,15 +189,19 @@ registry 完整来源状态与 `source_outbox` 同事务写。消费者在 busin
 
 ![WAV、转写片段和 VTT](../../assets/diagrams/07-transcript-vtt.svg)
 
+
+<details>
+<summary>展开实现细则</summary>
+
 ASR 消费当前 WAV，返回 cue 的 start_ms/end_ms/text 和可空 speaker。说话人按当前录音稳定映射为 A/B/C；供应方无分离结果时显示未区分，不能猜姓名。只接 ASR，不接纪要模型。
 
 ### 8.1 生成与存储
 
 1. 校验 JSON 片段：文本非空、毫秒为整数、`0 <= start < end`、时间不超当前 WAV 时长（允许最多 1ms 表示精度误差），起点不倒序。合法的多人重叠允许保留。
-2. 准备待发布 cues，每行带 recording_id、owner 和 input_revision；在步骤 5 的最终事务中写入 `transcript_cues`。它是结构化文字主源，VTT 和 Markdown 均由同一批 cues 生成。
+2. 准备待发布 cues，每行带 recording_id、owner 和 input_revision；在步骤 5 的最终事务中写入 `transcript_cues`。它是结构化文字主源，**识别出的原文必须存入 SQLite**，VTT 和 Markdown 均由同一批 cues 生成。采用 UTF-8 纯文本、整数毫秒和可空 speaker，完整 JSON/字段/空结果约定见[转写格式](2026-10-29-google-login-and-transcript-contract.md#transcript-format)及[JSON 示例](../../examples/transcript.json)。不把 VTT 标签或转义后的 HTML 存进 text。
 3. 生成 UTF-8 `transcript.vtt`，使用 `WEBVTT` 文件头、空行、稳定 cue 编号、`HH:MM:SS.mmm --> HH:MM:SS.mmm` 和可选 voice 标签。说明依据：[W3C WebVTT 格式](https://www.w3.org/TR/webvtt1/)。
 4. 用户文本的 `& < >` 转义，空白行规范化，speaker 标签只来自受控映射，不将 ASR 内容当任意 HTML/VTT 控制块。
-5. VTT 通过相同文件发布流程校验/持久，随后在短事务中提交 cues、VTT 对象指针和 transcript_revision/state；中断时不显示文字 ready，重启可重做。
+5. VTT 通过相同文件发布流程校验/持久，随后在短事务中提交 cues、VTT 对象指针和 transcript_revision/state；中断时不显示文字 ready，重启可重做。若仅有已 rename 的 VTT 而 cues 事务未提交，不能只凭文件 hash 补 ready：废弃该次未提交的派生产物并用同版本 WAV 重跑 ASR，新的 cues/VTT 重新一起发布；raw/WAV 保留。
 
 ASR 耗时不影响 WAV 播放。新 WAV 发布后，只展示与 audio_revision 相同的 cues/VTT；旧文字不贴到新时间轴。没有用户历史版本切换：处理中提示等待即可。当前输入更新期间仍可保留上一份音频与同版本文字，标“更新中”；新音频替换时旧文字先隐藏。
 
@@ -174,9 +227,14 @@ WEBVTT
 
 原型保留 WAV 与 `.md`；按用户追加要求，在同一个导出菜单加 `.vtt`，不增加新页面。WAV/VTT 为已存对象，Markdown 按当前 cues 流式生成：日期标题和 A/B 文字，不夹带摘要。没有 Word、TXT、异步导出记录、过期链接或公开分享链接。
 
+</details>
+
 <a id="web"></a>
 
 ## 9. Web 与 API
+
+<details>
+<summary>展开实现细则</summary>
 
 只保留“录音、设备”两个导航和账号菜单，品牌显示以新原型“录音助手”为准；Boa 仅为内部包/仓库名。
 
@@ -186,7 +244,9 @@ WEBVTT
 
 | 方法/路径（统一前缀 `/api/boa/v1`） | 内容 |
 |---|---|
-| GET `/auth/session`；DELETE `/auth/session` | 本人基本资料；退出 |
+| GET `/auth/google/start` | 创建一次性内存登录事务，跳转 Google |
+| GET `/auth/google/callback` | 消费 state、验证 Google 身份、创建本站会话后 303 回首页 |
+| GET `/auth/session`；DELETE `/auth/session` | 本人基本资料和 CSRF token（no-store）；退出清 Cookie/内存会话 |
 | GET `/devices` | 本人设备/能力/带时间的可信状态 |
 | POST `/devices/activate` | 已验证身份、完整 UID、可信登记依据；复用/建立本人绑定 |
 | POST `/devices/{id}/binding/confirm` | 设备配置读回确认，不代表真实上传 |
@@ -204,15 +264,19 @@ WEBVTT
 
 Wi-Fi 扫描/保存/删除通过 BLE，不设计对应 Server 密码接口。处理暂不可用时返回具体阶段状态；语音服务未配置显示 not_configured，不无限转圈。维护重试复用内部 job 接口/CLI，不新增用户任务管理页。旧 API `/api/audio/*` 与设备协议保持兼容。
 
+</details>
+
 <a id="sqlite-model"></a>
 
-## 10. SQLite：保留 11 张表
+## 10. SQLite：保留 10 张表
+
+<details>
+<summary>展开实现细则</summary>
 
 | 表 | 用途 |
 |---|---|
 | schema_migrations | 迁移版本 |
 | accounts | 9 字段基本用户 |
-| browser_sessions | 当前会话与撤销 |
 | device_preferences | 本人设备别名，身份/凭证仍在 registry |
 | recordings | 日期、来源、最少状态、输入与当前音频/文字版本、对象指针 |
 | storage_objects | raw/WAV/VTT 的路径、独立 hash/size 与 staged/ready/missing 状态 |
@@ -224,14 +288,27 @@ Wi-Fi 扫描/保存/删除通过 BLE，不设计对应 Server 密码接口。处
 
 registry 只增加 source_outbox，不加删除墓碑、清理历史或多份用户索引。数据库内用同 owner/同 recording 复合 FK，跨库不伪造 FK；每连接启用 foreign_keys、5 秒 busy timeout、synchronous FULL，业务库 WAL。音频不入 BLOB。
 
-不建 summaries、summary_references、recording_search、exports、media_tickets、audit_events、tombstones、processing_runs 或 media_assets。普通结构化日志用于排障，不把它扩成产品审计平台。
+不建 OAuth/token/browser_sessions 表；登录事务和会话是进程内有界 map。也不建 summaries、summary_references、recording_search、exports、media_tickets、audit_events、tombstones、processing_runs 或 media_assets。普通结构化日志用于排障，不把它扩成产品审计平台。
+
+</details>
 
 <a id="operations"></a>
 
 ## 11. 实施与验收
 
+![实施顺序](../../assets/diagrams/12-implementation-order.svg)
+
+<details>
+<summary>展开实现细则</summary>
+
 实施重排为 **S01–S12，共 12 项任务**，旧 T00–T23 不再作为当前待办。先基本用户/设备链路，再收件与 WAV，接 ASR/VTT，最后完善列表/详情/设备页面与迁移验收。见[任务计划](../plans/2026-10-29-boa-server-web-v1-implementation-plan.md)。
 
 备份保持简单：停服务、持排他维护锁、整体备份 SQLite/WAL、raw、identity、配置/凭证与派生文件；私密备份不入仓库。在隔离副本迁移并核对 user_id、绑定、数量、字节和 hash；真实根不直接试迁移。回退前先保存新收件原件，不能用旧快照覆盖上线后录音。不额外开发备份调度平台或人为设定未测容量承诺。
 
-验证分层：表/约束与 API 测试；真实浏览器；真实 Clip 收件；实际 WAV 解码/播放；ASR 样本与 VTT 解析；固件能力缺项；恢复演练；实际部署。此轮只更新文档/参考 SQL/图，不执行登录配置、刷写、生产数据迁移或部署。
+验证分层：表/约束与 API 测试；真实浏览器；真实 Clip 收件；实际 WAV 解码/播放；ASR 样本与 VTT 解析；固件能力缺项；恢复演练；实际部署。重启会清空网页登录状态，恢复后再次 Google 登录；用户、绑定、录音、任务均从持久存储恢复。
+
+此轮只更新文档/参考 SQL/图，不执行登录配置、刷写、生产数据迁移或部署。
+
+</details>
+
+[自我评审与验收缺口](../../2026-10-29-design-self-review.md) · [登录与转写数据契约](2026-10-29-google-login-and-transcript-contract.md)

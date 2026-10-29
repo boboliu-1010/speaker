@@ -10,7 +10,6 @@ erDiagram
         INTEGER created_at
         INTEGER updated_at
     }
-    accounts ||--o{ browser_sessions : sessions
     accounts ||--o{ device_preferences : aliases
     accounts ||--o{ recordings : owns
     recordings ||--o{ recording_segments : sources

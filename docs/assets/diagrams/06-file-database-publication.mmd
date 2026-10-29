@@ -12,7 +12,7 @@ sequenceDiagram
         J->>B: 再检查 fence；同事务 ready 与录音指针
     else 文件已发布但数据库提交前崩溃
         J->>B: 恢复任务领取新 lease，读取 prepared
-        J->>F: 核对最终文件 hash
-        J->>B: 当前版本才补提交，旧版本不覆盖新结果
+        J->>F: WAV 核对最终文件 hash
+        J->>B: WAV 当前版本可补提交；VTT 无已提交 cues 则重跑
     end
-    Note over B,F: 文件存在不等于 ready；raw 不参与临时文件清理
+    Note over B,F: 文件存在不等于 ready；VTT 与 cues 同事务发布；raw 不清理

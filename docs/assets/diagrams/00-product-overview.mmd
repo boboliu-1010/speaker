@@ -1,0 +1,12 @@
+flowchart TB
+    App["录音助手"]
+    App --> Records["录音"]
+    App --> Devices["设备"]
+    App --> Account["账号：邮箱 / 退出"]
+    Records --> Dates["日期筛选 / 录音列表"]
+    Dates --> Detail["播放音频 / 查看文字 / 复制"]
+    Detail --> Files["下载 WAV / Markdown / VTT"]
+    Devices --> Add["添加：BLE 连接 / 激活 / 校时"]
+    Add --> Wifi["Clip 扫描 Wi-Fi → 用户选择 → 设置"]
+    Devices --> Card["设备卡片：状态 / 改名 / 移除"]
+    Card --> Keep["移除设备，历史录音保留"]

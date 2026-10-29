@@ -18,17 +18,7 @@ CREATE TABLE accounts (
   auth_version INTEGER NOT NULL DEFAULT 1 CHECK(auth_version>0),
   last_login_at INTEGER, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
 );
-CREATE TABLE browser_sessions (
-  token_digest TEXT PRIMARY KEY CHECK(length(token_digest)=64),
-  user_id TEXT NOT NULL REFERENCES accounts(user_id),
-  auth_version INTEGER NOT NULL CHECK(auth_version>0),
-  csrf_digest TEXT NOT NULL CHECK(length(csrf_digest)=64),
-  created_at INTEGER NOT NULL, last_seen_at INTEGER NOT NULL,
-  idle_expires_at INTEGER NOT NULL, absolute_expires_at INTEGER NOT NULL,
-  revoked_at INTEGER,
-  CHECK(idle_expires_at<=absolute_expires_at)
-);
-CREATE INDEX sessions_user ON browser_sessions(user_id,revoked_at,absolute_expires_at);
+-- Google OAuth 临时事务与本站会话只保存在进程内存，不建会话/token 表。
 -- UID、owner、epoch、设备凭证仍由既有 registry 管理；不复制一套设备身份。
 CREATE TABLE device_preferences (
   owner TEXT NOT NULL REFERENCES accounts(user_id), device_id TEXT NOT NULL,
@@ -54,7 +44,8 @@ CREATE TABLE recordings (
   CHECK(audio_revision IS NULL OR (audio_revision>0 AND audio_revision<=input_revision)),
   CHECK(transcript_revision IS NULL OR (transcript_revision>0 AND transcript_revision<=input_revision)),
   CHECK(audio_state<>'ready' OR (wav_object_id IS NOT NULL AND audio_revision IS NOT NULL)),
-  CHECK(transcript_state<>'ready' OR (vtt_object_id IS NOT NULL AND transcript_revision IS NOT NULL)),
+  CHECK(transcript_state<>'ready' OR (vtt_object_id IS NOT NULL AND transcript_revision IS NOT NULL
+    AND audio_revision IS NOT NULL AND transcript_revision=audio_revision)),
   FOREIGN KEY(wav_object_id,id,owner) REFERENCES storage_objects(id,recording_id,owner) DEFERRABLE INITIALLY DEFERRED,
   FOREIGN KEY(vtt_object_id,id,owner) REFERENCES storage_objects(id,recording_id,owner) DEFERRABLE INITIALLY DEFERRED
 );
