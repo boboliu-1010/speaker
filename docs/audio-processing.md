@@ -23,12 +23,12 @@ v1 · 2026-10-29 · [Server / Web 主文档](../README.md)
 | 原件格式 | uint16 little-endian 包长度 + Opus payload；校验包边界、size/hash 与媒体 profile |
 | 持久确认 | data fsync、持久检查点、完整 hash、rename/目录 fsync；raw 与归属元数据持久后返回 COMPLETE |
 | 来源归属 | 从有效设备 binding 或已验证 App 来源取得 owner；旧来源 owner 保持原值 |
-| 聚合键 | source_kind + source_namespace + binding_epoch + source_session |
+| 聚合键 | source_kind + source_namespace + binding_epoch + source_session；Clip 的 source_namespace 使用 binding_id，App 使用包含 owner 和来源标识的稳定命名空间 |
 | 输入版本 | 原始片段首次 ready 导入时 input_revision 加 1；重复来源保持版本 |
 | 处理触发 | 片段从 1 开始连续且静默 10 分钟后处理当前已收内容；缺号时等待补齐 |
 | 完整性 | 现有协议缺少整段闭合信息时保持 unknown；确认完整须有协议证据 |
 
-业务投影使用一个短事务：按 namespace/source_id 查询片段；已有 ready 且 hash/size 相同则幂等返回，冲突报 source_identity_conflict；首次 ready 同时保存原件元数据、imported_at 并增加录音版本。business 提交后再更新 registry.sources.projected_at。
+业务投影使用一个短事务：按 source_namespace/source_id 查询片段；已有 ready 且 owner、recording_id、segment_no、hash/size 全部一致则幂等返回，冲突报 source_identity_conflict；首次 ready 同时保存原件元数据、imported_at 并增加录音版本。business 提交后再更新 registry.sources.projected_at。
 
 启动按每批 500 条核对全部 ready 来源，检查 raw 存在和 size/hash；来源时间 created 从既有秒值转为 UTC 毫秒。receiving 保存上传状态，校验完成后创建处理输入。
 
@@ -36,23 +36,16 @@ v1 · 2026-10-29 · [Server / Web 主文档](../README.md)
 
 ## 2. 处理对象与数据表
 
-| 对象 | 关键数据 | 作用 |
-|---|---|---|
-| SourceEvent | owner、来源类型/命名空间/ID、绑定代次、session、segment、raw 路径、size/hash、收件时间 | 导入经过验证的来源 |
-| InputSnapshot | recording_id、owner、revision、有序来源清单与 hash | 固定本次处理输入 |
-| Lease | job_id、recording_id、revision、lease_token、lease_until | 校验当前执行与发布资格 |
-| Cue | cue_index、start_ms、end_ms、speaker、text | 保存原文和生成导出 |
-
 完整 DDL 见[主文档](../README.md#business-sql)。下面说明录音处理使用的三张表；时间为 UTC Unix 毫秒，时长为毫秒，size 为字节数。
 
 ### 2.1 recordings
 
 | 字段 | 类型 | 约束 / 默认 | 含义 |
 |---|---|---|---|
-| id | TEXT | 主键 | 录音 ID。 |
+| id | TEXT | 主键；必填 | 录音 ID。 |
 | owner | TEXT | 必填；外键 | 所属用户 ID，引用 accounts.user_id。 |
 | source_kind | TEXT | 必填 | 来源类型：clip_direct / app_upload。 |
-| source_namespace | TEXT | 必填 | 来源所在的存储命名空间。 |
+| source_namespace | TEXT | 必填 | 全局来源空间：Clip 用 binding_id，App 空间包含 owner 与既有来源标识。 |
 | binding_epoch | INTEGER | 必填；≥0；Clip >0 | Clip 绑定代次；App 来源为 0。 |
 | source_session | TEXT | 必填 | 来源的录音 session；与来源/绑定代次一起确定一条录音。 |
 | recorded_at | INTEGER | 可空 | 录音时间，可空；时间不可信时按 received_at 查询。 |
@@ -60,26 +53,26 @@ v1 · 2026-10-29 · [Server / Web 主文档](../README.md)
 | received_at | INTEGER | 必填 | 首次收件时间。 |
 | last_received_at | INTEGER | 必填 | 最近片段收件时间。 |
 | integrity | TEXT | 必填；默认 'unknown' | unknown / gap / confirmed_complete；依协议证据更新。 |
-| input_revision | INTEGER | 必填；默认 0；≥0 | 已接收输入版本；新 ready 片段首次导入时加 1。 |
+| input_revision | INTEGER | 必填；默认 0；≥0 | 已收输入版本；新 ready 片段首次导入时加 1。 |
 | audio_revision | INTEGER | >0 且 ≤ input_revision | 当前 WAV 对应的输入版本，可空。 |
 | transcript_revision | INTEGER | >0 且 ≤ input_revision | 当前转写对应的输入版本，可空；ready 时等于 audio_revision。 |
-| audio_state | TEXT | 必填；默认 'pending' | pending / running / ready / failed。 |
+| audio_state | TEXT | 必填；默认 'pending' | 当前输入的解码状态：pending / running / ready / failed。 |
 | transcript_state | TEXT | 必填；默认 'pending' | not_configured / pending / running / ready / failed。 |
 | wav_job_id | TEXT | 录音/owner/版本复合外键 | 当前 WAV 的 decode 任务，可空。 |
 | vtt_job_id | TEXT | 录音/owner/版本复合外键 | 当前 VTT 的 transcribe 任务，可空。 |
 | duration_ms | INTEGER | ≥0 | 当前 WAV 时长，毫秒，可空。 |
-| transcript_json | TEXT | 合法 JSON v1；≤8 MiB | UTF-8 JSON v1：schema_version、time_unit、cues；上限 8 MiB，可空。 |
+| transcript_json | TEXT | 合法 JSON v1；≤8 MiB | schema_version、time_unit、cues，可空。 |
 | updated_at | INTEGER | 必填 | 录音状态或结果更新时间。 |
 
 ### 2.2 recording_segments
 
 | 字段 | 类型 | 约束 / 默认 | 含义 |
 |---|---|---|---|
-| id | TEXT | 主键 | 原始片段 ID。 |
+| id | TEXT | 主键；必填 | 原始片段 ID。 |
 | owner | TEXT | 必填；与录音组成复合外键 | 所属用户；与 recording_id 对应的录音一致。 |
 | recording_id | TEXT | 必填；与 owner 组成复合外键 | 所属录音 ID。 |
 | source_namespace | TEXT | 必填 | 来源命名空间。 |
-| source_id | TEXT | 必填；与 source_namespace 组合唯一 | 来源索引 ID；与 namespace 组成幂等键。 |
+| source_id | TEXT | 必填；与 source_namespace 组合唯一 | 来源索引 ID；与 source_namespace 组成幂等键。 |
 | segment_no | INTEGER | 必填；>0；录音内唯一 | 录音内片段号，从 1 开始。 |
 | state | TEXT | 必填 | receiving / ready。 |
 | raw_relative_path | TEXT | 唯一 | 原件相对路径，可空；ready 时必须存在。 |
@@ -92,7 +85,7 @@ v1 · 2026-10-29 · [Server / Web 主文档](../README.md)
 
 | 字段 | 类型 | 约束 / 默认 | 含义 |
 |---|---|---|---|
-| id | TEXT | 主键 | 任务 ID；一个任务对应一个 WAV 或 VTT 文件。 |
+| id | TEXT | 主键；必填 | 任务 ID；一个任务对应一个 WAV 或 VTT 文件。 |
 | owner | TEXT | 必填；与录音组成复合外键 | 任务所属用户，与录音 owner 相同。 |
 | recording_id | TEXT | 必填；与 owner 组成复合外键 | 任务处理的录音 ID。 |
 | input_revision | INTEGER | 必填；>0 | 任务对应的输入版本。 |
@@ -119,7 +112,7 @@ v1 · 2026-10-29 · [Server / Web 主文档](../README.md)
 | 来源唯一键 | source_namespace + source_id |
 | 录音内片段 | recording_id + segment_no 唯一 |
 | 后台处理 | recording_id + input_revision + kind 唯一；一个 running |
-| 当前文件指针 | wav_job_id/vtt_job_id 指向相同录音、owner、版本的 jobs |
+| 当前文件指针 | 复合 FK 保证录音/owner/版本；读写逻辑校验 WAV=decode、VTT=transcribe |
 | registry.sources | 保存原件身份和 ready/projected_at，业务投影后再更新标记 |
 
 <a id="decode"></a>
@@ -218,7 +211,7 @@ VTT 使用 UTF-8、WEBVTT 头、毫秒时间戳、稳定编号和可选 voice �
 | 重试 | 最多 4 次执行，重试间隔 30 秒 / 2 分钟 / 10 分钟 |
 | 超时 | decode 默认 10 分钟；ASR 默认 60 分钟 |
 
-领取和续期使用短事务，已过期执行的结果放弃发布；新输入使待执行旧版本标为 input_superseded。恢复时仅核验已落盘结果并补提交可换租约、保留 attempt；真正重做时增加 attempt。
+领取和续期使用短事务，已过期执行的结果放弃发布；新输入将待执行旧版本置 state=failed、error_code=input_superseded。恢复时仅核验已落盘结果并补提交可换租约、保留 attempt；真正重做时增加 attempt。
 
 | 发布阶段 | jobs / 文件 / 录音 |
 |---|---|
@@ -243,7 +236,7 @@ VTT 使用 UTF-8、WEBVTT 头、毫秒时间戳、稳定编号和可选 voice �
 
 ## 6. 音频与文字 API
 
-路径前缀 `/api/boa/v1`，携带本站会话，owner 取自会话。错误 body 使用 `{error:{code,message},request_id}`。
+路径前缀 `/api/boa/v1`，携带本站会话，owner 取自会话；统一错误格式见[主文档](../README.md#web-api)。
 
 | 接口 | 请求 | 响应 |
 |---|---|---|
@@ -260,14 +253,26 @@ VTT 使用 UTF-8、WEBVTT 头、毫秒时间戳、稳定编号和可选 voice �
 | 409 recording_revision_changed | 请求版本与当前音频不符 |
 | 409 audio_not_ready / transcript_not_ready | 对应结果处理中 |
 | 503 asr_not_configured / transcript_failed | ASR 未配置 / 识别失败 |
-| 503 audio_unavailable | 已发布音频文件缺失或不可用 |
+| 503 audio_unavailable / vtt_unavailable | WAV / VTT 文件缺失或不可用；VTT 缺失时已存 JSON 和 Markdown 仍可读取 |
 | 416 | GET 字节范围无效 |
 
 ### 6.1 版本与分页
 
-详情先固定 audio_revision。音频、JSON、VTT、Markdown 请求都携带 revision；文字还须匹配 transcript_revision 和 ready 状态。游标绑定 recording_id、revision、last_cue_index。每个请求在同一 SQLite 快照核对 owner 和版本后读取。
+详情先固定 recordings.audio_revision。所有媒体请求的 revision 为正整数；文字接口返回的 revision 取自 transcript_revision，并须等于 audio_revision。游标绑定 recording_id、revision、last_cue_index。
 
-JSON 使用 json_each 按 cue 数组下标读取 201 条：返回前 200 条，第 201 条决定 next_cursor。Markdown 迭代同一快照的全部 cues。复制取齐同版本全部页后再写剪贴板；新版本或 409 时，Web 取消旧分页和音频，重新固定版本。
+| 判断顺序 | 结果 |
+|---|---|
+| 录音不存在或 owner 不匹配 | 404 |
+| audio_revision 为空 | 解码失败为 503 audio_unavailable，其余为 409 audio_not_ready |
+| 请求 revision 与当前 audio_revision 不同 | 409 recording_revision_changed |
+| 文字请求且 transcript_state 为 not_configured / failed | 503 asr_not_configured / transcript_failed |
+| 文字处理中或 transcript_revision 尚未匹配 | 409 transcript_not_ready |
+| 文件请求 | 校验 jobs.kind、publication_state、路径；WAV 来自 decode，VTT 来自 transcribe；文件缺失分别返回 503 audio_unavailable / vtt_unavailable |
+
+同一读取快照内完成以上判断。audio_state 描述当前输入的处理进度；已有 WAV 以 wav_job_id/audio_revision 及对应文件状态判断可用性。VTT 文件缺失不影响同版本 JSON/Markdown 读取。
+
+
+JSON 使用 json_each 按 cue 数组下标读取 201 条：返回前 200 条，第 201 条决定 next_cursor。Markdown 迭代同一快照的全部 cues。复制取齐同版本全部页后再写剪贴板；仅遇到 409 recording_revision_changed 时重置旧音频和分页；not_ready 状态继续查询处理结果。
 
 ### 6.2 Range 与响应头
 
@@ -283,4 +288,4 @@ JSON 使用 json_each 按 cue 数组下标读取 201 条：返回前 200 条，�
 | GET，bytes=1000- | 416；bytes */1000 |
 | HEAD，bytes=0-99 | 200；Content-Length=1000，空 body |
 
-每次 GET/HEAD 都重新鉴权；文件使用不可变路径，响应标注 revision，ETag 取 SHA-256，Cache-Control 为 private, no-store。导出文件名由 Server 生成。Range/HEAD 依据 [RFC 9110 §14.2](https://www.rfc-editor.org/rfc/rfc9110.html#section-14.2)。
+所有媒体请求重新鉴权。JSON body 返回 revision，文件响应设置 X-Recording-Revision。WAV/VTT 使用不可变路径，ETag 取对应 jobs.sha256；响应设置 Cache-Control: private, no-store。导出文件名由 Server 生成。Range/HEAD 依据 [RFC 9110 §14.2](https://www.rfc-editor.org/rfc/rfc9110.html#section-14.2)。
