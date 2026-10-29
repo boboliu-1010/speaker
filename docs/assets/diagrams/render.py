@@ -114,7 +114,7 @@ for x, h in zip(xs, heads):p.text(x + 12, 165, h, 19, INK, '600')
 rows = [
  ('准备', ['临时路径 / 最终路径'], ['prepared', '记录 lease'], ['保留当前指针'], ['回收过期 lease']),
  ('生成', ['临时文件 fsync', '记录 size/hash/sample_count'], ['prepared', '元数据已保存'], ['保留当前指针'], ['重做未完成产物']),
- ('文件落盘', ['rename + 目录 fsync'], ['prepared', '最终文件可校验'], ['等待事务提交'], ['WAV 校验后补提交', 'VTT 结合文字事务处理']),
+ ('文件落盘', ['link 不覆盖 + 目录 fsync'], ['prepared', '最终文件可校验'], ['等待事务提交'], ['WAV 校验后补提交', 'VTT 结合文字事务处理']),
  ('事务完成', ['最终 WAV / VTT'], ['succeeded / ready'], ['更新版本与指针', '转写同时写 JSON'], ['直接读取已存结果']),
 ]
 for i, row in enumerate(rows):

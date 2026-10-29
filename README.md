@@ -61,7 +61,7 @@ v1 · 2026-10-29
 
 ## 2. Web 前后端 API
 
-路径前缀 `/api/boa/v1`。除登录入口、回调和 health，其余接口验证会话；写请求携带 Origin、X-CSRF-Token。owner 由 Server 确定。
+路径前缀 `/api/boa/v1`。除登录入口、回调和 health，其余接口验证会话；写请求携带 Origin、X-CSRF-Token；Server 精确匹配 PUBLIC_WEB_ORIGIN 和当前会话 CSRF，缺失或不匹配返回 403。owner 由 Server 确定。
 
 | 接口 | 请求参数 | 成功响应 |
 |---|---|---|
@@ -80,9 +80,9 @@ v1 · 2026-10-29
 | configuration | 沿用上传配置：device_id、device_uid、owner_id、binding_id、epoch、revision、endpoint、device_token；身份值与外层响应一致 |
 | 录音列表 | recordings 的 id、time_source、recorded_at、received_at、duration_ms、audio_state、transcript_state；preview_text 从当前同版本 JSON 的第一句提取，未就绪时为空 |
 | 录音详情 | 列表字段，加 integrity、input_revision、audio_revision、transcript_revision、audio_error_code、transcript_error_code、links |
-| links | audio、transcript、vtt、markdown；Server 按就绪状态构造带 revision 的地址，未就绪项为 null；文件可用性由媒体接口复核 |
+| links | audio、transcript、vtt、markdown；使用 audio_revision 构造地址。audio 要求当前 WAV 任务 publication_state=ready；文字要求 transcript_state=ready 且 transcript_revision=audio_revision；vtt 另要求当前 VTT 任务 publication_state=ready；其余为 null，媒体接口再次校验 |
 
-audio_error_code 取当前 input_revision 的失败 decode 任务，transcript_error_code 取当前 audio_revision 的失败 transcribe 任务；值为对应 jobs.error_code，未失败时为 null。
+audio_error_code 取当前 input_revision 的失败 decode 任务，transcript_error_code 取当前 audio_revision 的失败 transcribe 任务；值为对应 jobs.error_code，未失败时为 null。新输入处理中仍可返回上一份已发布音频的链接；VTT 文件修复失败只影响 vtt 链接，JSON/Markdown 仍按已提交文字状态返回。
 
 telemetry 的 online、battery、pending 分别返回 `{value,sampled_at,source}`；缺少有效来源时 value=null。时间统一为 UTC Unix 毫秒。配置/凭证响应使用 no-store。
 
@@ -137,6 +137,8 @@ Web 通过顶层导航发起 Google 登录。Google 授权后回调 Server，Ser
 <a id="business-sql"></a>
 
 ### 5.1 业务库
+
+运行时每个数据库连接都设置 foreign_keys=ON、synchronous=FULL、busy_timeout=5000；两个库分别提交，跨库顺序见音频文档。
 
 ```sql
 -- 录音助手 v1：四张业务表初始 DDL。
@@ -216,7 +218,7 @@ CREATE TABLE jobs (
   lease_token TEXT, lease_until INTEGER,
   input_json TEXT NOT NULL CHECK(json_valid(input_json)),
   -- 一个 decode 只产出 WAV，一个 transcribe 只产出 VTT；原文同时提交到 recordings。
-  -- 文件索引与发布记录并入本行，路径按 job/attempt 生成，重试不覆盖旧文件。
+  -- 文件索引与发布记录并入本行；每次发布使用新 UUID 路径，重试和修复不覆盖旧文件。
   publication_state TEXT NOT NULL DEFAULT 'none' CHECK(publication_state IN ('none','prepared','ready','missing','abandoned')),
   tmp_relative_path TEXT UNIQUE, final_relative_path TEXT UNIQUE,
   size_bytes INTEGER CHECK(size_bytes>0), sha256 TEXT CHECK(length(sha256)=64),
