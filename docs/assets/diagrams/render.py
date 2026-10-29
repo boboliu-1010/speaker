@@ -61,45 +61,9 @@ class Plate:
         (ROOT / (stem + '.svg')).write_text('\n'.join(self.parts) + '\n')
 
 
-# Product page composition: a list/detail screen and a separate device screen.
-p = Plate('产品页面', '录音、设备与账号菜单', 820)
-p.rect(40, 146, 765, 620)
-p.rect(40, 146, 765, 54, INK, INK, 0)
-p.text(60, 182, '录音助手', 22, 'white', '600')
-p.text(250, 182, '录音', 19, 'white')
-p.text(330, 182, '设备', 19, '#b8c5d8')
-p.text(627, 182, '邮箱 / 退出', 17, '#d6e1ef')
-p.rect(60, 224, 275, 42, PALE)
-p.text(75, 251, '开始日期 — 结束日期', 17, MUTED)
-for i, (date, duration, text) in enumerate([('10 月 29 日  10:30', '12:08', '我们确认一下今天的安排。'), ('10 月 29 日  09:00', '08:42', '先检查设备，再核对录音文字。'), ('10 月 28 日  15:20', '24:18', '录音文字预览…')]):
-    y = 294 + i * 126
-    p.rect(60, y, 300, 108, '#edf3ff' if i == 0 else 'white')
-    p.text(78, y + 29, date, 18, INK, '500')
-    p.text(78, y + 58, duration + '  ·  转写完成', 16, MUTED)
-    p.text(78, y + 85, text, 15)
-p.line(383, 224, 383, 737)
-p.text(408, 254, '10 月 29 日 10:30', 22, INK, '600')
-p.rect(408, 280, 370, 63, PALE)
-p.text(426, 319, '▶    ━━━━━━━━━━    00:18 / 12:08', 17)
-p.text(410, 385, 'A', 18, TEAL, '600')
-p.text(446, 385, '我们确认一下今天的安排。', 17)
-p.text(410, 433, 'B', 18, BLUE, '600')
-p.text(446, 433, '先检查设备，再核对录音文字。', 16)
-p.pill(410, 500, '复制全文', 116)
-p.text(410, 574, '下载', 18, INK, '500')
-for i, label in enumerate(['WAV', 'Markdown', 'VTT']):
-    p.pill(410 + i * 122, 594, label, 110, PALE, INK)
-p.rect(835, 146, 405, 620)
-p.text(859, 184, '设备', 24, INK, '600')
-p.pill(1097, 160, '+ 添加', 118)
-p.card(859, 222, 357, 238, '我的 Clip', ['固件版本    0.1.x', '最近收件    10:29', '电量 / 待上传    按设备上报', 'Wi-Fi    查看与设置'], TEAL)
-p.text(881, 435, '改名                       移除设备', 17, BLUE)
-p.text(859, 516, ['设备状态带采样时间', '设备移除后，已上传录音保留'], 18, MUTED)
-p.save('00-product-overview')
-
 # Deployment architecture: process boundary, interface tier, modules, and stores.
-p = Plate('部署与模块架构', 'Web 与设备接入同一 Server；业务模块共享数据目录', 850)
-p.card(40, 170, 215, 180, '浏览器', ['录音 / 设备', '同源 HTTPS API', 'BLE 配置设备'])
+p = Plate('部署与模块架构', 'HTTP / DTLS 接入、进程边界、业务模块与持久存储', 850)
+p.card(40, 170, 215, 180, '浏览器', ['原生 ES modules', '同源 HTTPS API', 'BLE adapter'])
 p.card(40, 545, 215, 140, 'ReSpeaker Clip', ['Wi-Fi 上传', 'UDP / DTLS 9528'], TEAL)
 p.rect(300, 144, 650, 645, PALE)
 p.text(322, 180, 'Server 主机', 24, INK, '600')
@@ -139,27 +103,6 @@ p.line(710, 373, 710, 480, BLUE, 2);p.line(710, 480, 325, 480, BLUE, 2);p.line(3
 p.line(1000, 373, 1000, 575, BLUE, 2);p.text(1017, 485, '1:N  处理任务', 17, MUTED)
 p.text(40, 856, '复合外键校验录音、owner 和版本；jobs.kind 区分 WAV 解码与 VTT 转写产物。', 18, MUTED)
 p.save('02-user-data-model')
-
-# Device onboarding screens.
-p = Plate('设备添加界面', '四步向导；每一步展示设备返回结果', 720)
-steps = [
-    ('准备设备', ['Clip 保持开机', '浏览器开启蓝牙', '设备靠近电脑'], '开始连接'),
-    ('连接 Clip', ['选择 BLE 设备', '显示完整 UID', '读取固件和能力'], '已连接'),
-    ('配置上传', ['核验设备登记与归属', '写入上传凭证', '读回 binding / epoch', '同步设备时间'], '配置已确认'),
-    ('设置 Wi-Fi', ['Clip 扫描附近网络', '选择 SSID，输入密码', 'BLE 写入配置', '显示实际连接结果'], '连接成功，完成'),
-]
-for i, (title, lines, button) in enumerate(steps):
-    x = 40 + i * 305
-    p.rect(x, 156, 285, 450)
-    p.pill(x + 22, 179, f'{i+1} / 4', 70)
-    p.text(x + 22, 257, title, 24, INK, '600')
-    for j, text in enumerate(lines):
-        p.text(x + 22, 310 + j * 44, text, 18)
-        p.line(x + 22, 326 + j * 44, x + 260, 326 + j * 44)
-    p.rect(x + 22, 533, 241, 43, '#edf3ff', '#edf3ff')
-    p.text(x + 36, 561, button, 18, BLUE, '500')
-p.text(40, 666, '交付核对：可信登记、上传凭证写入、设备配置读回、校时、Wi-Fi 连接与真实收件。', 18, MUTED)
-p.save('03-device-onboarding')
 
 # Persistence ownership view for receive and projection.
 p = Plate('收件与数据投影', '原件持久化与业务索引分别承担确认和读取职责', 760)
@@ -214,43 +157,36 @@ p.text(60, 671, '转写恢复规则', 22, TEAL, '600')
 p.text(60, 709, 'VTT 已落盘、JSON 未提交：重跑 ASR 后整体发布。JSON 已提交、VTT 丢失：从 JSON 重建 VTT。', 18)
 p.save('06-file-database-publication')
 
-# Versioned audio and transcript represented as a record detail sheet.
-p = Plate('音频与文字的版本对齐', '详情页与三种下载共享同一录音版本', 770)
-p.rect(40, 158, 720, 500)
-p.text(65, 199, '10 月 29 日 10:30', 24, INK, '600')
-p.pill(535, 174, 'revision = 1', 196)
-p.rect(65, 230, 670, 70, PALE)
-p.text(86, 271, '▶    ━━━━━━━━━━━━━━━━━━    00:02 / 00:05', 21)
-for y, speaker, time, text in [(354, 'A', '00:00.000 — 00:02.400', '我们确认一下今天的安排。'), (455, 'B', '00:02.400 — 00:05.800', '先检查设备，再核对录音文字。')]:
-    p.pill(65, y - 19, speaker, 42, '#e8f5f0', TEAL)
-    p.text(127, y, time, 16, MUTED)
-    p.text(127, y + 38, text, 21)
-for i, title in enumerate(['复制文字', 'WAV', 'Markdown', 'VTT']):p.pill(65 + i * 169, 576, title, 151)
-p.entity(805, 158, 435, 'recordings', ['audio_revision       1', 'transcript_revision  1', 'transcript_json      已存原文', 'wav_job_id           decode 任务', 'vtt_job_id           transcribe 任务'])
-p.card(805, 455, 435, 203, '接口约束', ['媒体与文字请求携带 revision', '分页游标绑定录音和版本', '版本变化返回 409，重新加载', '复制前取齐同版本文字'], TEAL)
-p.text(40, 718, 'VTT、Markdown 和页面文字均读取同组 cues；speaker 缺失时保存为 null。', 19, MUTED)
+# Version consistency across published objects and requests.
+p = Plate('版本与读取约束', 'recordings 固定当前音频与文字版本；各接口在读取快照内校验', 740)
+xs = [40, 360, 750]
+for x, title in zip(xs, ['校验对象', '固定字段', '读取条件']): p.text(x + 16, 166, title, 21, INK, '600')
+rows = [
+    ('WAV', 'wav_job_id / audio_revision', 'job.kind=decode；文件 ready'),
+    ('转写 JSON', 'transcript_json / transcript_revision', '文字 ready；版本等于 audio_revision'),
+    ('VTT', 'vtt_job_id / transcript_revision', 'job.kind=transcribe；文件 ready'),
+    ('Markdown', '当前 JSON 的全部 cues', '同一 SQLite 快照内迭代'),
+    ('文字分页', 'recording_id / revision / last_cue_index', '每页最多 200；游标属于当前录音'),
+]
+for i, row in enumerate(rows):
+    y = 195 + i * 68
+    p.rect(40, y, 1200, 68, PALE if i % 2 == 0 else 'white', LINE, 0)
+    for x, value in zip(xs, row): p.text(x + 16, y + 42, value, 17)
+p.card(40, 574, 580, 107, '版本变化', ['返回 409 recording_revision_changed'], BLUE)
+p.card(650, 574, 590, 107, 'Web 处理', ['取消旧请求与音频，重新固定版本后取齐文字'], TEAL)
 p.save('07-transcript-vtt')
 
-# Device Wi-Fi screen with the BLE boundary shown as a connection, not a workflow.
-p = Plate('Clip Wi-Fi 配置界面', '附近网络由目标 Clip 扫描，Web 负责选择与配置', 790)
-p.rect(40, 155, 690, 563)
-p.text(65, 199, '设置 Wi-Fi', 25, INK, '600')
-p.pill(567, 171, '重新扫描', 138)
-p.text(65, 242, '附近网络', 18, MUTED)
-for i, (ssid, info) in enumerate([('Office-WiFi', 'WPA2    -48 dBm'), ('Meeting-Room', 'WPA2    -61 dBm'), ('Studio', 'WPA2    -73 dBm')]):
-    y = 261 + i * 61
-    p.rect(65, y, 640, 53, '#edf3ff' if i == 0 else 'white')
-    p.text(83, y + 34, ('●  ' if i == 0 else '○  ') + ssid, 19)
-    p.text(493, y + 34, info, 16, MUTED)
-p.text(65, 488, '网络密码', 18, MUTED)
-p.rect(65, 503, 640, 49, PALE)
-p.text(83, 536, '••••••••••••', 22, MUTED)
-p.pill(65, 581, '保存并连接', 164)
-p.text(251, 605, '状态：已保存 / 连接中 / 已连接 / 失败原因', 17)
-p.card(825, 197, 415, 166, 'ReSpeaker Clip', ['扫描 SSID / 信号 / 安全类型', '保存网络配置并建立连接', '返回保存结果与实际连接状态'], TEAL)
-p.card(825, 416, 415, 192, 'BLE 连接', ['Web 与目标设备直接通信', '密码在写入完成后清空', '已保存网络按设备容量展示', '无线基线：2.4 GHz WPA2'])
-p.line(730, 315, 825, 315, TEAL, 2);p.text(746, 293, 'BLE', 18, TEAL, '600')
-p.text(40, 758, '界面中的网络名称与信号强度为示意数据。', 16, MUTED)
+# BLE adapter, firmware capabilities, and server binding responsibilities.
+p = Plate('设备接入与 BLE 适配', '凭证与归属由 Server 管理；网络扫描和连接由 Clip 执行', 820)
+p.rect(40, 155, 600, 573, PALE)
+p.text(62, 194, 'Web 设备控制器', 25, INK, '600')
+p.entity(62, 219, 556, 'devices.mjs / ClipAdapter', ['连接 generation 与命令串行队列', 'readIdentity() / capabilities()', 'writeUploadConfiguration() / 读回确认', 'scanWifi() / saveWifi() / readWifiStatus()', '断开连接：取消旧命令与密码引用'])
+p.card(62, 480, 556, 205, '服务端调用', ['activate(uid, evidence)：核验登记与归属', 'binding/confirm：核对配置 revision/hash', 'rename：限定本人 active binding', 'remove：撤销上传凭证与清理配置'], BLUE)
+p.card(800, 155, 440, 220, 'Clip 固件 / BLE', ['完整 UID、固件版本与 capability', '写入上传参数、校时、配置读回', '扫描 SSID / rssi / security', '保存网络、建立连接、返回错误'], TEAL)
+p.card(800, 442, 440, 220, 'Server / registry', ['owner / binding / epoch / credential', '设备受控登记与配置 revision', '别名、凭证撤销、cleanup_pending', '历史来源与录音归属'], BLUE)
+p.line(640, 290, 800, 290, TEAL, 2);p.text(688, 272, 'BLE', 18, TEAL, '600')
+p.line(640, 555, 800, 555, BLUE, 2);p.text(668, 536, 'HTTPS API', 18, BLUE, '600')
+p.text(40, 780, 'SSID 取自当前连接的扫描结果；保存状态、连接状态和 Server 收件状态分别读取。', 18, MUTED)
 p.save('08-wifi-configuration')
 
 # Authentication storage and lifecycle.
@@ -278,9 +214,9 @@ p.save('10-transcript-format')
 # Milestone schedule.
 p = Plate('开发任务与交付里程碑', '按 M1、M2、M3 依次交付；S01–S12 对应正文开发任务', 860)
 left = 420
-for i, (name, sub) in enumerate([('M1  账号与设备', 'S01–S04'), ('M2  录音与转写', 'S05–S08'), ('M3  页面与验收', 'S09–S12')]):
+for i, (name, sub) in enumerate([('M1  账号与设备', 'S01–S04'), ('M2  录音与转写', 'S05–S08'), ('M3  接口集成与验收', 'S09–S12')]):
     x = left + i * 270;p.rect(x, 150, 260, 70, '#edf3ff', '#edf3ff');p.text(x + 18, 178, name, 20, BLUE, '600');p.text(x + 18, 207, sub, 17, MUTED)
-items = [('S01 / S02', '四表迁移、Google 登录、会话', 0), ('S03 / S04', '设备绑定、Web 与添加向导', 0), ('S05 / S06', '来源投影、任务与文件发布', 1), ('S07', 'WAV 解码与 Range 播放', 1), ('S08', 'ASR、原文 JSON、VTT', 1), ('S09 / S10', '日期列表、详情与下载', 2), ('S11', '设备卡片与 Clip Wi-Fi', 2), ('S12', '集成、迁移恢复、候选包', 2)]
+items = [('S01 / S02', '四表迁移、Google 登录、会话', 0), ('S03 / S04', '绑定、Web 请求与会话管理', 0), ('S05 / S06', '来源投影、任务与文件发布', 1), ('S07', 'WAV 解码与 Range 播放', 1), ('S08', 'ASR、原文 JSON、VTT', 1), ('S09 / S10', '日期列表、详情与下载', 2), ('S11', 'BLE 能力与 Clip Wi-Fi', 2), ('S12', '集成、迁移恢复、候选包', 2)]
 for i, (code, name, stage) in enumerate(items):
     y = 242 + i * 66
     p.text(40, y + 25, code, 18, BLUE, '600');p.text(177, y + 25, name, 17)
@@ -288,4 +224,4 @@ for i, (code, name, stage) in enumerate(items):
     p.rect(left + stage * 270 + 12, y + 8, 236, 28, TEAL if stage == 1 else BLUE, TEAL if stage == 1 else BLUE, 4)
 p.text(40, 821, '交付依据：接口与单元验证、真实浏览器、Google / Clip / ASR 联调、备份恢复记录。', 18, MUTED)
 p.save('12-implementation-order')
-print('Generated 12 SVG plates.')
+print('Generated 10 engineering SVG plates.')

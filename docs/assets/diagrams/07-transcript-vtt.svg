@@ -1,50 +1,40 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="770" viewBox="0 0 1280 770">
-<title>音频与文字的版本对齐</title>
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="740" viewBox="0 0 1280 740">
+<title>版本与读取约束</title>
 <rect width="1280" height="100%" fill="white"/>
 <g font-family="PingFang SC,Microsoft YaHei,Noto Sans CJK SC,Arial,sans-serif">
-<text x="40" y="55" font-size="30" font-weight="600" fill="#17283f">音频与文字的版本对齐</text>
-<text x="40" y="88" font-size="17" font-weight="400" fill="#607088">详情页与三种下载共享同一录音版本</text>
+<text x="40" y="55" font-size="30" font-weight="600" fill="#17283f">版本与读取约束</text>
+<text x="40" y="88" font-size="17" font-weight="400" fill="#607088">recordings 固定当前音频与文字版本；各接口在读取快照内校验</text>
 <line x1="40" y1="112" x2="1240" y2="112" stroke="#d8e0ea" stroke-width="1.5"/>
-<rect x="40" y="158" width="720" height="500" rx="8" fill="white" stroke="#d8e0ea"/>
-<text x="65" y="199" font-size="24" font-weight="600" fill="#17283f">10 月 29 日 10:30</text>
-<rect x="535" y="174" width="196" height="30" rx="5" fill="#e9f1ff" stroke="#e9f1ff"/>
-<text x="547" y="195" font-size="15" font-weight="500" fill="#245cca">revision = 1</text>
-<rect x="65" y="230" width="670" height="70" rx="8" fill="#f3f6fa" stroke="#d8e0ea"/>
-<text x="86" y="271" font-size="21" font-weight="400" fill="#17283f">▶    ━━━━━━━━━━━━━━━━━━    00:02 / 00:05</text>
-<rect x="65" y="335" width="42" height="30" rx="5" fill="#e8f5f0" stroke="#e8f5f0"/>
-<text x="77" y="356" font-size="15" font-weight="500" fill="#087f74">A</text>
-<text x="127" y="354" font-size="16" font-weight="400" fill="#607088">00:00.000 — 00:02.400</text>
-<text x="127" y="392" font-size="21" font-weight="400" fill="#17283f">我们确认一下今天的安排。</text>
-<rect x="65" y="436" width="42" height="30" rx="5" fill="#e8f5f0" stroke="#e8f5f0"/>
-<text x="77" y="457" font-size="15" font-weight="500" fill="#087f74">B</text>
-<text x="127" y="455" font-size="16" font-weight="400" fill="#607088">00:02.400 — 00:05.800</text>
-<text x="127" y="493" font-size="21" font-weight="400" fill="#17283f">先检查设备，再核对录音文字。</text>
-<rect x="65" y="576" width="151" height="30" rx="5" fill="#e9f1ff" stroke="#e9f1ff"/>
-<text x="77" y="597" font-size="15" font-weight="500" fill="#245cca">复制文字</text>
-<rect x="234" y="576" width="151" height="30" rx="5" fill="#e9f1ff" stroke="#e9f1ff"/>
-<text x="246" y="597" font-size="15" font-weight="500" fill="#245cca">WAV</text>
-<rect x="403" y="576" width="151" height="30" rx="5" fill="#e9f1ff" stroke="#e9f1ff"/>
-<text x="415" y="597" font-size="15" font-weight="500" fill="#245cca">Markdown</text>
-<rect x="572" y="576" width="151" height="30" rx="5" fill="#e9f1ff" stroke="#e9f1ff"/>
-<text x="584" y="597" font-size="15" font-weight="500" fill="#245cca">VTT</text>
-<rect x="805" y="158" width="435" height="213" rx="8" fill="white" stroke="#d8e0ea"/>
-<rect x="805" y="158" width="435" height="48" rx="0" fill="#17283f" stroke="#17283f"/>
-<text x="823" y="190" font-size="21" font-weight="600" fill="white">recordings</text>
-<rect x="806" y="206" width="433" height="31" rx="0" fill="#f3f6fa" stroke="#f3f6fa"/>
-<text x="821" y="228" font-size="16" font-weight="400" fill="#17283f">audio_revision       1</text>
-<text x="821" y="259" font-size="16" font-weight="400" fill="#17283f">transcript_revision  1</text>
-<rect x="806" y="268" width="433" height="31" rx="0" fill="#f3f6fa" stroke="#f3f6fa"/>
-<text x="821" y="290" font-size="16" font-weight="400" fill="#17283f">transcript_json      已存原文</text>
-<text x="821" y="321" font-size="16" font-weight="400" fill="#17283f">wav_job_id           decode 任务</text>
-<rect x="806" y="330" width="433" height="31" rx="0" fill="#f3f6fa" stroke="#f3f6fa"/>
-<text x="821" y="352" font-size="16" font-weight="400" fill="#17283f">vtt_job_id           transcribe 任务</text>
-<rect x="805" y="455" width="435" height="203" rx="8" fill="white" stroke="#d8e0ea"/>
-<rect x="805" y="455" width="5" height="203" rx="0" fill="#087f74" stroke="#087f74"/>
-<text x="827" y="489" font-size="21" font-weight="600" fill="#17283f">接口约束</text>
-<text x="827" y="525" font-size="18" font-weight="400" fill="#607088">媒体与文字请求携带 revision</text>
-<text x="827" y="553" font-size="18" font-weight="400" fill="#607088">分页游标绑定录音和版本</text>
-<text x="827" y="581" font-size="18" font-weight="400" fill="#607088">版本变化返回 409，重新加载</text>
-<text x="827" y="609" font-size="18" font-weight="400" fill="#607088">复制前取齐同版本文字</text>
-<text x="40" y="718" font-size="19" font-weight="400" fill="#607088">VTT、Markdown 和页面文字均读取同组 cues；speaker 缺失时保存为 null。</text>
+<text x="56" y="166" font-size="21" font-weight="600" fill="#17283f">校验对象</text>
+<text x="376" y="166" font-size="21" font-weight="600" fill="#17283f">固定字段</text>
+<text x="766" y="166" font-size="21" font-weight="600" fill="#17283f">读取条件</text>
+<rect x="40" y="195" width="1200" height="68" rx="0" fill="#f3f6fa" stroke="#d8e0ea"/>
+<text x="56" y="237" font-size="17" font-weight="400" fill="#17283f">WAV</text>
+<text x="376" y="237" font-size="17" font-weight="400" fill="#17283f">wav_job_id / audio_revision</text>
+<text x="766" y="237" font-size="17" font-weight="400" fill="#17283f">job.kind=decode；文件 ready</text>
+<rect x="40" y="263" width="1200" height="68" rx="0" fill="white" stroke="#d8e0ea"/>
+<text x="56" y="305" font-size="17" font-weight="400" fill="#17283f">转写 JSON</text>
+<text x="376" y="305" font-size="17" font-weight="400" fill="#17283f">transcript_json / transcript_revision</text>
+<text x="766" y="305" font-size="17" font-weight="400" fill="#17283f">文字 ready；版本等于 audio_revision</text>
+<rect x="40" y="331" width="1200" height="68" rx="0" fill="#f3f6fa" stroke="#d8e0ea"/>
+<text x="56" y="373" font-size="17" font-weight="400" fill="#17283f">VTT</text>
+<text x="376" y="373" font-size="17" font-weight="400" fill="#17283f">vtt_job_id / transcript_revision</text>
+<text x="766" y="373" font-size="17" font-weight="400" fill="#17283f">job.kind=transcribe；文件 ready</text>
+<rect x="40" y="399" width="1200" height="68" rx="0" fill="white" stroke="#d8e0ea"/>
+<text x="56" y="441" font-size="17" font-weight="400" fill="#17283f">Markdown</text>
+<text x="376" y="441" font-size="17" font-weight="400" fill="#17283f">当前 JSON 的全部 cues</text>
+<text x="766" y="441" font-size="17" font-weight="400" fill="#17283f">同一 SQLite 快照内迭代</text>
+<rect x="40" y="467" width="1200" height="68" rx="0" fill="#f3f6fa" stroke="#d8e0ea"/>
+<text x="56" y="509" font-size="17" font-weight="400" fill="#17283f">文字分页</text>
+<text x="376" y="509" font-size="17" font-weight="400" fill="#17283f">recording_id / revision / last_cue_index</text>
+<text x="766" y="509" font-size="17" font-weight="400" fill="#17283f">每页最多 200；游标属于当前录音</text>
+<rect x="40" y="574" width="580" height="107" rx="8" fill="white" stroke="#d8e0ea"/>
+<rect x="40" y="574" width="5" height="107" rx="0" fill="#245cca" stroke="#245cca"/>
+<text x="62" y="608" font-size="21" font-weight="600" fill="#17283f">版本变化</text>
+<text x="62" y="644" font-size="18" font-weight="400" fill="#607088">返回 409 recording_revision_changed</text>
+<rect x="650" y="574" width="590" height="107" rx="8" fill="white" stroke="#d8e0ea"/>
+<rect x="650" y="574" width="5" height="107" rx="0" fill="#087f74" stroke="#087f74"/>
+<text x="672" y="608" font-size="21" font-weight="600" fill="#17283f">Web 处理</text>
+<text x="672" y="644" font-size="18" font-weight="400" fill="#607088">取消旧请求与音频，重新固定版本后取齐文字</text>
 </g>
 </svg>

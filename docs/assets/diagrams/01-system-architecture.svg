@@ -3,14 +3,14 @@
 <rect width="1280" height="100%" fill="white"/>
 <g font-family="PingFang SC,Microsoft YaHei,Noto Sans CJK SC,Arial,sans-serif">
 <text x="40" y="55" font-size="30" font-weight="600" fill="#17283f">部署与模块架构</text>
-<text x="40" y="88" font-size="17" font-weight="400" fill="#607088">Web 与设备接入同一 Server；业务模块共享数据目录</text>
+<text x="40" y="88" font-size="17" font-weight="400" fill="#607088">HTTP / DTLS 接入、进程边界、业务模块与持久存储</text>
 <line x1="40" y1="112" x2="1240" y2="112" stroke="#d8e0ea" stroke-width="1.5"/>
 <rect x="40" y="170" width="215" height="180" rx="8" fill="white" stroke="#d8e0ea"/>
 <rect x="40" y="170" width="5" height="180" rx="0" fill="#245cca" stroke="#245cca"/>
 <text x="62" y="204" font-size="21" font-weight="600" fill="#17283f">浏览器</text>
-<text x="62" y="240" font-size="18" font-weight="400" fill="#607088">录音 / 设备</text>
+<text x="62" y="240" font-size="18" font-weight="400" fill="#607088">原生 ES modules</text>
 <text x="62" y="268" font-size="18" font-weight="400" fill="#607088">同源 HTTPS API</text>
-<text x="62" y="296" font-size="18" font-weight="400" fill="#607088">BLE 配置设备</text>
+<text x="62" y="296" font-size="18" font-weight="400" fill="#607088">BLE adapter</text>
 <rect x="40" y="545" width="215" height="140" rx="8" fill="white" stroke="#d8e0ea"/>
 <rect x="40" y="545" width="5" height="140" rx="0" fill="#087f74" stroke="#087f74"/>
 <text x="62" y="579" font-size="21" font-weight="600" fill="#17283f">ReSpeaker Clip</text>

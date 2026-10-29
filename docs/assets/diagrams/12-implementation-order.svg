@@ -12,7 +12,7 @@
 <text x="708" y="178" font-size="20" font-weight="600" fill="#245cca">M2  录音与转写</text>
 <text x="708" y="207" font-size="17" font-weight="400" fill="#607088">S05–S08</text>
 <rect x="960" y="150" width="260" height="70" rx="8" fill="#edf3ff" stroke="#edf3ff"/>
-<text x="978" y="178" font-size="20" font-weight="600" fill="#245cca">M3  页面与验收</text>
+<text x="978" y="178" font-size="20" font-weight="600" fill="#245cca">M3  接口集成与验收</text>
 <text x="978" y="207" font-size="17" font-weight="400" fill="#607088">S09–S12</text>
 <text x="40" y="267" font-size="18" font-weight="600" fill="#245cca">S01 / S02</text>
 <text x="177" y="267" font-size="17" font-weight="400" fill="#17283f">四表迁移、Google 登录、会话</text>
@@ -21,7 +21,7 @@
 <rect x="960" y="242" width="260" height="44" rx="3" fill="#f3f6fa" stroke="#f3f6fa"/>
 <rect x="432" y="250" width="236" height="28" rx="4" fill="#245cca" stroke="#245cca"/>
 <text x="40" y="333" font-size="18" font-weight="600" fill="#245cca">S03 / S04</text>
-<text x="177" y="333" font-size="17" font-weight="400" fill="#17283f">设备绑定、Web 与添加向导</text>
+<text x="177" y="333" font-size="17" font-weight="400" fill="#17283f">绑定、Web 请求与会话管理</text>
 <rect x="420" y="308" width="260" height="44" rx="3" fill="#f3f6fa" stroke="#f3f6fa"/>
 <rect x="690" y="308" width="260" height="44" rx="3" fill="#f3f6fa" stroke="#f3f6fa"/>
 <rect x="960" y="308" width="260" height="44" rx="3" fill="#f3f6fa" stroke="#f3f6fa"/>
@@ -51,7 +51,7 @@
 <rect x="960" y="572" width="260" height="44" rx="3" fill="#f3f6fa" stroke="#f3f6fa"/>
 <rect x="972" y="580" width="236" height="28" rx="4" fill="#245cca" stroke="#245cca"/>
 <text x="40" y="663" font-size="18" font-weight="600" fill="#245cca">S11</text>
-<text x="177" y="663" font-size="17" font-weight="400" fill="#17283f">设备卡片与 Clip Wi-Fi</text>
+<text x="177" y="663" font-size="17" font-weight="400" fill="#17283f">BLE 能力与 Clip Wi-Fi</text>
 <rect x="420" y="638" width="260" height="44" rx="3" fill="#f3f6fa" stroke="#f3f6fa"/>
 <rect x="690" y="638" width="260" height="44" rx="3" fill="#f3f6fa" stroke="#f3f6fa"/>
 <rect x="960" y="638" width="260" height="44" rx="3" fill="#f3f6fa" stroke="#f3f6fa"/>
