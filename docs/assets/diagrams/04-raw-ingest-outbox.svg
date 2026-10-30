@@ -1,46 +1,65 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="760" viewBox="0 0 1280 760">
-<title>原件存储与双写投影</title>
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="1010" viewBox="0 0 1280 1010">
+<title>原始录音文件如何进入业务库</title>
 <rect width="1280" height="100%" fill="white"/>
 <g font-family="PingFang SC,Microsoft YaHei,Noto Sans CJK SC,Arial,sans-serif">
-<text x="40" y="55" font-size="30" font-weight="600" fill="#17283f">原件存储与双写投影</text>
-<text x="40" y="88" font-size="17" font-weight="400" fill="#607088">原件与来源索引完成持久化后确认设备；业务投影可恢复</text>
+<text x="40" y="55" font-size="30" font-weight="600" fill="#17283f">原始录音文件如何进入业务库</text>
+<text x="40" y="88" font-size="17" font-weight="400" fill="#607088">来源记录描述一份 raw 文件；文件接收成功后，再独立导入录音与片段。</text>
 <line x1="40" y1="112" x2="1240" y2="112" stroke="#d8e0ea" stroke-width="1.5"/>
-<rect x="40" y="160" width="250" height="370" rx="8" fill="white" stroke="#d8e0ea"/>
-<rect x="40" y="160" width="5" height="370" rx="0" fill="#087f74" stroke="#087f74"/>
-<text x="62" y="194" font-size="21" font-weight="600" fill="#17283f">设备 / 接收器</text>
-<text x="62" y="230" font-size="18" font-weight="400" fill="#607088">设备凭证与归属校验</text>
-<text x="62" y="258" font-size="18" font-weight="400" fill="#607088">已持久偏移 ACK</text>
-<text x="62" y="286" font-size="18" font-weight="400" fill="#607088">size / SHA-256 检查</text>
-<text x="62" y="314" font-size="18" font-weight="400" fill="#607088">raw 与 identity 持久化</text>
-<text x="62" y="342" font-size="18" font-weight="400" fill="#607088">完整来源就绪后 COMPLETE</text>
-<rect x="335" y="160" width="415" height="213" rx="8" fill="white" stroke="#d8e0ea"/>
-<rect x="335" y="160" width="415" height="48" rx="0" fill="#17283f" stroke="#17283f"/>
-<text x="353" y="192" font-size="21" font-weight="600" fill="white">registry.sources</text>
-<rect x="336" y="208" width="413" height="31" rx="0" fill="#f3f6fa" stroke="#f3f6fa"/>
-<text x="351" y="230" font-size="16" font-weight="400" fill="#17283f">id / owner / binding</text>
-<text x="351" y="261" font-size="16" font-weight="400" fill="#17283f">session / segment / object_id</text>
-<rect x="336" y="270" width="413" height="31" rx="0" fill="#f3f6fa" stroke="#f3f6fa"/>
-<text x="351" y="292" font-size="16" font-weight="400" fill="#17283f">size / sha256</text>
-<text x="351" y="323" font-size="16" font-weight="400" fill="#17283f">state = ready</text>
-<rect x="336" y="332" width="413" height="31" rx="0" fill="#f3f6fa" stroke="#f3f6fa"/>
-<text x="351" y="354" font-size="16" font-weight="400" fill="#17283f">projected_at = NULL 或提交时间</text>
-<rect x="795" y="160" width="445" height="213" rx="8" fill="white" stroke="#d8e0ea"/>
-<rect x="795" y="160" width="445" height="48" rx="0" fill="#17283f" stroke="#17283f"/>
-<text x="813" y="192" font-size="21" font-weight="600" fill="white">业务库</text>
-<rect x="796" y="208" width="443" height="31" rx="0" fill="#f3f6fa" stroke="#f3f6fa"/>
-<text x="811" y="230" font-size="16" font-weight="400" fill="#17283f">recordings：来源聚合与输入版本</text>
-<text x="811" y="261" font-size="16" font-weight="400" fill="#17283f">recording_segments：raw 元数据</text>
-<rect x="796" y="270" width="443" height="31" rx="0" fill="#f3f6fa" stroke="#f3f6fa"/>
-<text x="811" y="292" font-size="16" font-weight="400" fill="#17283f">唯一键：source_namespace + source_id</text>
-<text x="811" y="323" font-size="16" font-weight="400" fill="#17283f">imported_at：首次导入时间</text>
-<rect x="796" y="332" width="443" height="31" rx="0" fill="#f3f6fa" stroke="#f3f6fa"/>
-<text x="811" y="354" font-size="16" font-weight="400" fill="#17283f">同一事务更新片段与录音版本</text>
-<rect x="335" y="430" width="905" height="100" rx="8" fill="#edf3ff" stroke="#d3e0f7"/>
-<text x="357" y="465" font-size="20" font-weight="600" fill="#245cca">跨库提交规则</text>
-<text x="357" y="500" font-size="18" font-weight="400" fill="#17283f">业务提交成功后填写 projected_at；重放时核对来源唯一键与 hash。</text>
-<rect x="40" y="570" width="1200" height="124" rx="8" fill="#f3f6fa" stroke="#d8e0ea"/>
-<text x="62" y="605" font-size="22" font-weight="600" fill="#17283f">启动对账</text>
-<text x="62" y="643" font-size="19" font-weight="400" fill="#17283f">后台按每批 500 条核对 ready 来源；片段首次 ready 时递增 input_revision。</text>
-<text x="62" y="675" font-size="18" font-weight="400" fill="#607088">设备接收确认与 WAV / ASR 任务独立运行。</text>
+<rect x="40" y="150" width="760" height="738" rx="8" fill="white" stroke="#d8e0ea"/>
+<text x="62" y="189" font-size="23" font-weight="600" fill="#17283f">registry.sources · 原始文件的接收记录</text>
+<text x="62" y="221" font-size="17" font-weight="400" fill="#607088">每条来源对应一个片段；下面的值仅用于说明字段。</text>
+<text x="64" y="255" font-size="18" font-weight="400" fill="#17283f">{</text>
+<text x="80" y="282" font-size="15" font-weight="400" fill="#607088">// 来源记录唯一 ID；导入后对应片段的 source_id</text>
+<text x="80" y="303" font-size="16" font-weight="400" fill="#17283f">&quot;id&quot;: &quot;source-001&quot;,</text>
+<text x="80" y="328" font-size="15" font-weight="400" fill="#607088">// 录音所属用户 ID；由验证通过的设备绑定确定</text>
+<text x="80" y="349" font-size="16" font-weight="400" fill="#17283f">&quot;owner&quot;: &quot;user-001&quot;,</text>
+<text x="80" y="374" font-size="15" font-weight="400" fill="#607088">// 设备绑定 ID；导入后对应 source_namespace</text>
+<text x="80" y="395" font-size="16" font-weight="400" fill="#17283f">&quot;binding&quot;: &quot;binding-001&quot;,</text>
+<text x="80" y="420" font-size="15" font-weight="400" fill="#607088">// 设备 ID；标识这份录音来自哪台 Clip</text>
+<text x="80" y="441" font-size="16" font-weight="400" fill="#17283f">&quot;device&quot;: &quot;clip-001&quot;,</text>
+<text x="80" y="466" font-size="15" font-weight="400" fill="#607088">// 设备录音会话 ID；与绑定及代次一起归并为一条录音</text>
+<text x="80" y="487" font-size="16" font-weight="400" fill="#17283f">&quot;session&quot;: &quot;session-001&quot;,</text>
+<text x="80" y="512" font-size="15" font-weight="400" fill="#607088">// 会话内片段序号；从 1 开始，按此顺序拼接音频</text>
+<text x="80" y="533" font-size="16" font-weight="400" fill="#17283f">&quot;segment&quot;: 1,</text>
+<text x="80" y="558" font-size="15" font-weight="400" fill="#607088">// 原始文件字节数；用于接收限额与完整性校验</text>
+<text x="80" y="579" font-size="16" font-weight="400" fill="#17283f">&quot;size&quot;: 1024,</text>
+<text x="80" y="604" font-size="15" font-weight="400" fill="#607088">// 原始文件完整 SHA-256；示例值不代表真实文件</text>
+<text x="80" y="625" font-size="16" font-weight="400" fill="#17283f">&quot;sha256&quot;: &quot;aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa&quot;,</text>
+<text x="80" y="650" font-size="15" font-weight="400" fill="#607088">// 服务端文件标识；定位原件，不接受客户端文件路径</text>
+<text x="80" y="671" font-size="16" font-weight="400" fill="#17283f">&quot;object_id&quot;: &quot;object-001&quot;,</text>
+<text x="80" y="696" font-size="15" font-weight="400" fill="#607088">// 首次收件时间；既有字段使用 Unix 秒，导入业务时转毫秒</text>
+<text x="80" y="717" font-size="16" font-weight="400" fill="#17283f">&quot;created&quot;: 1793318400,</text>
+<text x="80" y="742" font-size="15" font-weight="400" fill="#607088">// receiving 表示尚在接收；ready 表示原件校验并持久化成功</text>
+<text x="80" y="763" font-size="16" font-weight="400" fill="#17283f">&quot;state&quot;: &quot;ready&quot;,</text>
+<text x="80" y="788" font-size="15" font-weight="400" fill="#607088">// 业务导入完成时间，Unix 毫秒；null 表示尚未标记导入完成</text>
+<text x="80" y="809" font-size="16" font-weight="400" fill="#17283f">&quot;projected_at&quot;: null</text>
+<text x="64" y="857" font-size="18" font-weight="400" fill="#17283f">}</text>
+<rect x="840" y="150" width="400" height="158" rx="8" fill="white" stroke="#d8e0ea"/>
+<rect x="840" y="150" width="5" height="158" rx="0" fill="#087f74" stroke="#087f74"/>
+<text x="862" y="184" font-size="21" font-weight="600" fill="#17283f">1 · 保存原始文件</text>
+<text x="862" y="220" font-size="18" font-weight="400" fill="#607088">校验上传凭证与用户归属</text>
+<text x="862" y="248" font-size="18" font-weight="400" fill="#607088">原件、身份信息和来源 ready 均持久化</text>
+<text x="862" y="276" font-size="18" font-weight="400" fill="#607088">ready 表示文件收件成功</text>
+<rect x="840" y="334" width="400" height="140" rx="8" fill="white" stroke="#d8e0ea"/>
+<rect x="840" y="334" width="5" height="140" rx="0" fill="#245cca" stroke="#245cca"/>
+<text x="862" y="368" font-size="21" font-weight="600" fill="#17283f">2 · 向 Clip 确认接收</text>
+<text x="862" y="404" font-size="18" font-weight="400" fill="#607088">返回 COMPLETE，设备可结束本次上传</text>
+<text x="862" y="432" font-size="18" font-weight="400" fill="#607088">此时可以尚未完成业务导入与转写</text>
+<rect x="840" y="500" width="400" height="178" rx="8" fill="white" stroke="#d8e0ea"/>
+<rect x="840" y="500" width="5" height="178" rx="0" fill="#087f74" stroke="#087f74"/>
+<text x="862" y="534" font-size="21" font-weight="600" fill="#17283f">3 · 后台导入业务库</text>
+<text x="862" y="570" font-size="18" font-weight="400" fill="#607088">binding 映射为片段 source_namespace</text>
+<text x="862" y="598" font-size="18" font-weight="400" fill="#607088">id 映射为片段 source_id</text>
+<text x="862" y="626" font-size="18" font-weight="400" fill="#607088">同一事务保存录音、片段与输入版本</text>
+<text x="862" y="654" font-size="18" font-weight="400" fill="#607088">重复导入同一来源不再增加版本</text>
+<rect x="840" y="704" width="400" height="184" rx="8" fill="white" stroke="#d8e0ea"/>
+<rect x="840" y="704" width="5" height="184" rx="0" fill="#245cca" stroke="#245cca"/>
+<text x="862" y="738" font-size="21" font-weight="600" fill="#17283f">4 · 标记业务导入完成</text>
+<text x="862" y="774" font-size="18" font-weight="400" fill="#607088">业务事务提交后填写 projected_at</text>
+<text x="862" y="802" font-size="18" font-weight="400" fill="#607088">null：尚未标记完成，可重试导入</text>
+<text x="862" y="830" font-size="18" font-weight="400" fill="#607088">非空：记录最近一次完成标记的时间</text>
+<text x="862" y="858" font-size="18" font-weight="400" fill="#607088">启动仍会核对文件与业务记录</text>
+<rect x="40" y="920" width="1200" height="58" rx="8" fill="#f3f6fa" stroke="#d8e0ea"/>
+<text x="62" y="955" font-size="19" font-weight="400" fill="#17283f">业务提交后标记失败：重放同一来源并核对片段，避免重复录音与版本递增。</text>
 </g>
 </svg>

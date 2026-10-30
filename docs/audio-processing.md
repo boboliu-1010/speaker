@@ -15,7 +15,7 @@ v1 · 2026-10-30 · [Server / Web 主文档](../README.md)
 
 ## 1. 原件收件与录音聚合
 
-![收件与投影](assets/diagrams/04-raw-ingest-outbox.svg)
+![原始文件接收记录：字段注释与业务导入步骤](assets/diagrams/04-raw-ingest-outbox.svg)
 
 ```mermaid
 flowchart TD

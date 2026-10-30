@@ -92,18 +92,37 @@ p.line(950, 461, 1005, 461, TEAL, 2)
 p.text(1005, 588, ['认证临时状态保存在内存', '任务与录音保存在 SQLite', '音频文件保存在磁盘'], 18, MUTED)
 p.save('01-system-architecture')
 
-# Persistence ownership view for receive and projection.
-p = Plate('原件存储与双写投影', '原件与来源索引完成持久化后确认设备；业务投影可恢复', 760)
-p.card(40, 160, 250, 370, '设备 / 接收器', ['设备凭证与归属校验', '已持久偏移 ACK', 'size / SHA-256 检查', 'raw 与 identity 持久化', '完整来源就绪后 COMPLETE'], TEAL)
-p.entity(335, 160, 415, 'registry.sources', ['id / owner / binding', 'session / segment / object_id', 'size / sha256', 'state = ready', 'projected_at = NULL 或提交时间'])
-p.entity(795, 160, 445, '业务库', ['recordings：来源聚合与输入版本', 'recording_segments：raw 元数据', '唯一键：source_namespace + source_id', 'imported_at：首次导入时间', '同一事务更新片段与录音版本'])
-p.rect(335, 430, 905, 100, '#edf3ff', '#d3e0f7')
-p.text(357, 465, '跨库提交规则', 20, BLUE, '600')
-p.text(357, 500, '业务提交成功后填写 projected_at；重放时核对来源唯一键与 hash。', 18)
-p.rect(40, 570, 1200, 124, PALE)
-p.text(62, 605, '启动对账', 22, INK, '600')
-p.text(62, 643, '后台按每批 500 条核对 ready 来源；片段首次 ready 时递增 input_revision。', 19)
-p.text(62, 675, '设备接收确认与 WAV / ASR 任务独立运行。', 18, MUTED)
+# Source receipt: one annotated JSON field per line, plus the import boundaries.
+p = Plate('原始录音文件如何进入业务库', '来源记录描述一份 raw 文件；文件接收成功后，再独立导入录音与片段。', 1010)
+p.rect(40, 150, 760, 738)
+p.text(62, 189, 'registry.sources · 原始文件的接收记录', 23, INK, '600')
+p.text(62, 221, '每条来源对应一个片段；下面的值仅用于说明字段。', 17, MUTED)
+p.text(64, 255, '{', 18)
+source_fields = [
+ ('id', '"source-001"', '来源记录唯一 ID；导入后对应片段的 source_id'),
+ ('owner', '"user-001"', '录音所属用户 ID；由验证通过的设备绑定确定'),
+ ('binding', '"binding-001"', '设备绑定 ID；导入后对应 source_namespace'),
+ ('device', '"clip-001"', '设备 ID；标识这份录音来自哪台 Clip'),
+ ('session', '"session-001"', '设备录音会话 ID；与绑定及代次一起归并为一条录音'),
+ ('segment', '1', '会话内片段序号；从 1 开始，按此顺序拼接音频'),
+ ('size', '1024', '原始文件字节数；用于接收限额与完整性校验'),
+ ('sha256', '"' + 'a' * 64 + '"', '原始文件完整 SHA-256；示例值不代表真实文件'),
+ ('object_id', '"object-001"', '服务端文件标识；定位原件，不接受客户端文件路径'),
+ ('created', '1793318400', '首次收件时间；既有字段使用 Unix 秒，导入业务时转毫秒'),
+ ('state', '"ready"', 'receiving 表示尚在接收；ready 表示原件校验并持久化成功'),
+ ('projected_at', 'null', '业务导入完成时间，Unix 毫秒；null 表示尚未标记导入完成'),
+]
+for i, (key, value, meaning) in enumerate(source_fields):
+    y = 282 + i * 46
+    p.text(80, y, '// ' + meaning, 15, MUTED)
+    p.text(80, y + 21, '"' + key + '": ' + value + (',' if i < len(source_fields)-1 else ''), 16, INK)
+p.text(64, 857, '}', 18)
+p.card(840, 150, 400, 158, '1 · 保存原始文件', ['校验上传凭证与用户归属', '原件、身份信息和来源 ready 均持久化', 'ready 表示文件收件成功'], TEAL)
+p.card(840, 334, 400, 140, '2 · 向 Clip 确认接收', ['返回 COMPLETE，设备可结束本次上传', '此时可以尚未完成业务导入与转写'], BLUE)
+p.card(840, 500, 400, 178, '3 · 后台导入业务库', ['binding 映射为片段 source_namespace', 'id 映射为片段 source_id', '同一事务保存录音、片段与输入版本', '重复导入同一来源不再增加版本'], TEAL)
+p.card(840, 704, 400, 184, '4 · 标记业务导入完成', ['业务事务提交后填写 projected_at', 'null：尚未标记完成，可重试导入', '非空：记录最近一次完成标记的时间', '启动仍会核对文件与业务记录'], BLUE)
+p.rect(40, 920, 1200, 58, PALE)
+p.text(62, 955, '业务提交后标记失败：重放同一来源并核对片段，避免重复录音与版本递增。', 19)
 p.save('04-raw-ingest-outbox')
 
 # State matrix makes file/database commit and failure handling visible.
