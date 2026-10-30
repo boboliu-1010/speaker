@@ -1,19 +1,74 @@
 # ReSpeaker Clip · Server / Web 开发设计
 
-v1 · 2026-10-29
+v1 · 2026-10-30
 
-## 核心设计
+## 1. 整体架构与主要模块
 
-- 用户通过 Google 登录；Server 维护本站 session，业务数据按 owner 归属。
-- 设备绑定到用户，Server 发放上传配置；Wi-Fi 由 Clip 扫描并经 BLE 设置。
-- Web 查询本人的设备和录音，取得音频、文字和导出链接。
-- 业务库使用 accounts、recordings、recording_segments、jobs 四张表；[音频处理设计](docs/audio-processing.md)负责音频文件存储、文件/数据库双写、转写/VTT、安全读取和恢复。
+本文描述 Server / Web 的开发设计。系统由 ReSpeaker Clip、浏览器 Web、Server 和外部身份/识别服务组成：Web 负责登录、设备配置与录音查看；Clip 负责录音与上传；Server 负责归属校验、可靠收件、后台处理和结果读取。
+
+### 1.1 架构总览
+
+![整体架构：客户端、Server 模块、外部服务与存储](docs/assets/diagrams/01-system-architecture.svg)
+
+- **客户端**：浏览器经同源 HTTPS 调用 Server，经 BLE 与 Clip 交互；Clip 经 Wi-Fi 使用 DTLS 直传录音。BLE 用于设备配置，录音上传走 Clip 到 Server 的连接。
+- **Server**：按图中 Python / FastAPI 单进程基线组织接入、认证、设备、录音和后台任务模块；解码使用受控子进程。模块是职责划分，后台任务按顺序领取执行。
+- **外部依赖**：Google 提供登录身份验证，本站会话由 Server 维护；ASR 通过服务端配置的受控端点接收 WAV，返回文字、时间戳和 speaker。未配置 ASR 时仍可生成和播放 WAV。
+- **存储边界**：registry 保存设备绑定、凭证和上传来源；业务 SQLite 保存用户、录音、片段、任务及转写 JSON；私有文件目录保存 raw、WAV 和 VTT。会话与登录临时状态保存在内存。
+
+图中 Web 9529、HTTPS 兼容接口 9528、UDP/DTLS 9528 表示接入基线；Web 对外访问使用 HTTPS，Google 回调地址按部署配置精确登记。本文描述设计约定，部署和实机验收需另行验证。
+
+### 1.2 主要模块
+
+| 模块 | 位置 | 主要职责与输出 | 详细设计 |
+|---|---|---|---|
+| Web 页面与设备交互 | 浏览器 | 登录入口、设备/录音列表、播放与导出；经 BLE 配置设备并读回确认 | [Web API](#web-api)、[设备规则](#ble) |
+| 录音与上传 | Clip | 录音、保存原始 Opus 片段、扫描/连接 Wi-Fi、通过 DTLS 上传并处理确认 | [设备规则](#ble)、[收件约定](docs/audio-processing.md#ingest) |
+| 认证与会话 | Server | Google OIDC 回调、账号映射、本站 Cookie、CSRF、账号状态检查；确定请求用户 | [登录与会话](#oauth) |
+| 设备与绑定 | Server | UID 登记校验、绑定/激活、上传配置发放与确认、改名、凭证撤销 | [设备规则](#ble) |
+| 上传接收 | Server | 校验凭证与 owner、断点续传、raw 和来源索引持久化；完成后返回 COMPLETE | [原件收件](docs/audio-processing.md#ingest) |
+| 来源投影与录音聚合 | Server 后台 | 将 registry 的 ready 来源幂等投影到业务库，按来源/session 聚合片段并更新输入版本 | [收件与聚合](docs/audio-processing.md#ingest) |
+| 任务调度与恢复 | Server 后台 | 持久任务、顺序领取、租约、重试、版本检查、发布恢复与文件修复 | [双写与恢复](docs/audio-processing.md#publication) |
+| 音频解码 | 受控子进程 | 校验并按序解码 raw Opus，生成 16 kHz、单声道 PCM16 WAV | [音频存储与解码](docs/audio-processing.md#storage) |
+| 转写与导出生成 | Server 后台 / ASR | 调用 ASR、校验 cues，提交转写 JSON 与 VTT；Markdown 从同组原文生成 | [转写设计](docs/audio-processing.md#transcript) |
+| 录音查询与媒体读取 | Server | 按 owner 返回录音与当前版本链接，鉴权读取 WAV/JSON/VTT/Markdown，支持音频 Range | [Web API](#web-api)、[媒体 API](docs/audio-processing.md#media-api) |
+| 持久存储与备份 | Server 数据卷 / 独立备份 | 管理两套 SQLite、私有文件、文件/数据库双写、加密快照与恢复 | [数据模型](#data-model)、[存储安全](docs/audio-processing.md#security) |
+
+### 1.3 主流程与模块衔接
+
+```mermaid
+flowchart TD
+    Web["浏览器 Web"] -->|"HTTPS：登录、绑定、查询与播放"| API["Server：认证 / 设备 / 录音 API"]
+    Web <-->|"BLE：配置写入与读回"| Clip["ReSpeaker Clip"]
+    API <-->|"OIDC：身份验证"| Google["Google"]
+    API -->|"账号与录音查询"| Biz[("业务 SQLite")]
+    API -->|"绑定与凭证"| Registry[("registry")]
+    Clip -->|"Wi-Fi / DTLS：raw Opus"| Ingest["上传接收：鉴权与持久确认"]
+    Ingest -->|"持久化原件"| Files[("私有文件目录：raw / WAV / VTT")]
+    Ingest -->|"提交来源 ready"| Registry
+    Registry -->|"ready 来源"| Project["后台：幂等投影与录音聚合"]
+    Project -->|"片段 / 输入版本 / 任务"| Biz
+    Biz -->|"领取持久任务"| Worker["后台：调度 / 解码 / 转写 / 恢复"]
+    Files -->|"读取 raw / WAV"| Worker
+    Worker <-->|"WAV → 文字 / 时间戳 / speaker"| ASR["受控 ASR"]
+    Worker -->|"先落盘 WAV / VTT"| Files
+    Worker -->|"再提交任务 / 版本 / JSON"| Biz
+    Files -->|"鉴权后读取 WAV / VTT"| API
+```
+
+1. **登录与绑定**：Web 发起 Google 登录，Server 建立本站会话；激活设备后返回上传配置，Web 经 BLE 写入 Clip、读回并向 Server 确认。Wi-Fi 扫描与连接由 Clip 执行。
+2. **录音与收件**：Clip 上传 raw；Server 校验凭证和归属，完成原件、身份元数据及 registry 来源索引持久化后才返回 COMPLETE。该确认不等待解码或转写。
+3. **后台处理**：ready 来源投影为录音和片段，生成版本化任务；后台依次解码 WAV、调用 ASR 并发布转写。文件先落盘，随后事务提交任务与录音指针；转写 JSON 与 VTT 指针一起提交。
+4. **查看与导出**：Web 查询录音状态和链接，Server 按会话 owner、录音版本及产物状态读取结果。WAV 可独立播放，文字和字幕使用与音频一致的版本。
+
+### 1.4 文档导航
+
+本页承载总体架构、模块边界和 Server / Web 契约；[音频处理设计](docs/audio-processing.md)展开收件、文件存储、解码、转写、双写恢复及媒体读取。
 
 [对象与表](#data-model) · [Web API](#web-api) · [登录与会话](#oauth) · [设备规则](#ble) · [SQL](#sql)
 
 <a id="data-model"></a>
 
-## 1. 对象与数据表
+## 2. 对象与数据表
 
 | 对象 | 保存位置 | 关系 |
 |---|---|---|
@@ -59,7 +114,7 @@ v1 · 2026-10-29
 
 <a id="web-api"></a>
 
-## 2. Web 前后端 API
+## 3. Web 前后端 API
 
 路径前缀 `/api/boa/v1`。除登录入口、回调和 health，其余接口验证会话；写请求携带 Origin、X-CSRF-Token；Server 精确匹配 PUBLIC_WEB_ORIGIN 和当前会话 CSRF，缺失或不匹配返回 403。owner 由 Server 确定。
 
@@ -92,7 +147,7 @@ from/to 为 YYYY-MM-DD，默认时区 Asia/Shanghai，结束日包含当天。�
 
 <a id="oauth"></a>
 
-## 3. 登录与会话
+## 4. 登录与会话
 
 Web 通过顶层导航发起 Google 登录。Google 授权后回调 Server，Server 校验本次 state 和 Google ID token，按 google_sub 找到或建立 accounts 用户，再创建本站 session、设置 Cookie，303 返回 `/`。后续请求使用本站 Cookie。
 
@@ -115,7 +170,7 @@ Web 通过顶层导航发起 Google 登录。Google 授权后回调 Server，Ser
 
 <a id="ble"></a>
 
-## 4. 设备与请求规则
+## 5. 设备与请求规则
 
 | 处理项 | 规则 |
 |---|---|
@@ -132,11 +187,11 @@ Web 通过顶层导航发起 Google 登录。Google 授权后回调 Server，Ser
 
 <a id="sql"></a>
 
-## 5. 数据库 DDL
+## 6. 数据库 DDL
 
 <a id="business-sql"></a>
 
-### 5.1 业务库
+### 6.1 业务库
 
 运行时每个数据库连接都设置 foreign_keys=ON、synchronous=FULL、busy_timeout=5000；两个库分别提交，跨库顺序见音频文档。
 
@@ -242,7 +297,7 @@ COMMIT;
 
 <a id="registry-sql"></a>
 
-### 5.2 registry 增量
+### 6.2 registry 增量
 
 ```sql
 -- 复用既有 registry 表：新增 0 张表。设计参考，真实迁移先检查 table_info。
