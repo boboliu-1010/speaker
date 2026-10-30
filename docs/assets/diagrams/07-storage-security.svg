@@ -1,56 +1,71 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="825" viewBox="0 0 1280 825">
-<title>音频存储与访问边界</title>
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="1070" viewBox="0 0 1280 1070">
+<title>录音文件由谁访问，Server 如何保护数据</title>
 <rect width="1280" height="100%" fill="white"/>
 <g font-family="PingFang SC,Microsoft YaHei,Noto Sans CJK SC,Arial,sans-serif">
-<text x="40" y="55" font-size="30" font-weight="600" fill="#17283f">音频存储与访问边界</text>
-<text x="40" y="88" font-size="17" font-weight="400" fill="#607088">用户通过媒体接口读取；服务账号管理加密数据卷与独立备份</text>
+<text x="40" y="55" font-size="30" font-weight="600" fill="#17283f">录音文件由谁访问，Server 如何保护数据</text>
+<text x="40" y="88" font-size="17" font-weight="400" fill="#607088">浏览器不能直接访问存储目录；Server 核对用户归属和版本后，才读取或处理对应文件。</text>
 <line x1="40" y1="112" x2="1240" y2="112" stroke="#d8e0ea" stroke-width="1.5"/>
-<rect x="40" y="190" width="245" height="212" rx="8" fill="white" stroke="#d8e0ea"/>
-<rect x="40" y="190" width="5" height="212" rx="0" fill="#245cca" stroke="#245cca"/>
-<text x="62" y="224" font-size="21" font-weight="600" fill="#17283f">Web 用户</text>
-<text x="62" y="260" font-size="18" font-weight="400" fill="#607088">本站 Cookie</text>
-<text x="62" y="288" font-size="18" font-weight="400" fill="#607088">录音 ID + revision</text>
-<text x="62" y="316" font-size="18" font-weight="400" fill="#607088">WAV / JSON / VTT / MD</text>
-<rect x="345" y="150" width="550" height="290" rx="8" fill="#f3f6fa" stroke="#d8e0ea"/>
-<text x="368" y="188" font-size="25" font-weight="600" fill="#17283f">媒体与录音服务</text>
-<rect x="367" y="211" width="246" height="190" rx="8" fill="white" stroke="#d8e0ea"/>
-<rect x="367" y="211" width="5" height="190" rx="0" fill="#245cca" stroke="#245cca"/>
-<text x="389" y="245" font-size="21" font-weight="600" fill="#17283f">访问校验</text>
-<text x="389" y="281" font-size="18" font-weight="400" fill="#607088">会话与账号状态</text>
-<text x="389" y="309" font-size="18" font-weight="400" fill="#607088">owner 与录音版本</text>
-<text x="389" y="337" font-size="18" font-weight="400" fill="#607088">文件状态 / 类型 / size</text>
-<rect x="633" y="211" width="240" height="190" rx="8" fill="white" stroke="#d8e0ea"/>
-<rect x="633" y="211" width="5" height="190" rx="0" fill="#087f74" stroke="#087f74"/>
-<text x="655" y="245" font-size="21" font-weight="600" fill="#17283f">保存与发布</text>
-<text x="655" y="281" font-size="18" font-weight="400" fill="#607088">受限解码与识别</text>
-<text x="655" y="309" font-size="18" font-weight="400" fill="#607088">文件 fsync / hash</text>
-<text x="655" y="337" font-size="18" font-weight="400" fill="#607088">SQLite 事务发布</text>
-<rect x="345" y="505" width="550" height="236" rx="8" fill="#eaf5f1" stroke="#c4ded5"/>
-<text x="368" y="544" font-size="24" font-weight="600" fill="#087f74">加密数据卷 · 专用服务账号</text>
-<text x="368" y="591" font-size="19" font-weight="400" fill="#17283f">raw 原件 / WAV / VTT</text>
-<text x="368" y="620" font-size="19" font-weight="400" fill="#17283f">SQLite：归属、文件元数据、原文 JSON</text>
-<text x="368" y="649" font-size="19" font-weight="400" fill="#17283f">目录 0700 / 文件 0600</text>
-<text x="368" y="678" font-size="19" font-weight="400" fill="#17283f">文件通过服务端 ID 定位</text>
-<rect x="960" y="150" width="280" height="218" rx="8" fill="white" stroke="#d8e0ea"/>
-<rect x="960" y="150" width="5" height="218" rx="0" fill="#087f74" stroke="#087f74"/>
-<text x="982" y="184" font-size="21" font-weight="600" fill="#17283f">受控 ASR</text>
-<text x="982" y="220" font-size="18" font-weight="400" fill="#607088">固定端点与目标白名单</text>
-<text x="982" y="248" font-size="18" font-weight="400" fill="#607088">HTTPS / 本机受控访问</text>
-<text x="982" y="276" font-size="18" font-weight="400" fill="#607088">校验后传入 WAV</text>
-<text x="982" y="304" font-size="18" font-weight="400" fill="#607088">本次处理后清理临时副本</text>
-<rect x="960" y="505" width="280" height="236" rx="8" fill="white" stroke="#d8e0ea"/>
-<rect x="960" y="505" width="5" height="236" rx="0" fill="#245cca" stroke="#245cca"/>
-<text x="982" y="539" font-size="21" font-weight="600" fill="#17283f">独立加密备份</text>
-<text x="982" y="575" font-size="18" font-weight="400" fill="#607088">一致性快照与 size/hash</text>
-<text x="982" y="603" font-size="18" font-weight="400" fill="#607088">默认每日，最近 7 份</text>
-<text x="982" y="631" font-size="18" font-weight="400" fill="#607088">验证后标记备份成功</text>
-<text x="982" y="659" font-size="18" font-weight="400" fill="#607088">密钥与备份分开授权</text>
-<text x="982" y="687" font-size="18" font-weight="400" fill="#607088">校验归属后恢复</text>
-<line x1="285" y1="288" x2="345" y2="288" stroke="#245cca" stroke-width="2"/>
-<text x="289" y="270" font-size="14" font-weight="400" fill="#245cca">HTTPS</text>
-<line x1="895" y1="268" x2="960" y2="268" stroke="#087f74" stroke-width="2"/>
-<line x1="620" y1="440" x2="620" y2="505" stroke="#087f74" stroke-width="2"/>
-<line x1="895" y1="610" x2="960" y2="610" stroke="#245cca" stroke-width="2"/>
-<text x="40" y="793" font-size="19" font-weight="400" fill="#607088">双写保证文件与索引一致；独立备份提供存储卷损坏后的恢复点。</text>
+<rect x="40" y="150" width="380" height="255" rx="8" fill="white" stroke="#d8e0ea"/>
+<rect x="40" y="150" width="5" height="255" rx="0" fill="#245cca" stroke="#245cca"/>
+<text x="62" y="184" font-size="21" font-weight="600" fill="#17283f">浏览器 · 发起读取请求</text>
+<text x="62" y="220" font-size="18" font-weight="400" fill="#607088">Cookie：携带本站会话身份</text>
+<text x="62" y="248" font-size="18" font-weight="400" fill="#607088">录音 ID：指定要读取的录音</text>
+<text x="62" y="276" font-size="18" font-weight="400" fill="#607088">revision：固定需要读取的音频版本</text>
+<text x="62" y="304" font-size="18" font-weight="400" fill="#607088">通过 HTTPS 请求音频和文字</text>
+<text x="62" y="332" font-size="18" font-weight="400" fill="#607088">退出时清理播放状态与本地会话状态</text>
+<rect x="450" y="150" width="380" height="255" rx="8" fill="white" stroke="#d8e0ea"/>
+<rect x="450" y="150" width="5" height="255" rx="0" fill="#245cca" stroke="#245cca"/>
+<text x="472" y="184" font-size="21" font-weight="600" fill="#17283f">Server · 核对会话与归属</text>
+<text x="472" y="220" font-size="18" font-weight="400" fill="#607088">检查会话有效期和账号状态</text>
+<text x="472" y="248" font-size="18" font-weight="400" fill="#607088">owner：录音所属的本站用户 ID</text>
+<text x="472" y="276" font-size="18" font-weight="400" fill="#607088">仅允许读取当前用户拥有的录音</text>
+<text x="472" y="304" font-size="18" font-weight="400" fill="#607088">跨用户查询统一返回 404</text>
+<text x="472" y="332" font-size="18" font-weight="400" fill="#607088">每次媒体请求都重新鉴权</text>
+<rect x="860" y="150" width="380" height="255" rx="8" fill="white" stroke="#d8e0ea"/>
+<rect x="860" y="150" width="5" height="255" rx="0" fill="#245cca" stroke="#245cca"/>
+<text x="882" y="184" font-size="21" font-weight="600" fill="#17283f">Server · 校验文件并执行任务</text>
+<text x="882" y="220" font-size="18" font-weight="400" fill="#607088">核对请求版本和文件发布状态</text>
+<text x="882" y="248" font-size="18" font-weight="400" fill="#607088">以受控路径打开普通文件句柄</text>
+<text x="882" y="276" font-size="18" font-weight="400" fill="#607088">拒绝符号链接和存储根之外的路径</text>
+<text x="882" y="304" font-size="18" font-weight="400" fill="#607088">解码使用受限子进程并设置超时</text>
+<text x="882" y="332" font-size="18" font-weight="400" fill="#607088">发布前核对大小、摘要和有效租约</text>
+<rect x="40" y="450" width="380" height="360" rx="8" fill="white" stroke="#d8e0ea"/>
+<rect x="40" y="450" width="5" height="360" rx="0" fill="#087f74" stroke="#087f74"/>
+<text x="62" y="484" font-size="21" font-weight="600" fill="#17283f">私有加密数据卷 · 保存业务数据</text>
+<text x="62" y="520" font-size="18" font-weight="400" fill="#607088">raw：保留设备上传原件</text>
+<text x="62" y="548" font-size="18" font-weight="400" fill="#607088">WAV：保存播放与识别用音频</text>
+<text x="62" y="576" font-size="18" font-weight="400" fill="#607088">VTT：保存与原文对应的字幕</text>
+<text x="62" y="604" font-size="18" font-weight="400" fill="#607088">SQLite：保存归属、版本及原文 JSON</text>
+<text x="62" y="632" font-size="18" font-weight="400" fill="#607088">由专用服务账号访问存储内容</text>
+<text x="62" y="660" font-size="18" font-weight="400" fill="#607088">目录权限 0700：仅服务账号可进入</text>
+<text x="62" y="688" font-size="18" font-weight="400" fill="#607088">文件权限 0600：仅服务账号可读写</text>
+<text x="62" y="716" font-size="18" font-weight="400" fill="#607088">文件位于 Web 静态资源目录之外</text>
+<rect x="450" y="450" width="380" height="360" rx="8" fill="white" stroke="#d8e0ea"/>
+<rect x="450" y="450" width="5" height="360" rx="0" fill="#087f74" stroke="#087f74"/>
+<text x="472" y="484" font-size="21" font-weight="600" fill="#17283f">受控 ASR · 处理音频并返回原文</text>
+<text x="472" y="520" font-size="18" font-weight="400" fill="#607088">服务地址由 Server 配置</text>
+<text x="472" y="548" font-size="18" font-weight="400" fill="#607088">远程连接使用 HTTPS 并校验证书</text>
+<text x="472" y="576" font-size="18" font-weight="400" fill="#607088">本机端点须明确登记并限制访问</text>
+<text x="472" y="604" font-size="18" font-weight="400" fill="#607088">禁止重定向，出站只放行配置目标</text>
+<text x="472" y="632" font-size="18" font-weight="400" fill="#607088">输入 WAV 须先校验完整摘要</text>
+<text x="472" y="660" font-size="18" font-weight="400" fill="#607088">返回原文、时间戳及说话人标识</text>
+<text x="472" y="688" font-size="18" font-weight="400" fill="#607088">本地临时音频在处理结束后清理</text>
+<text x="472" y="716" font-size="18" font-weight="400" fill="#607088">供应方留存按已核实的约定执行</text>
+<rect x="860" y="450" width="380" height="360" rx="8" fill="white" stroke="#d8e0ea"/>
+<rect x="860" y="450" width="5" height="360" rx="0" fill="#087f74" stroke="#087f74"/>
+<text x="882" y="484" font-size="21" font-weight="600" fill="#17283f">独立加密备份 · 恢复存储卷</text>
+<text x="882" y="520" font-size="18" font-weight="400" fill="#607088">每日停写后复制一致性快照</text>
+<text x="882" y="548" font-size="18" font-weight="400" fill="#607088">同时备份数据库、原件和当前产物</text>
+<text x="882" y="576" font-size="18" font-weight="400" fill="#607088">清单记录每个文件的字节数与摘要</text>
+<text x="882" y="604" font-size="18" font-weight="400" fill="#607088">校验成功后保留最近 7 份快照</text>
+<text x="882" y="632" font-size="18" font-weight="400" fill="#607088">备份置于独立存储介质</text>
+<text x="882" y="660" font-size="18" font-weight="400" fill="#607088">备份密钥与备份数据分开授权</text>
+<text x="882" y="688" font-size="18" font-weight="400" fill="#607088">恢复时先校验清单和数据库完整性</text>
+<text x="882" y="716" font-size="18" font-weight="400" fill="#607088">恢复后撤销旧凭证，重新确认访问</text>
+<rect x="40" y="850" width="1200" height="175" rx="8" fill="#f3f6fa" stroke="#d8e0ea"/>
+<text x="62" y="887" font-size="23" font-weight="600" fill="#17283f">访问、保存与恢复分别承担什么责任</text>
+<text x="62" y="926" font-size="19" font-weight="400" fill="#17283f">访问控制：阻止其他用户读取录音。加密存储：保护离线数据卷与备份中的内容。</text>
+<text x="62" y="961" font-size="19" font-weight="400" fill="#17283f">文件与数据库双写：保持产物和索引一致。独立备份：提供数据卷损坏后的恢复点。</text>
+<text x="62" y="996" font-size="18" font-weight="400" fill="#607088">日志只保留定位信息和错误码，认证凭证与录音正文不写入日志。</text>
 </g>
 </svg>

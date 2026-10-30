@@ -21,16 +21,16 @@ v1 · 2026-10-30 · [Server / Web 主文档](../README.md)
 
 ```mermaid
 flowchart TD
-    A["上传鉴权 / owner / 额度校验"] --> B["保存 receiving 来源"]
+    A["验证上传凭证、录音归属和可用额度"] --> B["保存 receiving 来源"]
     B --> C["raw 写入并 fsync<br/>持久检查点 → ACK 偏移"]
-    C --> D{"收完整且 size/hash 正确？"}
+    C --> D{"收完整且字节数与 SHA-256 正确？"}
     D -->|未完成| C
     D -->|校验失败| X["按接收协议报错<br/>保留已持久偏移"]
     D -->|是| E["raw rename + 目录 fsync<br/>身份元数据持久化"]
     E --> F["设备与上传 SQLite（registry）<br/>sources 提交 ready"]
     F --> G["设备收到 COMPLETE"]
-    F --> H["业务 SQLite 事务：片段 ready<br/>input_revision 只增一次"]
-    H --> I["更新 projected_at"]
+    F --> H["业务 SQLite 事务：片段 ready<br/>输入版本 input_revision 只增一次"]
+    H --> I["写入导入完成时间 projected_at"]
     I --> J{"片段连续且静默满 10 分钟？"}
     J -->|否| K["等待补齐或静默时间"]
     K --> J
@@ -358,17 +358,17 @@ raw 与 WAV 是两种分别保存的音频。双写是文件持久化与 SQLite 
 
 ```mermaid
 flowchart TD
-    A["WAV 已双写发布<br/>固定 audio_revision"] --> B{"ASR 已配置？"}
-    B -->|否| C["not_configured<br/>音频可读取"]
-    B -->|是| D["transcribe 固定 WAV 快照<br/>校验 hash，调用受控 ASR"]
+    A["WAV 已双写发布<br/>固定音频版本 audio_revision"] --> B{"ASR 已配置？"}
+    B -->|否| C["未配置识别，状态 not_configured<br/>音频可读取"]
+    B -->|是| D["转写任务 transcribe 固定 WAV 快照<br/>校验音频摘要，调用受控 ASR"]
     D --> E{"ASR 成功且 cues 全部合法？"}
-    E -->|否| X["临时故障重试 / 终止 failed<br/>保留已提交结果"]
+    E -->|否| X["临时故障重试；终止后状态为 failed<br/>保留已提交结果"]
     E -->|是，含静音| F["整理 JSON v1 原文<br/>按固定格式生成临时 VTT"]
-    F --> G["fsync 文件，提交 size/hash<br/>link 不覆盖发布 + 目录 fsync"]
-    G --> H{"owner / 版本 / WAV / 租约有效？"}
+    F --> G["fsync 文件，提交字节数和完整摘要<br/>link 不覆盖发布 + 目录 fsync"]
+    G --> H{"用户归属未变、结果版本匹配<br/>WAV 摘要一致、租约未到期？"}
     H -->|否| Y["放弃本次结果<br/>保留当前文字与指针"]
-    H -->|是| I["同一事务提交<br/>JSON + VTT 指针 + 版本 + ready"]
-    I --> J["鉴权读取 JSON / VTT<br/>同版本 JSON 生成 Markdown"]
+    H -->|是| I["同一事务提交<br/>保存原文 JSON 和字幕文件指针<br/>记录文字版本，状态改为 ready"]
+    I --> J["鉴权读取原文 JSON 或字幕 VTT<br/>同版本 JSON 生成 Markdown"]
 ```
 
 持久格式为 `{schema_version:1,time_unit:"ms",cues:[...]}`。接口补充 recording_id、revision 和 next_cursor：
@@ -445,7 +445,7 @@ Web 用 textContent 渲染原文。Markdown 标题使用有效录音日期，按
 
 ## 5. 文件与数据库双写
 
-![双写状态](assets/diagrams/06-file-database-publication.svg)
+![文件发布字段注释、提交步骤与中断恢复](assets/diagrams/06-file-database-publication.svg)
 
 ### 5.1 原件双写与业务投影
 
@@ -481,11 +481,11 @@ Web 用 textContent 渲染原文。Markdown 标题使用有效录音日期，按
 flowchart TD
     A["VTT 发布中断或文件异常"] --> B{"同版本 JSON 已提交？"}
     B -->|否| C["放弃未提交 VTT<br/>按重试规则重跑 ASR，整体发布"]
-    B -->|是| D["保留 JSON，标记文件 missing<br/>保存 repair_expected"]
+    B -->|是| D["保留原文 JSON，文件状态改为 missing<br/>repair_expected 保存修复前预期元数据"]
     D --> E["复用原 jobs 行，使用新路径<br/>按原格式从 JSON 重建 VTT"]
-    E --> F{"size/hash 与预期一致？"}
-    F -->|否| G["停止发布<br/>repair_content_mismatch"]
-    F -->|是| H{"当前指针 / 版本 / 租约有效？"}
+    E --> F{"文件字节数和完整摘要与预期一致？"}
+    F -->|否| G["修复内容不一致，停止发布<br/>错误码 repair_content_mismatch"]
+    F -->|是| H{"当前指针仍指向本任务<br/>结果版本匹配且租约未到期？"}
     H -->|否| I["放弃过时修复产物"]
     H -->|是| J["提交新文件元数据<br/>录音版本与原文保持不变"]
     J --> K["VTT 恢复可读<br/>释放引用后清理旧路径"]
@@ -581,7 +581,7 @@ JSON 使用 json_each 按 cue 数组下标读取 201 条：返回前 200 条，�
 
 ## 7. 文件与音频数据安全
 
-![存储与访问边界](assets/diagrams/07-storage-security.svg)
+![录音访问校验、加密数据卷、ASR 与独立备份的职责](assets/diagrams/07-storage-security.svg)
 
 - 用户隔离：所有列表、GET/HEAD/Range、JSON/VTT/Markdown 读取与后台处理先限定 owner；原件 owner 来自验证通过的 Clip 绑定
 - 上传凭证：OPEN、续传和 COMPLETE 检查有效绑定/凭证；撤销后拒绝继续写入，历史归属保持原值

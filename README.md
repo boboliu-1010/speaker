@@ -35,22 +35,22 @@ v1 · 2026-10-30
 
 ```mermaid
 flowchart TD
-    Web["浏览器 Web"] -->|"HTTPS：登录、绑定、查询与播放"| API["Server：认证 / 设备 / 录音 API"]
+    Web["浏览器 Web"] -->|"HTTPS：登录、绑定、查询与播放"| API["Server：验证身份、管理设备、查询录音"]
     Web <-->|"BLE：配置写入与读回"| Clip["ReSpeaker Clip"]
     API <-->|"OIDC：身份验证"| Google["Google"]
     API -->|"账号与录音查询"| Biz[("业务 SQLite")]
     API -->|"绑定与凭证"| Registry[("设备与上传 SQLite（registry）")]
-    Clip -->|"Wi-Fi / DTLS：raw Opus"| Ingest["上传接收：鉴权与持久确认"]
-    Ingest -->|"持久化原件"| Files[("私有文件目录：raw / WAV / VTT")]
+    Clip -->|"Wi-Fi 连接服务器，DTLS 直传 raw Opus"| Ingest["上传接收：鉴权与持久确认"]
+    Ingest -->|"持久化原件"| Files[("私有文件目录：保存原件、音频和字幕")]
     Ingest -->|"提交来源 ready"| Registry
     Registry -->|"ready 来源"| Project["后台：幂等投影与录音聚合"]
-    Project -->|"片段 / 输入版本 / 任务"| Biz
-    Biz -->|"领取持久任务"| Worker["后台：调度 / 解码 / 转写 / 恢复"]
-    Files -->|"读取 raw / WAV"| Worker
-    Worker <-->|"WAV → 文字 / 时间戳 / speaker"| ASR["受控 ASR"]
-    Worker -->|"先落盘 WAV / VTT"| Files
-    Worker -->|"再提交任务 / 版本 / JSON"| Biz
-    Files -->|"鉴权后读取 WAV / VTT"| API
+    Project -->|"保存片段、递增输入版本并建立任务"| Biz
+    Biz -->|"领取持久任务"| Worker["后台任务：领取执行、处理音频并恢复中断"]
+    Files -->|"读取原件进行解码，读取 WAV 进行识别"| Worker
+    Worker <-->|"发送 WAV；返回原文、时间戳和说话人"| ASR["受控 ASR"]
+    Worker -->|"先持久化音频文件与字幕文件"| Files
+    Worker -->|"再提交任务状态、结果版本与识别原文"| Biz
+    Files -->|"鉴权后读取对应音频或字幕"| API
 ```
 
 1. **登录与绑定**：Web 发起 Google 登录，Server 建立本站会话；激活设备后返回上传配置，Web 经 BLE 写入 Clip、读回并向 Server 确认。Wi-Fi 扫描与连接由 Clip 执行。
