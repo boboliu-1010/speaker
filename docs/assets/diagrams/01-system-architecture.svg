@@ -44,8 +44,9 @@
 <text x="334" y="675" font-size="20" font-weight="600" fill="#087f74">业务 SQLite</text>
 <text x="334" y="711" font-size="14" font-weight="400" fill="#607088">用户 / 录音 / 片段 / 任务</text>
 <rect x="528" y="640" width="194" height="110" rx="8" fill="#eaf5f1" stroke="#c4ded5"/>
-<text x="542" y="675" font-size="20" font-weight="600" fill="#087f74">registry</text>
-<text x="542" y="711" font-size="14" font-weight="400" fill="#607088">凭证 / 绑定 / 来源</text>
+<text x="542" y="675" font-size="20" font-weight="600" fill="#087f74">设备与上传</text>
+<text x="542" y="701" font-size="16" font-weight="600" fill="#087f74">SQLite（registry）</text>
+<text x="542" y="733" font-size="14" font-weight="400" fill="#607088">凭证 / 绑定 / 来源</text>
 <rect x="736" y="640" width="194" height="110" rx="8" fill="#eaf5f1" stroke="#c4ded5"/>
 <text x="750" y="675" font-size="20" font-weight="600" fill="#087f74">文件目录</text>
 <text x="750" y="711" font-size="14" font-weight="400" fill="#607088">raw / WAV / VTT</text>

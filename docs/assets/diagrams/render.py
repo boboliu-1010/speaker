@@ -79,10 +79,14 @@ for x, title, sub in [(340, '认证与设备', 'Google / Session / 绑定'), (53
     p.text(x + 12, 419, sub, 14, MUTED)
 p.rect(320, 537, 610, 62)
 p.text(341, 576, '受控解码子进程     raw Opus → 16 kHz 单声道 WAV', 18)
-for x, title, sub in [(320, '业务 SQLite', '用户 / 录音 / 片段 / 任务'), (528, 'registry', '凭证 / 绑定 / 来源'), (736, '文件目录', 'raw / WAV / VTT')]:
+for x, title, sub in [(320, '业务 SQLite', '用户 / 录音 / 片段 / 任务'), (528, '设备与上传', '凭证 / 绑定 / 来源'), (736, '文件目录', 'raw / WAV / VTT')]:
     p.rect(x, 640, 194, 110, '#eaf5f1', '#c4ded5')
     p.text(x + 14, 675, title, 20, TEAL, '600')
-    p.text(x + 14, 711, sub, 14, MUTED)
+    if x == 528:
+        p.text(x + 14, 701, 'SQLite（registry）', 16, TEAL, '600')
+        p.text(x + 14, 733, sub, 14, MUTED)
+    else:
+        p.text(x + 14, 711, sub, 14, MUTED)
 p.card(1005, 205, 235, 125, 'Google', ['OAuth 2.0 / OIDC', '身份验证'])
 p.card(1005, 399, 235, 125, '私有 ASR', ['WAV 识别', '时间戳 / 文字 / speaker'], TEAL)
 p.line(255, 260, 300, 260, BLUE, 2)
@@ -93,7 +97,7 @@ p.text(1005, 588, ['认证临时状态保存在内存', '任务与录音保存�
 p.save('01-system-architecture')
 
 # Source receipt: one annotated JSON field per line, plus the import boundaries.
-p = Plate('原始录音文件如何进入业务库', '来源记录描述一份 raw 文件；文件接收成功后，再独立导入录音与片段。', 1010)
+p = Plate('原始录音文件如何进入业务库', '设备与上传 SQLite（registry）保存来源记录；接收成功后，再导入业务 SQLite。', 1010)
 p.rect(40, 150, 760, 738)
 p.text(62, 189, 'registry.sources · 原始文件的接收记录', 23, INK, '600')
 p.text(62, 221, '每条来源对应一个片段；下面的值仅用于说明字段。', 17, MUTED)

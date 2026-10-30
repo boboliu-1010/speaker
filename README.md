@@ -13,7 +13,7 @@ v1 · 2026-10-30
 - **客户端**：浏览器经同源 HTTPS 调用 Server，经 BLE 与 Clip 交互；Clip 经 Wi-Fi 使用 DTLS 直传录音。BLE 用于设备配置，录音上传走 Clip 到 Server 的连接。
 - **Server**：按图中 Python / FastAPI 单进程基线组织接入、认证、设备、录音和后台任务模块；解码使用受控子进程。模块是职责划分，后台任务按顺序领取执行。
 - **外部依赖**：Google 提供登录身份验证，本站会话由 Server 维护；ASR 通过服务端配置的受控端点接收 WAV，返回文字、时间戳和 speaker。未配置 ASR 时仍可生成和播放 WAV。
-- **存储边界**：registry 保存设备绑定、凭证和上传来源；业务 SQLite 保存用户、录音、片段、任务及转写 JSON；私有文件目录保存 raw、WAV 和 VTT。会话与登录临时状态保存在内存。
+- **存储边界**：设备与上传 SQLite（registry）保存设备绑定、凭证和上传来源；业务 SQLite 保存用户、录音、片段、任务及转写 JSON；两者是独立的 SQLite 数据库，分别提交事务；私有文件目录保存 raw、WAV 和 VTT。会话与登录临时状态保存在内存。
 
 图中 Web 9529、HTTPS 兼容接口 9528、UDP/DTLS 9528 表示接入基线；Web 对外访问使用 HTTPS，Google 回调地址按部署配置精确登记。本文描述设计约定，部署和实机验收需另行验证。
 
@@ -24,12 +24,12 @@ v1 · 2026-10-30
 - 认证与会话：Server；Google OIDC 回调、账号映射、本站 Cookie、CSRF、账号状态检查；确定请求用户；[登录与会话](#oauth)
 - 设备与绑定：Server；UID 登记校验、绑定/激活、上传配置发放与确认、改名、凭证撤销；[设备规则](#ble)
 - 上传接收：Server；校验凭证与 owner、断点续传、raw 和来源索引持久化；完成后返回 COMPLETE；[原件收件](docs/audio-processing.md#ingest)
-- 来源投影与录音聚合：Server 后台；将 registry 的 ready 来源幂等投影到业务库，按来源/session 聚合片段并更新输入版本；[收件与聚合](docs/audio-processing.md#ingest)
+- 来源投影与录音聚合：Server 后台；将设备与上传 SQLite（registry）的 ready 来源幂等投影到业务 SQLite，按来源/session 聚合片段并更新输入版本；[收件与聚合](docs/audio-processing.md#ingest)
 - 任务调度与恢复：Server 后台；持久任务、顺序领取、租约、重试、版本检查、发布恢复与文件修复；[双写与恢复](docs/audio-processing.md#publication)
 - 音频解码：受控子进程；校验并按序解码 raw Opus，生成 16 kHz、单声道 PCM16 WAV；[音频存储与解码](docs/audio-processing.md#storage)
 - 转写与导出生成：Server 后台 / ASR；调用 ASR、校验 cues，提交转写 JSON 与 VTT；Markdown 从同组原文生成；[转写设计](docs/audio-processing.md#transcript)
 - 录音查询与媒体读取：Server；按 owner 返回录音与当前版本链接，鉴权读取 WAV/JSON/VTT/Markdown，支持音频 Range；[Web API](#web-api)、[媒体 API](docs/audio-processing.md#media-api)
-- 持久存储与备份：Server 数据卷 / 独立备份；管理两套 SQLite、私有文件、文件/数据库双写、加密快照与恢复；[数据模型](#data-model)、[存储安全](docs/audio-processing.md#security)
+- 持久存储与备份：Server 数据卷 / 独立备份；管理设备与上传 SQLite（registry）、业务 SQLite、私有文件、文件/数据库双写、加密快照与恢复；[数据模型](#data-model)、[存储安全](docs/audio-processing.md#security)
 
 ### 1.3 主流程与模块衔接
 
@@ -39,7 +39,7 @@ flowchart TD
     Web <-->|"BLE：配置写入与读回"| Clip["ReSpeaker Clip"]
     API <-->|"OIDC：身份验证"| Google["Google"]
     API -->|"账号与录音查询"| Biz[("业务 SQLite")]
-    API -->|"绑定与凭证"| Registry[("registry")]
+    API -->|"绑定与凭证"| Registry[("设备与上传 SQLite（registry）")]
     Clip -->|"Wi-Fi / DTLS：raw Opus"| Ingest["上传接收：鉴权与持久确认"]
     Ingest -->|"持久化原件"| Files[("私有文件目录：raw / WAV / VTT")]
     Ingest -->|"提交来源 ready"| Registry
@@ -68,7 +68,7 @@ flowchart TD
 
 ## 2. 对象与数据表
 
-所有录音来自 Clip 直传。registry 保存绑定与来源，业务库保存 accounts、recordings、recording_segments、jobs；转写原文保存在 recordings.transcript_json。owner 始终引用 accounts.user_id。
+所有录音来自 Clip 直传。设备与上传 SQLite（registry）保存绑定与来源，业务 SQLite 保存 accounts、recordings、recording_segments、jobs；转写原文保存在 recordings.transcript_json。owner 始终引用 accounts.user_id。
 
 对象统一用带注释的 JSON（jsonc）说明。注释用于开发文档，实际请求/响应为标准 JSON；时间为 UTC Unix 毫秒，hash 和凭证均为示例值。
 
@@ -429,7 +429,7 @@ Clip Wi-Fi 扫描结果由 Web 的 BLE 适配层读取：
 
 <a id="business-sql"></a>
 
-### 6.1 业务库
+### 6.1 业务 SQLite
 
 运行时每个数据库连接都设置 foreign_keys=ON、synchronous=FULL、busy_timeout=5000；两个库分别提交，跨库顺序见音频文档。
 
@@ -534,10 +534,10 @@ COMMIT;
 
 <a id="registry-sql"></a>
 
-### 6.2 registry 增量
+### 6.2 设备与上传 SQLite（registry）增量
 
 ```sql
--- 复用既有 registry 表：新增 0 张表。设计参考，真实迁移先检查 table_info。
+-- 复用既有设备与上传 SQLite（registry）中的表：新增 0 张表。设计参考，真实迁移先检查 table_info。
 -- users 保留 Bearer 凭证映射，bindings 保留设备归属和上传凭证。
 PRAGMA foreign_keys=ON;
 PRAGMA synchronous=FULL;

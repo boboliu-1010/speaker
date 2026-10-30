@@ -3,7 +3,7 @@
 <rect width="1280" height="100%" fill="white"/>
 <g font-family="PingFang SC,Microsoft YaHei,Noto Sans CJK SC,Arial,sans-serif">
 <text x="40" y="55" font-size="30" font-weight="600" fill="#17283f">原始录音文件如何进入业务库</text>
-<text x="40" y="88" font-size="17" font-weight="400" fill="#607088">来源记录描述一份 raw 文件；文件接收成功后，再独立导入录音与片段。</text>
+<text x="40" y="88" font-size="17" font-weight="400" fill="#607088">设备与上传 SQLite（registry）保存来源记录；接收成功后，再导入业务 SQLite。</text>
 <line x1="40" y1="112" x2="1240" y2="112" stroke="#d8e0ea" stroke-width="1.5"/>
 <rect x="40" y="150" width="760" height="738" rx="8" fill="white" stroke="#d8e0ea"/>
 <text x="62" y="189" font-size="23" font-weight="600" fill="#17283f">registry.sources · 原始文件的接收记录</text>

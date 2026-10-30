@@ -15,6 +15,8 @@ v1 · 2026-10-30 · [Server / Web 主文档](../README.md)
 
 ## 1. 原件收件与录音聚合
 
+本文涉及两个独立的 SQLite 数据库：**设备与上传 SQLite（registry）**保存设备绑定、上传凭证和来源记录；**业务 SQLite**保存用户、录音、片段、任务及转写 JSON。下文 `registry.sources` 表示前者中的 `sources` 表；“业务库”指后者。原始音频文件单独存放在私有文件目录。
+
 ![原始文件接收记录：字段注释与业务导入步骤](assets/diagrams/04-raw-ingest-outbox.svg)
 
 ```mermaid
@@ -25,9 +27,9 @@ flowchart TD
     D -->|未完成| C
     D -->|校验失败| X["按接收协议报错<br/>保留已持久偏移"]
     D -->|是| E["raw rename + 目录 fsync<br/>身份元数据持久化"]
-    E --> F["registry.sources 提交 ready"]
+    E --> F["设备与上传 SQLite（registry）<br/>sources 提交 ready"]
     F --> G["设备收到 COMPLETE"]
-    F --> H["业务事务：片段 ready<br/>input_revision 只增一次"]
+    F --> H["业务 SQLite 事务：片段 ready<br/>input_revision 只增一次"]
     H --> I["更新 projected_at"]
     I --> J{"片段连续且静默满 10 分钟？"}
     J -->|否| K["等待补齐或静默时间"]
