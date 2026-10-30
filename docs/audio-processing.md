@@ -1,6 +1,6 @@
 # 音频存储、双写与 VTT 开发设计
 
-v1 · 2026-10-29 · [Server / Web 主文档](../README.md)
+v1 · 2026-10-30 · [Server / Web 主文档](../README.md)
 
 ## 关键点
 
@@ -16,6 +16,24 @@ v1 · 2026-10-29 · [Server / Web 主文档](../README.md)
 ## 1. 原件收件与录音聚合
 
 ![收件与投影](assets/diagrams/04-raw-ingest-outbox.svg)
+
+```mermaid
+flowchart TD
+    A["上传鉴权 / owner / 额度校验"] --> B["保存 receiving 来源"]
+    B --> C["raw 写入并 fsync<br/>持久检查点 → ACK 偏移"]
+    C --> D{"收完整且 size/hash 正确？"}
+    D -->|未完成| C
+    D -->|校验失败| X["按接收协议报错<br/>保留已持久偏移"]
+    D -->|是| E["raw rename + 目录 fsync<br/>身份元数据持久化"]
+    E --> F["registry.sources 提交 ready"]
+    F --> G["设备收到 COMPLETE"]
+    F --> H["业务事务：片段 ready<br/>input_revision 只增一次"]
+    H --> I["更新 projected_at"]
+    I --> J{"片段连续且静默满 10 分钟？"}
+    J -->|否| K["等待补齐或静默时间"]
+    K --> J
+    J -->|是| L["固定快照，建立 decode 任务"]
+```
 
 | 数据 / 操作 | 规则 |
 |---|---|
@@ -183,6 +201,21 @@ raw 与 WAV 是两种分别保存的音频。双写是文件持久化与 SQLite 
 
 ## 4. 识别原文与 VTT
 
+```mermaid
+flowchart TD
+    A["WAV 已双写发布<br/>固定 audio_revision"] --> B{"ASR 已配置？"}
+    B -->|否| C["not_configured<br/>音频可读取"]
+    B -->|是| D["transcribe 固定 WAV 快照<br/>校验 hash，调用受控 ASR"]
+    D --> E{"ASR 成功且 cues 全部合法？"}
+    E -->|否| X["临时故障重试 / 终止 failed<br/>保留已提交结果"]
+    E -->|是，含静音| F["整理 JSON v1 原文<br/>按固定格式生成临时 VTT"]
+    F --> G["fsync 文件，提交 size/hash<br/>link 不覆盖发布 + 目录 fsync"]
+    G --> H{"owner / 版本 / WAV / 租约有效？"}
+    H -->|否| Y["放弃本次结果<br/>保留当前文字与指针"]
+    H -->|是| I["同一事务提交<br/>JSON + VTT 指针 + 版本 + ready"]
+    I --> J["鉴权读取 JSON / VTT<br/>同版本 JSON 生成 Markdown"]
+```
+
 | Cue 字段 | 类型 / 含义 |
 |---|---|
 | cue_index | 从 1 开始的连续整数，按起点和供应方稳定顺序排列 |
@@ -285,6 +318,20 @@ Web 用 textContent 渲染原文。Markdown 标题使用有效录音日期，按
 | 所有类型 | owner/recording_id 匹配；jobs.state=running、publication_state=prepared、lease_token 匹配且未到期；最终文件 size/hash 与已存元数据一致 |
 
 ### 5.3 后台执行与恢复
+
+```mermaid
+flowchart TD
+    A["VTT 发布中断或文件异常"] --> B{"同版本 JSON 已提交？"}
+    B -->|否| C["放弃未提交 VTT<br/>按重试规则重跑 ASR，整体发布"]
+    B -->|是| D["保留 JSON，标记文件 missing<br/>保存 repair_expected"]
+    D --> E["复用原 jobs 行，使用新路径<br/>按原格式从 JSON 重建 VTT"]
+    E --> F{"size/hash 与预期一致？"}
+    F -->|否| G["停止发布<br/>repair_content_mismatch"]
+    F -->|是| H{"当前指针 / 版本 / 租约有效？"}
+    H -->|否| I["放弃过时修复产物"]
+    H -->|是| J["提交新文件元数据<br/>录音版本与原文保持不变"]
+    J --> K["VTT 恢复可读<br/>释放引用后清理旧路径"]
+```
 
 | 处理规则 | 值 |
 |---|---|
