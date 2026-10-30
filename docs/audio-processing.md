@@ -20,21 +20,41 @@ v1 · 2026-10-30 · [Server / Web 主文档](../README.md)
 ![原始文件接收记录：字段注释与业务导入步骤](assets/diagrams/04-raw-ingest-outbox.svg)
 
 ```mermaid
-flowchart TD
-    A["验证上传凭证、录音归属和可用额度"] --> B["保存 receiving 来源"]
-    B --> C["raw 写入并 fsync<br/>持久检查点 → ACK 偏移"]
-    C --> D{"收完整且字节数与 SHA-256 正确？"}
-    D -->|未完成| C
-    D -->|校验失败| X["按接收协议报错<br/>保留已持久偏移"]
-    D -->|是| E["raw rename + 目录 fsync<br/>身份元数据持久化"]
-    E --> F["设备与上传 SQLite（registry）<br/>sources 提交 ready"]
-    F --> G["设备收到 COMPLETE"]
-    F --> H["业务 SQLite 事务：片段 ready<br/>输入版本 input_revision 只增一次"]
-    H --> I["写入导入完成时间 projected_at"]
-    I --> J{"片段连续且静默满 10 分钟？"}
-    J -->|否| K["等待补齐或静默时间"]
-    K --> J
-    J -->|是| L["固定快照，建立 decode 任务"]
+sequenceDiagram
+    participant C as Clip
+    participant S as Server
+    participant F as 私有文件存储
+    participant R as 来源库 registry
+    participant B as 业务 SQLite
+    C->>S: 请求上传，声明片段身份、字节数和摘要
+    S->>R: 校验绑定与用户归属，保存 receiving 来源
+    Note over C,S: 凭证、身份或额度校验失败时立即拒绝
+    loop 分块上传，直到收齐原件
+        C->>S: 上传片段数据
+        S->>F: 写 raw 并 fsync，再持久化检查点
+        F-->>S: 返回已持久偏移
+        S-->>C: ACK 已持久偏移
+    end
+    S->>F: 校验完整字节数与 SHA-256
+    alt 原件校验通过
+        S->>F: rename 原件，持久化目录和身份元数据
+        S->>R: 提交来源 state=ready
+        R-->>S: 提交成功
+        S-->>C: COMPLETE，设备结束本次上传
+        Note over S,B: 后台导入业务库，不阻塞设备确认
+        S->>B: 幂等保存录音与 ready 片段，首次导入递增 input_revision
+        alt 业务事务提交成功
+            B-->>S: 返回导入结果
+            S->>R: 更新业务导入完成时间 projected_at
+            opt 片段连续且静默满 10 分钟
+                S->>B: 固定输入快照，建立唯一 decode 任务
+            end
+        else 业务提交或完成标记失败
+            Note over S,B: 保留 ready 来源，后台幂等重放，不重复增加版本
+        end
+    else 原件校验失败
+        S-->>C: 按接收协议报错，仅确认已持久偏移
+    end
 ```
 
 - 原件格式：uint16 little-endian 包长度 + Opus payload；校验包边界、size/hash 与媒体 profile
@@ -357,18 +377,41 @@ raw 与 WAV 是两种分别保存的音频。双写是文件持久化与 SQLite 
 ## 4. 识别原文与 VTT
 
 ```mermaid
-flowchart TD
-    A["WAV 已双写发布<br/>固定音频版本 audio_revision"] --> B{"ASR 已配置？"}
-    B -->|否| C["未配置识别，状态 not_configured<br/>音频可读取"]
-    B -->|是| D["转写任务 transcribe 固定 WAV 快照<br/>校验音频摘要，调用受控 ASR"]
-    D --> E{"ASR 成功且 cues 全部合法？"}
-    E -->|否| X["临时故障重试；终止后状态为 failed<br/>保留已提交结果"]
-    E -->|是，含静音| F["整理 JSON v1 原文<br/>按固定格式生成临时 VTT"]
-    F --> G["fsync 文件，提交字节数和完整摘要<br/>link 不覆盖发布 + 目录 fsync"]
-    G --> H{"用户归属未变、结果版本匹配<br/>WAV 摘要一致、租约未到期？"}
-    H -->|否| Y["放弃本次结果<br/>保留当前文字与指针"]
-    H -->|是| I["同一事务提交<br/>保存原文 JSON 和字幕文件指针<br/>记录文字版本，状态改为 ready"]
-    I --> J["鉴权读取原文 JSON 或字幕 VTT<br/>同版本 JSON 生成 Markdown"]
+sequenceDiagram
+    participant W as Server 后台任务
+    participant B as 业务 SQLite
+    participant F as 私有文件存储
+    participant A as 受控 ASR
+    Note over W,F: WAV 已双写发布，audio_revision 固定当前音频版本
+    alt ASR 未配置
+        W->>B: 设置 transcript_state=not_configured
+        Note over W,B: WAV 仍可独立读取
+    else ASR 已配置
+        W->>B: 建立并领取 transcribe 任务，固定 WAV 快照与执行租约
+        W->>F: 读取 WAV，校验字节数和完整摘要
+        W->>A: 发送校验后的 WAV，使用固定识别配置
+        A-->>W: 返回识别结果，或返回调用错误
+        alt 识别成功且全部 cues 合法，含静音结果
+            W->>B: 提交 prepared 状态和本次临时、最终路径
+            W->>F: 按固定格式生成临时 VTT，fsync 文件
+            F-->>W: 返回文件字节数与 SHA-256
+            W->>B: 提交 VTT 预期字节数和摘要
+            W->>F: link 原子创建最终文件，禁止覆盖，再 fsync 目录
+            W->>B: 开始最终事务，核对归属、版本、WAV 快照和有效租约
+            alt 全部发布条件仍满足
+                W->>B: 同事务提交 JSON、VTT 指针、文字版本、ready 与任务成功
+                B-->>W: 提交成功，新结果可读取
+                W->>F: 删除临时硬链接并持久化目录
+                Note over W,B: JSON 与 VTT 同版本；Markdown 从已提交 JSON 生成
+            else 版本已改变或租约失效
+                Note over W,B: 停止本次发布；旧执行者不得覆盖当前任务与已提交结果
+                Note over W,F: 无引用产物按清理规则回收
+            end
+        else ASR 调用失败或 cues 校验失败
+            W->>B: 临时故障进入 retry_wait；不可重试或次数耗尽则 failed
+            Note over W,B: 只更新对应任务与当前版本状态，保留之前已提交结果
+        end
+    end
 ```
 
 持久格式为 `{schema_version:1,time_unit:"ms",cues:[...]}`。接口补充 recording_id、revision 和 next_cursor：
@@ -478,17 +521,41 @@ Web 用 textContent 渲染原文。Markdown 标题使用有效录音日期，按
 ### 5.3 后台执行与恢复
 
 ```mermaid
-flowchart TD
-    A["VTT 发布中断或文件异常"] --> B{"同版本 JSON 已提交？"}
-    B -->|否| C["放弃未提交 VTT<br/>按重试规则重跑 ASR，整体发布"]
-    B -->|是| D["保留原文 JSON，文件状态改为 missing<br/>repair_expected 保存修复前预期元数据"]
-    D --> E["复用原 jobs 行，使用新路径<br/>按原格式从 JSON 重建 VTT"]
-    E --> F{"文件字节数和完整摘要与预期一致？"}
-    F -->|否| G["修复内容不一致，停止发布<br/>错误码 repair_content_mismatch"]
-    F -->|是| H{"当前指针仍指向本任务<br/>结果版本匹配且租约未到期？"}
-    H -->|否| I["放弃过时修复产物"]
-    H -->|是| J["提交新文件元数据<br/>录音版本与原文保持不变"]
-    J --> K["VTT 恢复可读<br/>释放引用后清理旧路径"]
+sequenceDiagram
+    participant W as Server 恢复任务
+    participant B as 业务 SQLite
+    participant F as 私有文件存储
+    participant A as 受控 ASR
+    W->>B: 查询 VTT 任务、已提交原文和当前结果指针
+    alt 同版本 JSON 尚未提交
+        W->>F: 放弃未提交 VTT，按引用规则清理
+        opt 任务仍符合发布条件且未超过重试上限
+            W->>A: 按原输入快照重新识别 WAV
+            A-->>W: 返回新的识别结果
+            Note over W,B: 按转写发布时序，整体提交新 JSON 与 VTT
+        end
+    else JSON 已提交，但 VTT 缺失或损坏
+        W->>B: 标记 missing，保存 repair_expected，复用原 jobs 行排队修复
+        Note over W,B: repair_expected 保存原字节数、摘要和最终路径
+        W->>B: 领取修复任务，提交新租约、新路径和 prepared 状态
+        B-->>W: 返回同版本 JSON 与原 VTT 格式版本
+        W->>F: 从 JSON 重建临时 VTT，fsync 并计算字节数与摘要
+        Note over W,A: 此分支直接使用已提交原文，无须调用 ASR
+        alt 修复文件与预期元数据一致
+            W->>B: 提交修复文件的预期字节数和摘要
+            W->>F: link 创建新最终文件，禁止覆盖，再 fsync 目录
+            W->>B: 开始事务，复核当前指针、已发布版本与有效租约
+            alt 仍指向原任务且租约有效
+                W->>B: 提交新文件元数据和任务成功，保持录音版本与原文不变
+                B-->>W: VTT 恢复可读
+                W->>F: 释放下载引用后清理旧路径与临时文件
+            else 当前结果已替换或租约失效
+                Note over W,F: 不提交过时修复结果，按执行归属与引用条件清理
+            end
+        else 修复内容与预期不一致
+            W->>B: 记录 repair_content_mismatch，停止发布
+        end
+    end
 ```
 
 - kind / 去重键：decode、transcribe；recording_id + input_revision + kind
