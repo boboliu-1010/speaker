@@ -31,39 +31,6 @@ v1 · 2026-10-30
 - 录音查询与媒体读取：Server；按 owner 返回录音与当前版本链接，鉴权读取 WAV/JSON/VTT/Markdown，支持音频 Range；[Web API](#web-api)、[媒体 API](docs/audio-processing.md#media-api)
 - 持久存储与备份：Server 数据卷 / 独立备份；管理设备与上传 SQLite（registry）、业务 SQLite、私有文件、文件/数据库双写、加密快照与恢复；[数据模型](#data-model)、[存储安全](docs/audio-processing.md#security)
 
-### 1.3 主流程与模块衔接
-
-```mermaid
-flowchart TD
-    Web["浏览器 Web"] -->|"HTTPS：登录、绑定、查询与播放"| API["Server：验证身份、管理设备、查询录音"]
-    Web <-->|"BLE：配置写入与读回"| Clip["ReSpeaker Clip"]
-    API <-->|"OIDC：身份验证"| Google["Google"]
-    API -->|"账号与录音查询"| Biz[("业务 SQLite")]
-    API -->|"绑定与凭证"| Registry[("设备与上传 SQLite（registry）")]
-    Clip -->|"Wi-Fi 连接服务器，DTLS 直传 raw Opus"| Ingest["上传接收：鉴权与持久确认"]
-    Ingest -->|"持久化原件"| Files[("私有文件目录：保存原件、音频和字幕")]
-    Ingest -->|"提交来源 ready"| Registry
-    Registry -->|"ready 来源"| Project["后台：幂等投影与录音聚合"]
-    Project -->|"保存片段、递增输入版本并建立任务"| Biz
-    Biz -->|"领取持久任务"| Worker["后台任务：领取执行、处理音频并恢复中断"]
-    Files -->|"读取原件进行解码，读取 WAV 进行识别"| Worker
-    Worker <-->|"发送 WAV；返回原文、时间戳和说话人"| ASR["受控 ASR"]
-    Worker -->|"先持久化音频文件与字幕文件"| Files
-    Worker -->|"再提交任务状态、结果版本与识别原文"| Biz
-    Files -->|"鉴权后读取对应音频或字幕"| API
-```
-
-1. **登录与绑定**：Web 发起 Google 登录，Server 建立本站会话；激活设备后返回上传配置，Web 经 BLE 写入 Clip、读回并向 Server 确认。Wi-Fi 扫描与连接由 Clip 执行。
-2. **录音与收件**：Clip 上传 raw；Server 校验凭证和归属，完成原件、身份元数据及 registry 来源索引持久化后才返回 COMPLETE。该确认不等待解码或转写。
-3. **后台处理**：ready 来源投影为录音和片段，生成版本化任务；后台依次解码 WAV、调用 ASR 并发布转写。文件先落盘，随后事务提交任务与录音指针；转写 JSON 与 VTT 指针一起提交。
-4. **查看与导出**：Web 查询录音状态和链接，Server 按会话 owner、录音版本及产物状态读取结果。WAV 可独立播放，文字和字幕使用与音频一致的版本。
-
-### 1.4 文档导航
-
-本页承载总体架构、模块边界和 Server / Web 契约；[音频处理设计](docs/audio-processing.md)展开收件、文件存储、解码、转写、双写恢复及媒体读取。
-
-[对象与表](#data-model) · [Web API](#web-api) · [登录与会话](#oauth) · [设备规则](#ble) · [SQL](#sql)
-
 <a id="data-model"></a>
 
 ## 2. 对象与数据表
@@ -554,3 +521,53 @@ COMMIT;
 -- 启动时分批对账全部 ready 来源，不只相信 projected_at，确保备份恢复后可补投影。
 -- 改名仅更新本人当前 bindings.display_name；保留原 UID、凭证和历史 owner。
 ```
+
+
+## 7. 设置与启动配置
+
+本节约定 Server 的启动配置。当前仓库为开发设计文档，以下环境变量名和 systemd 片段作为后续实现的配置契约；实际启动入口随 Server 实现补齐。
+
+### 7.1 数据库与文件地址
+
+配置集中保存在服务器 `/etc/speaker/server.env`，由启动项加载。数据库填写 **SQLite 文件的绝对路径**，音频与备份填写目录绝对路径；路径按部署环境修改。
+
+```dotenv
+# 设备与上传 SQLite（registry）：设备绑定、凭证、来源记录。
+SPEAKER_REGISTRY_DB_PATH=/var/lib/speaker/db/registry.sqlite3
+# 业务 SQLite：账号、录音、片段、任务、转写 JSON。
+SPEAKER_BUSINESS_DB_PATH=/var/lib/speaker/db/business.sqlite3
+# 私有音频目录：raw 原件、WAV、VTT 和处理临时文件。
+SPEAKER_STORAGE_ROOT=/var/lib/speaker/audio
+# 独立加密备份的挂载目录；加密密钥由部署环境单独提供。
+SPEAKER_BACKUP_ROOT=/mnt/speaker-backup
+
+# Web 对外 HTTPS 地址及 Google 登录配置。
+PUBLIC_WEB_ORIGIN=https://speaker.example.com
+GOOGLE_CLIENT_ID=replace-with-google-client-id
+GOOGLE_CLIENT_SECRET=replace-with-google-client-secret
+```
+
+- `SPEAKER_REGISTRY_DB_PATH` 与 `SPEAKER_BUSINESS_DB_PATH` 指向两个不同的文件；`registry.sources` 是 registry 库中的表引用，不是文件名。
+- Server 所有接收、查询和后台任务模块共用这里解析出的路径；数据库连接统一设置第 6 节规定的 PRAGMA。
+- 数据库父目录须允许服务账号创建 SQLite 的 WAL/SHM 文件；数据库、音频和临时目录位于已解锁的加密数据卷，备份使用独立存储。
+- 数据目录权限为 0700，数据库及 WAL/SHM、音频和配置文件权限为 0600。配置文件由服务端受控保存，真实凭证不提交到仓库。
+
+### 7.2 启动项加载配置
+
+Linux 使用 systemd 时，在 Server 服务单元的 `[Service]` 中加载同一份配置文件：
+
+```ini
+[Service]
+EnvironmentFile=/etc/speaker/server.env
+```
+
+这段内容合入实际 Server 的 systemd 启动项；`ExecStart` 使用 Server 实现提供的启动命令。配置文件路径不加 `-` 前缀，文件缺失时启动失败。Server 从启动环境读取上述设置，不依赖启动时的当前目录。
+
+修改配置或启动项后，重启对应 Server 服务；修改 systemd 单元时先执行 `systemctl daemon-reload`。数据库文件地址变更须先停写并按一致性备份/恢复规则迁移两个库和关联文件，再修改路径；仅修改环境变量不会迁移已有数据。
+
+### 7.3 启动检查
+
+- 检查必填路径为绝对路径，两个数据库不指向同一文件，数据卷已解锁，服务账号具有所需读写权限。
+- 首次部署按第 6 节初始化数据库；已有部署检查数据库版本并执行迁移。配置指向的既有数据库缺失时应报错，避免误建空库后继续运行。
+- 校验备份目录、加密密钥与用户额度配置；要求与[音频存储及恢复设计](docs/audio-processing.md#security)一致，未满足时拒绝启动。
+- 完成数据库和存储校验后，恢复过期任务、对账 ready 来源，再开放接收入口与 Web API。
