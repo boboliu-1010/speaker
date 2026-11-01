@@ -48,6 +48,8 @@ flowchart TD
 
 ### 2.1 recordings：内容版本与结果快照
 
+下面示例表示首次汇总失败、尚无已发布快照；第 4.3 节给出发布后的快照结构。
+
 ```jsonc
 {
   // TEXT；录音主键，owner/来源/时间字段见主文档。
@@ -110,10 +112,12 @@ flowchart TD
 
 - Server 使用一个应用进程、一个后台工作循环。启动时对业务 DB 同目录的 `speaker.worker.lock` 取得非阻塞排他 flock，并持有至所有后台工作和子进程结束；第二实例直接启动失败。锁针对同一个本地数据目录，禁止多 Uvicorn worker、热重载重叠实例或多机共享运行。
 - 只有持锁工作者可更改处理状态、调用 ASR、修复和清理文件。原件导入可并发写业务库；媒体接口发现缺失文件只通知工作者复核，不自行修改片段状态。
+- ASR 仅领取 decode_state=ready、wav_state=ready，且 asr_state 为 pending/retry_wait、asr_run_after 已到期、asr_attempt<4 的片段，并检查固定配置可用。等待解码或 WAV 修复不消耗识别次数；asr_state=ready 的片段不再领取。
 - 调用解码器/ASR 前在短事务中增加对应 attempt 并置 running；I/O 在事务外。每次 ASR 返回后保存当前片段，再轮转其他可执行片段和录音汇总。
 - 每个片段的解码和 ASR 各最多执行 4 次，重试等待 30 秒、2 分钟、10 分钟。暂时网络/存储故障可重试；格式/hash/额度/结构超限直接 failed。失败片段不影响其他片段；终止后的人工重试须明确重置该单元的预算。
 - 超时先终止并等待本地解码子进程退出，或取消并等待 ASR 请求返回；不得让旧本地执行仍能回写时启动重试。已送达远端的请求可能继续执行和计费，重试也可能重复调用。
 - 重启持锁后，遗留 running 恢复为 retry_wait，但保留已执行次数；达到 4 次则置 failed。成功 transcript_json 保留。
+- 导入时根据有效 ASR 配置显式设置 asr_state：有配置为 pending，无配置为 not_configured；DDL 的 pending 默认值不能代替此判断。未配置期间不领取 ASR，也不增加 asr_attempt。配置补齐后将尚未开始识别的片段由 not_configured 改为 pending、设置 asr_run_after，并在同一事务递增 content_revision。领取前再次检查配置，未冻结配置的片段若仍无可用 ASR，恢复为 not_configured，不消耗次数。
 - 解码配置首次解码前固定，ASR 配置首次调用前固定，包括失败重试。未配置 ASR 时可先解码播放，随后只允许一次性补齐 ASR 设置；默认值改变只作用于未冻结配置。成功片段暂不支持在线更换模型重新识别。
 
 <a id="storage"></a>
@@ -162,6 +166,10 @@ ASR 失败的片段保留原时长，后面字幕不能前移。已知时长但 
 
 ### 4.3 结果快照
 
+audio_items 中的 start_sample/end_sample 是整条录音上的全局半开区间；二者之差必须等于该 segment 的 sample_count。原始片段的 ASR 时间仍是片段内毫秒，汇总时按起始样本偏移换算为全局时间。
+
+下面示例含 5 分钟第一段和 1 分钟末段。第二段从样本 4,800,000、即 300,000 ms 开始，结束于样本 5,760,000；示例中第二段识别成功且为静音。schema_version=3 是 JSON 结构版本，export_format_version=2 是独立的字幕序列化版本。
+
 ```jsonc
 {
   // INTEGER；等于本快照发布时的 content_revision。
@@ -173,11 +181,17 @@ ASR 失败的片段保留原时长，后面字幕不能前移。已知时长但 
   // BOOLEAN；有缺号、待处理、失败片段或尚未确认录完。
   "partial": true,
   // INTEGER|null；当前可定位前缀总时长。
-  "duration_ms": 300000,
-  // ARRAY；播放各个片段，缺失文件仍保留时间范围，URL 由 API 生成。
-  "audio_items": [{"segment_id": "segment-001", "start_sample": 0, "end_sample": 4800000, "wav": {"state": "ready", "relative_path": "derived/segment-001/publication.wav", "size_bytes": 9600044, "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}}],
-  // ARRAY；各片段的识别覆盖状态；pending 包括 running/retry_wait。
-  "coverage": [{"segment_id": "segment-001", "start_ms": 0, "end_ms": 300000, "state": "ready"}],
+  "duration_ms": 360000,
+  // ARRAY；样本区间为全局位置，URL 由 API 生成；缺失文件仍保留区间。
+  "audio_items": [
+    {"segment_id": "segment-001", "start_sample": 0, "end_sample": 4800000, "wav": {"state": "ready", "relative_path": "derived/segment-001/publication.wav", "size_bytes": 9600044, "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}},
+    {"segment_id": "segment-002", "start_sample": 4800000, "end_sample": 5760000, "wav": {"state": "ready", "relative_path": "derived/segment-002/publication.wav", "size_bytes": 1920044, "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"}}
+  ],
+  // ARRAY；state 为 not_configured / pending / ready / failed；pending 包括 running/retry_wait。
+  "coverage": [
+    {"segment_id": "segment-001", "start_ms": 0, "end_ms": 300000, "state": "ready"},
+    {"segment_id": "segment-002", "start_ms": 300000, "end_ms": 360000, "state": "ready"}
+  ],
   // ARRAY；缺号之后尚不能定位的原件 ID。
   "unpositioned_segment_ids": [],
   // ARRAY；全局毫秒，排序后从 1 编号；合法说话重叠保留。
@@ -229,7 +243,7 @@ DDL 用于新建业务库。已有部署须另写迁移脚本：先停写备份�
 
 前缀 `/api/boa/v1`，所有读取验证会话、owner 与 revision，跨 owner 为 404。详情返回 content_revision、result_revision、result_stale，以及实时计算的 audio_state/transcript_state；partial/duration/preview/links 来自已发布快照。
 
-- GET `/recordings/{id}/audio?revision=N`：从同一 result_json 返回音频清单，含 revision、partial、duration_ms、items；每项为 segment_id、start_ms、duration_ms、sample_count、state、url。sample_count 为 end_sample-start_sample，start_ms 由全局样本数换算；missing 的 URL 为 null。
+- GET `/recordings/{id}/audio?revision=N`：从同一 result_json 返回音频清单，含 revision、partial、duration_ms、items；每项为 segment_id、start_ms、duration_ms、sample_count、state、url。sample_count=end_sample-start_sample，start_ms=round(start_sample×1000/16000)，duration_ms=round(end_sample×1000/16000)-start_ms，确保相邻段边界连续；missing 的 URL 为 null。
 - GET/HEAD `/recordings/{id}/segments/{segment_id}.wav?revision=N`：该片段必须在此录音当前快照清单中；读取片段 WAV，支持单范围 Range。不能仅凭 segment_id 绕过归属与版本检查。
 - GET `/recordings/{id}/transcript?revision=N`：返回 revision、schema_version=3、time_unit=ms、partial、coverage、unpositioned_segment_ids、cues。内部磁盘路径不返回 Web。
 - GET/HEAD `/recordings/{id}/transcript.vtt?revision=N` 与 `transcript.md?revision=N`：从本次读取的同版本快照确定性生成字节；按 export_format_version 转义并序列化，计算长度与 ETag，不落盘。

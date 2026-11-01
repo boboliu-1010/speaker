@@ -119,12 +119,12 @@ p.save('04-raw-ingest-outbox')
 
 # Segment processing and one rebuildable recording snapshot.
 p = Plate('片段处理与结果汇总', '每份原件生成一个 WAV，按五分钟片段识别，汇总后用于播放和字幕导出。', 1070)
-p.card(40, 150, 585, 245, 'recording_segments · 原件与识别结果', ['raw：路径、大小、hash 和原件序号', 'sample_count：校验后的原件样本总数', 'decode_state / decode_attempt：解码次数', 'wav_* / asr_*：WAV 元数据及处理状态', 'transcript_json：本片段的识别文字'], TEAL)
+p.card(40, 150, 585, 245, 'recording_segments · 原件与识别结果', ['raw_relative_path：原件位置', 'sample_count：片段样本总数', 'decode_state / decode_attempt：解码状态与次数', 'wav_state / wav_*：WAV 状态与元数据', 'asr_state / asr_attempt：识别状态与次数', 'transcript_json：本片段的识别文字'], TEAL)
 p.card(655, 150, 585, 245, 'recordings · 缓存一份结果快照', ['content_revision：当前可见内容版本', 'result_revision：已汇总到哪个内容版本', 'result_json：清单、时间轴、覆盖状态和原文', '内容版本与结果版本不同时重新汇总', '查询时根据片段计算进度'], BLUE)
 for x, title, lines in [
  (40, '1 · 解码片段', ['一份原件独立流式解码', 'WAV 先落盘、校验与 fsync', '校验完成后提交片段索引', '不合成整条大音频']),
  (347, '2 · 片段识别', ['每段 ASR 调用前记录次数', '成功原文立即入库', '失败只重试当前片段', '中断不清空已执行次数']),
- (654, '3 · 更新快照', ['按样本数确定全局时间轴', '缺号后的结果先缓存', 'CAS 核对当前内容版本', '一个事务替换整份快照']),
+ (654, '3 · 更新快照', ['按实际样本数累计全局偏移', '缺号后的结果先缓存', 'CAS 核对当前内容版本', '一个事务替换整份快照']),
  (961, '4 · 播放与导出', ['按片段 WAV 清单播放', '从同一 JSON 生成字幕', 'VTT / Markdown 不落盘', 'HEAD 与 GET 使用同字节']),
 ]: p.card(x, 435, 279 if x == 961 else 280, 235, title, lines, BLUE)
 p.card(40, 710, 585, 145, '识别成功但汇总中断', ['版本差仍然存在，重新汇总即可，不重跑成功片段。', '字幕由已提交 JSON 生成，不单独保存文件。'], TEAL)

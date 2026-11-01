@@ -291,9 +291,9 @@ GET `/devices` 返回 `{items:[设备对象]}`；POST `/devices/activate` 返回
   "result_stale": false,
   // boolean；快照存在缺口或未获录音闭合确认；没有快照时为 true。
   "partial": true,
-  // string|null；当前 segment 的 decode_error_code 或片段 WAV 错误，按段号取首个。
+  // string|null；按段号取首个 decode_error_code；wav_state=missing 且无该错误码时使用 audio_unavailable。
   "audio_error_code": null,
-  // string|null；当前片段 asr_error_code，按段号取首个，再取当前内容版本的 merge_error_json。
+  // string|null；按段号取首个 asr_error_code，再取当前内容版本 merge_error_json.code；返回字符串或 null。
   "transcript_error_code": null,
   // object；链接共用 result_revision；无可用结果时对应值为 null。
   "links": {
@@ -339,6 +339,20 @@ from/to 为 YYYY-MM-DD，默认时区 Asia/Shanghai，结束日包含当天。�
   "request_id": "example-request"
 }
 ```
+
+### 播放与导出接口
+
+以下接口均使用录音详情返回的 result_revision；详细请求、响应和错误规则见[媒体 API](docs/audio-processing.md#media-api)。
+
+| 方法与路径 | 返回内容 |
+|---|---|
+| GET `/recordings/{id}/audio?revision=N` | 按 segment 排序的播放清单 |
+| GET / HEAD `/recordings/{id}/segments/{segment_id}.wav?revision=N` | 清单引用的片段 WAV，支持单范围 Range |
+| GET `/recordings/{id}/transcript?revision=N` | schema_version=3 的汇总文字与 coverage |
+| GET / HEAD `/recordings/{id}/transcript.vtt?revision=N` | 从同版本快照生成的 VTT |
+| GET / HEAD `/recordings/{id}/transcript.md?revision=N` | 从同版本快照生成的 Markdown |
+
+音频清单使用 segment_id 标识片段，不直接暴露磁盘路径。state=missing 时 url 为 null。若服务端已切换快照版本，返回 409 recording_revision_changed，Web 重新获取详情及链接。
 
 <a id="oauth"></a>
 
@@ -493,6 +507,7 @@ CREATE TABLE recording_segments (
   wav_state TEXT NOT NULL DEFAULT 'none' CHECK(wav_state IN ('none','ready','missing')),
   wav_relative_path TEXT UNIQUE, wav_size_bytes INTEGER CHECK(wav_size_bytes>0),
   wav_sha256 TEXT CHECK(length(wav_sha256)=64),
+  -- 导入器须根据 ASR 是否可用显式写入 pending 或 not_configured。
   asr_state TEXT NOT NULL DEFAULT 'pending' CHECK(asr_state IN ('not_configured','pending','running','retry_wait','ready','failed')),
   asr_attempt INTEGER NOT NULL DEFAULT 0 CHECK(asr_attempt BETWEEN 0 AND 4),
   asr_run_after INTEGER NOT NULL, asr_error_code TEXT,
