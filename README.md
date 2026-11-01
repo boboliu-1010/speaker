@@ -4,27 +4,25 @@ v2 简化修订 · 2026-11-01
 
 ## 1. 整体架构与主要模块
 
-本文描述 Server / Web 的开发设计。系统由 ReSpeaker Clip、浏览器 Web、Server 和外部身份/识别服务组成：Web 负责登录、设备配置与录音查看；Clip 负责录音与上传；Server 负责归属校验、可靠收件、后台处理和结果读取。
+本文描述 Server / Web 的开发设计，覆盖用户、设备、已就绪原件导入、后台音频处理及结果读取。Clip 与 Server 之间的文件传输由既有接入组件负责；本文从原件和来源元数据已就绪的边界开始，不定义设备传输协议。
 
 ### 1.1 架构总览
 
 ![整体架构：客户端、Server 模块、外部服务与存储](docs/assets/diagrams/01-system-architecture.svg)
 
-- **客户端**：浏览器经同源 HTTPS 调用 Server，经 BLE 与 Clip 交互；Clip 经 Wi-Fi 使用 DTLS 直传录音。BLE 用于设备配置，录音上传走 Clip 到 Server 的连接。
+- **客户端**：浏览器经同源 HTTPS 调用用户、设备和录音接口，经 BLE 配置设备；原件导入以接入组件提供的已就绪来源为输入。
 - **Server**：按图中 Python / FastAPI 单进程基线组织接入、认证、设备、录音和后台任务模块；解码使用受控子进程。后台只有一个工作者，持有本地独占锁并按顺序处理；禁止多 Uvicorn worker 或多机共享数据目录运行。
 - **外部依赖**：Google 提供登录身份验证，本站会话由 Server 维护；ASR 通过服务端配置的受控端点接收 WAV，返回文字、时间戳和 speaker。未配置 ASR 时仍可生成和播放 WAV。
 - **存储边界**：设备与上传 SQLite（registry）保存设备绑定、凭证和上传来源；业务 SQLite 保存用户、录音、片段及行内分块结果；两者是独立的 SQLite 数据库，分别提交事务；私有文件目录保存 raw 与核心 WAV；VTT/Markdown 从数据库快照生成。会话与登录临时状态保存在内存。
 
-图中 Web 9529、HTTPS 兼容接口 9528、UDP/DTLS 9528 表示接入基线；Web 对外访问使用 HTTPS，Google 回调地址按部署配置精确登记。本文描述设计约定，部署和实机验收需另行验证。
+Web 服务端口基线为 9529，对外通过 HTTPS 访问；Google 回调地址按部署配置精确登记。本文描述设计约定，部署和实机验收需另行验证。
 
 ### 1.2 主要模块
 
 - Web 页面与设备交互：浏览器；登录入口、设备/录音列表、播放与导出；经 BLE 配置设备并读回确认；[Web API](#web-api)、[设备规则](#ble)
-- 录音与上传：Clip；录音、保存原始 Opus 片段、扫描/连接 Wi-Fi、通过 DTLS 上传并处理确认；[设备规则](#ble)、[收件约定](docs/audio-processing.md#ingest)
-- 认证与会话：Server；Google OIDC 回调、账号映射、本站 Cookie、CSRF、账号状态检查；确定请求用户；[登录与会话](#oauth)
+- 用户与会话：Server；Google OIDC、本站会话、当前用户资料读取与修改、CSRF 和账号状态检查；[用户接口](#users-api)、[登录与会话](#oauth)
 - 设备与绑定：Server；UID 登记校验、绑定/激活、上传配置发放与确认、改名、凭证撤销；[设备规则](#ble)
-- 上传接收：Server；校验凭证与 owner、断点续传、raw 和来源索引持久化；完成后返回 COMPLETE；[原件收件](docs/audio-processing.md#ingest)
-- 来源投影与录音聚合：Server 后台；将设备与上传 SQLite（registry）的 ready 来源幂等投影到业务 SQLite，按来源/session 聚合片段并更新输入版本；[收件与聚合](docs/audio-processing.md#ingest)
+- 原件导入与录音聚合：Server 后台；读取 registry 的 ready 来源，校验原件及归属，幂等导入业务库并更新 content_revision；[原件导入](docs/audio-processing.md#ingest)
 - 分块调度与恢复：Server 后台；扫描行内状态、单工作者独占锁与分块重试，恢复未完成处理及 WAV；[双写与恢复](docs/audio-processing.md#publication)
 - 音频解码：受控子进程；每份原件独立流式解码为短 WAV，不先合成整条录音；[音频存储与解码](docs/audio-processing.md#storage)
 - 转写与字幕汇总：Server 后台 / ASR；按块识别，成功块单独保存；统一时间偏移并保存录音 JSON 快照，VTT/Markdown 按请求从快照生成；[转写设计](docs/audio-processing.md#transcript)
@@ -35,7 +33,7 @@ v2 简化修订 · 2026-11-01
 
 ## 2. 对象与数据表
 
-所有录音来自 Clip 直传。设备与上传 SQLite（registry）保存绑定与来源，业务 SQLite 仅保留 accounts、recordings、recording_segments 三张表。recording_segments 一行对应一个原始文件，其 chunks_json 保存该文件的分块结果与状态；recordings 保存内容版本和一份可重建的结果快照，包含播放清单、覆盖状态与汇总文字。独立 jobs 表取消。owner 始终引用 accounts.user_id。
+业务处理以既有接入组件提供的 ready 原始片段为输入。设备与上传 SQLite（registry）保存绑定与来源，业务 SQLite 仅保留 accounts、recordings、recording_segments 三张表。recording_segments 一行对应一个原始文件，其 chunks_json 保存该文件的分块结果与状态；recordings 保存内容版本和一份可重建的结果快照，包含播放清单、覆盖状态与汇总文字。独立 jobs 表取消。owner 始终引用 accounts.user_id。
 
 默认按 60 秒核心音频分块，同一原件内识别时增加前后至多 1 秒上下文，失败只重试对应块；新上传不重跑成功块。播放按无重叠核心 WAV 清单进行，整条字幕按样本偏移合并，不以完整音频合成为前置条件。详细字段、缺号处理、部分结果和恢复规则见[分块处理设计](docs/audio-processing.md#tables)。
 
@@ -76,6 +74,8 @@ v2 简化修订 · 2026-11-01
 
 路径前缀 `/api/boa/v1`。除登录入口、回调和 health，其余接口验证会话；写请求携带 Origin、X-CSRF-Token；Server 精确匹配 PUBLIC_WEB_ORIGIN 和当前会话 CSRF，缺失或不匹配返回 403。owner 由 Server 确定。
 
+- GET `/users/me`：读取会话对应的当前用户；200：用户资料对象
+- PATCH `/users/me`：`{display_name}`；修改本人显示名称；200：更新后的用户资料对象
 - GET `/devices`：无；200：`{items:[设备对象]}`
 - POST `/devices/activate`：`{device_uid}`；查询受控登记和本人归属；200：device_id、device_uid、binding_id、epoch、revision、configuration；no-store
 - POST `/devices/{id}/binding/confirm`：`{device_uid,binding_id,revision,saved:true}`；200：`{binding_id,revision,state:"provisioned"}`
@@ -84,6 +84,38 @@ v2 简化修订 · 2026-11-01
 - GET `/recordings`：from、to、cursor、limit；200：`{items:[录音列表对象],next_cursor}`
 - GET `/recordings/{id}`：id；200：录音详情对象
 - GET `/health`：无；200：服务状态与版本
+
+<a id="users-api"></a>
+
+### 当前用户接口
+
+用户首次通过 Google 登录时由 Server 自动建立 accounts 记录，HTTP 接口使用 `/users/me` 表示当前会话用户。两项接口均返回 `Cache-Control: private, no-store`；会话失效返回 401，账号禁用返回 403 account_disabled。
+
+GET `/users/me` 和 PATCH `/users/me` 的成功响应使用相同结构：
+
+```jsonc
+{
+  // string；accounts.user_id；只读，由会话确定。
+  "user_id": "demo-user",
+  // string；accounts.email，由登录身份同步；只读。
+  "email": "user@example.com",
+  // string；本站显示名称，允许空字符串，最多 100 字符。
+  "display_name": "示例用户"
+}
+```
+
+PATCH `/users/me` 请求：
+
+```jsonc
+{
+  // string；必填，最多 100 字符；空字符串用于清空显示名称。
+  "display_name": "我的名字"
+}
+```
+
+Server 检查 Origin 和会话 CSRF，只允许 display_name，缺少字段、类型错误、超长或出现额外字段返回 422；不能通过请求修改 user_id、email、google_sub、status、auth_version 或业务 owner。使用参数化 SQL，仅更新会话用户的 display_name 与 updated_at，再返回数据库中的当前资料。
+
+`GET /auth/session` 用于获取登录状态和 CSRF，其 user 与 `/users/me` 同样从 accounts 当前行读取，不缓存旧名称。Google 首次建号时可初始化显示名称，后续登录保留本站已设置的名称。当前范围包含本人资料，不增加管理员用户列表、任意用户编辑或账号删除接口。
 
 ### 设备写入请求与响应
 
@@ -210,7 +242,7 @@ GET `/devices` 返回 `{items:[设备对象]}`；POST `/devices/activate` 返回
     "epoch": 1,
     // integer；与外层配置版本相同。
     "revision": 1,
-    // string；现有 DTLS 上传端点，host:port。
+    // string；由既有接入组件提供的设备上传地址，host:port；本文不定义传输细节。
     "endpoint": "upload.example.com:9528",
     // string；设备上传凭证，仅经受控 BLE 配置写入设备。
     "device_token": "example-device-token"
@@ -249,7 +281,7 @@ GET `/devices` 返回 `{items:[设备对象]}`；POST `/devices/activate` 返回
   "transcript_state": "ready",
   // string；已发布快照的第一句；快照无成功文字或静音时为空字符串。
   "preview_text": "我们确认一下今天的安排。",
-  // enum；unknown / gap / confirmed_complete，按协议证据确定。
+  // enum；unknown / gap / confirmed_complete，由接入侧可信元数据确定。
   "integrity": "unknown",
   // integer >=0；原件、可见块结果/文件状态或完整性变化时增加。
   "content_revision": 1,
@@ -531,7 +563,7 @@ GOOGLE_CLIENT_SECRET=replace-with-google-client-secret
 ```
 
 - `SPEAKER_REGISTRY_DB_PATH` 与 `SPEAKER_BUSINESS_DB_PATH` 指向两个不同的文件；`registry.sources` 是 registry 库中的表引用，不是文件名。
-- Server 所有接收、查询和后台任务模块共用这里解析出的路径；数据库连接统一设置第 6 节规定的 PRAGMA。
+- Server 所有导入、查询和后台任务模块共用这里解析出的路径；数据库连接统一设置第 6 节规定的 PRAGMA。
 - 数据库父目录须允许服务账号创建 SQLite 的 WAL/SHM 文件；数据库、音频和临时目录位于已解锁的加密数据卷，备份使用独立存储。
 - 数据目录权限为 0700，数据库及 WAL/SHM、音频和配置文件权限为 0600。配置文件由服务端受控保存，真实凭证不提交到仓库。
 
@@ -555,4 +587,4 @@ EnvironmentFile=/etc/speaker/server.env
 - 校验备份目录、加密密钥与用户额度配置；要求与[音频存储及恢复设计](docs/audio-processing.md#security)一致，未满足时拒绝启动。
 - 配置 ASR 时校验分块长度为正、上下文小于核心块长，且含上下文 WAV 的总时长/体积不超 ASR 上限；已开始处理的原件沿用冻结配置；首次 ASR 尝试前固定识别配置，失败重试不能换模型。
 - 在业务 DB 同目录对 speaker.worker.lock 取得排他 flock 并持有至后台退出；第二实例启动失败。只运行一个应用进程和一个工作者，不使用多 worker 或热重载重叠实例。
-- 持锁后恢复遗留 running（保留已执行次数）、对账来源和 WAV；开放上传/媒体 API 与开始新处理前完成派生/临时目录孤儿清理，运行期间不做孤儿删除。随后按内容/结果版本差更新快照。接收处理与后台循环分离，子进程或网络调用不能阻塞 Web 事件循环。
+- 持锁后恢复遗留 running（保留已执行次数）、对账来源和 WAV；开放 HTTP API、原件导入与开始新处理前完成派生/临时目录孤儿清理，运行期间不做孤儿删除。随后按内容/结果版本差更新快照。原件导入与后台循环分离，子进程或网络调用不能阻塞 Web 事件循环。

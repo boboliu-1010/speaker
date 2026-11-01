@@ -11,36 +11,34 @@ v2 简化修订 · 2026-11-01 · [Server / Web 主文档](../README.md)
 
 这是尚未实现的设计。分块时长、上下文、超时和限额是工程默认值，实际 ASR 能力与边界识别效果仍须验证。
 
-[收件](#ingest) · [字段](#tables) · [分块与存储](#storage) · [转写](#transcript) · [提交与恢复](#publication) · [接口](#media-api) · [安全](#security)
+[导入](#ingest) · [字段](#tables) · [分块与存储](#storage) · [转写](#transcript) · [提交与恢复](#publication) · [接口](#media-api) · [安全](#security)
 
 <a id="ingest"></a>
 
-## 1. 原件收件与录音聚合
+## 1. 已就绪原件导入与录音聚合
 
-设备与上传 SQLite（registry）保存设备绑定、凭证和来源，业务 SQLite 保存用户、录音与原始片段。两个库独立提交；文件放在私有目录。
+本文从“原件与来源元数据已就绪”开始，不规定 Clip 与 Server 的连接、传输和确认过程。既有接入组件负责提供可靠保存的 raw、可信 owner/绑定/会话/段号、原始大小和 SHA-256，以及 registry.sources 的 ready 记录；业务模块只消费该边界。
 
-![原始文件接收记录与业务导入](assets/diagrams/04-raw-ingest-outbox.svg)
+![已就绪来源的校验与业务导入](assets/diagrams/04-raw-ingest-outbox.svg)
 
 ```mermaid
 flowchart TD
-    A["Clip 上传 raw segment"] --> B["鉴权、额度与 size/hash 校验"]
-    B --> C["raw、身份元数据、registry 来源 ready 持久化"]
-    C --> D["COMPLETE：完成设备收件确认"]
-    C --> E["幂等导入原件行，更新内容版本"]
-    E --> F["独立流式解码为短 WAV"]
-    F --> G["逐块 ASR，成功一块保存一块"]
-    F --> H["录音结果快照：播放清单、时间轴与文字"]
-    G --> H
-    H --> I["Web 按块播放；按请求生成 VTT / Markdown"]
+    A["既有接入组件：ready 原件与可信元数据"] --> B["校验来源归属、原件 size/hash 和处理限额"]
+    B --> C["幂等导入 recordings / recording_segments"]
+    C --> D["独立流式解码为短 WAV"]
+    D --> E["逐块 ASR，成功一块保存一块"]
+    D --> F["录音快照：播放清单、时间轴与文字"]
+    E --> F
+    F --> G["Web 按块播放；按请求生成 VTT / Markdown"]
 ```
 
-- 一条 recordings 对应一次录音；一条 recording_segments 对应一个 raw 文件；一个 segment 可解码成多个计算块 chunk。
-- 录音聚合键为 source_namespace（绑定 ID）+ binding_epoch + source_session；segment_no 从 1 开始。所有来源固定为 Clip 直传。
-- receiving 只 ACK 已持久偏移；完整原件校验、文件和目录 fsync、身份元数据与来源 ready 持久后才 COMPLETE。业务处理和 ASR 不阻塞确认。
-- 业务按 source_namespace/source_id 去重，并复核 owner、录音、段号、size/hash；不同内容冲突报 source_identity_conflict。业务提交后才写 projected_at；重复导入不增加内容版本。
-- 启动每批 500 条对账全部 ready 来源，不只依赖 projected_at；旧来源 created 从 Unix 秒转毫秒。
-- 原件导入后即可处理；后段可提前独立识别。缺号只阻止无法确定偏移的全局结果发布，不阻止后段本地处理。
-- integrity 为 unknown / gap / confirmed_complete。静默不证明录完；confirmed_complete 必须有协议闭合证据，完整性变化也更新内容版本。
+- 一条 recordings 对应一次录音；一条 recording_segments 对应一个 raw 文件；一个 segment 可解码成多个 chunk。
+- 录音聚合键为 source_namespace（绑定 ID）+ binding_epoch + source_session；segment_no 从 1 开始。owner 取可信来源，不接受 Web 自行指定。
+- 只导入 ready 来源；通过受控文件句柄验证原件存在、类型、实际大小及完整 SHA-256，缺失/冲突时保留来源并记录导入错误，暂不创建业务 segment、不填写 projected_at。额度核算按同一物理文件去重，导入索引不重复计费。
+- 同一业务事务按 source_namespace/source_id 去重，复核 owner、录音、段号、size/hash，首次导入递增 content_revision。相同来源幂等返回，不同内容报 source_identity_conflict。
+- 业务提交后才写 registry.sources.projected_at，标记失败可重放；启动每批 500 条对账全部 ready 来源，不只依赖该标记。旧来源 created 从 Unix 秒转毫秒。两个 SQLite 库不做跨库事务。
+- 导入后即可处理；后段可提前独立识别。缺号只阻止无法确定偏移的全局结果发布，不阻止后段本地处理。
+- integrity 为 unknown / gap / confirmed_complete，由接入侧可信完整性元数据提供；没有明确完成依据时保持 unknown，静默不能当作录完。完整性变化也更新 content_revision。
 
 <a id="tables"></a>
 
@@ -109,12 +107,12 @@ flowchart TD
 }
 ```
 
-业务 segment 只在原件 ready 后创建，不重复保存固定 state 列；receiving/ready 由 registry.sources 维护。
+业务 segment 只在原件 ready 后创建，不重复保存固定 state 列；原件何时就绪由既有接入组件和 registry.sources 维护。
 
 ### 2.3 一种工作者，一份重试预算
 
 - Server 使用一个应用进程、一个后台工作循环。启动时对业务 DB 同目录的 `speaker.worker.lock` 取得非阻塞排他 flock，并持有至所有后台工作和子进程结束；第二实例直接启动失败。锁针对同一个本地数据目录，禁止多 Uvicorn worker、热重载重叠实例或多机共享运行。
-- 只有持锁工作者可更改处理状态、调用 ASR、修复和清理文件。上传导入可并发写业务库；媒体接口发现缺失文件只通知工作者复核，不自行修改 chunks_json。
+- 只有持锁工作者可更改处理状态、调用 ASR、修复和清理文件。原件导入可并发写业务库；媒体接口发现缺失文件只通知工作者复核，不自行修改 chunks_json。
 - 调用解码器/ASR 前在短事务中增加对应 attempt 并置 running；I/O 在事务外。每次 ASR 返回后保存一个块，再轮转其他可执行块和录音汇总。
 - 每个 decode 单元和每个 ASR 块最多 4 次执行，重试等待 30 秒、2 分钟、10 分钟。暂时网络/存储故障可重试；格式/hash/额度/结构超限直接 failed。失败块不影响其他块；终止后的人工重试须明确重置该单元的预算。
 - 超时先终止并等待本地解码子进程退出，或取消并等待 ASR 请求返回；不得让旧本地执行仍能回写时启动重试。远端已收到请求仍可能继续计费，不承诺 ASR exactly-once。
@@ -135,11 +133,11 @@ raw 仍为 uint16 little-endian 长度 + Opus payload，限定 16 kHz、mono、2
 - 默认 raw≤8 MiB、单原件≤1 小时、整条已收录音≤12 小时；process_config_json≤64 KiB、chunks_json≤8 MiB、汇总文字≤8 MiB、result_json≤16 MiB、单次导出≤64 MiB。实际处理先检查限额，超限明确失败，不静默截断。
 - 原件解码默认超时 10 分钟，单块 ASR 超时 120 秒。ASR adapter 登记实际时长/字节上限；启动时检查核心长度加双侧上下文及 WAV 头不超限，未配置 ASR 时跳过该能力检查。
 
-raw 按数据保留策略保存；核心 WAV 是播放产物。接收预留 raw 声明大小，解码按时长上限预留核心 WAV 和一个临时识别输入；所有原件、派生/临时/待清理文件计入用户额度，同物理硬链接只计一次，另保留至少 256 MiB 空闲空间。数据根目录和备份设置见主文档。
+raw 按数据保留策略保存；核心 WAV 是播放产物。原件导入检查实际大小与处理额度，解码按时长上限预留核心 WAV 和一个临时识别输入；所有原件、派生/临时/待清理文件计入用户额度，同物理硬链接只计一次，另保留至少 256 MiB 空闲空间。数据根目录和备份设置见主文档。
 
-孤儿清理只在启动取得独占锁、完成状态恢复之后、开放上传/媒体 API 和启动新处理之前执行。分批扫描 derived/临时目录，保留 segment 索引和已发布快照引用的文件，删除无引用文件并 fsync。运行期间不做孤儿删除，替换后的旧 WAV 留到下次启动清理，期间仍计入用户额度；因此不需要下载引用追踪、retained_files_json 或在线删除互斥。ASR 自己的临时输入可在本次请求结束后删除，不属于孤儿扫描。
+孤儿清理只在启动取得独占锁、完成状态恢复之后、开放 HTTP API、启动原件导入和新处理之前执行。分批扫描 derived/临时目录，保留 segment 索引和已发布快照引用的文件，删除无引用文件并 fsync。运行期间不做孤儿删除，替换后的旧 WAV 留到下次启动清理，期间仍计入用户额度；因此不需要下载引用追踪、retained_files_json 或在线删除互斥。ASR 自己的临时输入可在本次请求结束后删除，不属于孤儿扫描。
 
-raw 接收目录不参与上述清理；原件由 registry/接收器的显式保留规则管理，不能因为尚未业务投影就删除。默认保留原件，不自动删除。
+raw 目录不参与上述清理；原件由既有来源管理组件的显式保留规则管理，不能因为尚未业务投影就删除。默认保留原件，不自动删除。
 
 <a id="transcript"></a>
 
@@ -173,7 +171,7 @@ speaker 只在本次调用内有效，保存为 `segment_id-cN:局部编号`；�
   "revision": 7,
   // INTEGER；冻结导出格式，保证同一快照 GET/HEAD 字节一致。
   "export_format_version": 2,
-  // ENUM；快照捕获的协议完整性。
+  // ENUM；快照捕获的原件完整性。
   "integrity": "unknown",
   // BOOLEAN；有缺号、待处理、失败块或尚未确认录完。
   "partial": true,
@@ -208,13 +206,13 @@ speaker 只在本次调用内有效，保存为 `segment_id-cN:局部编号`；�
 
 ### 5.2 汇总只做一次 SQLite 原子更新
 
-工作者从同一读事务取得 content_revision 与所有 segment 结果，在事务外构建有界快照，无 ASR 或文件 I/O。提交时 `UPDATE recordings ... WHERE id=? AND content_revision=?`：成功则令 result_revision 等于捕获版本、替换 result_json 并清 merge_error_json；上传或完整性更新抢先发生则丢弃候选，放回调度后再汇总，不在当前循环无限重试。只有唯一工作者修改块结果，所有其他可见写入也必须递增 content_revision，所以不会漏掉新内容。
+工作者从同一读事务取得 content_revision 与所有 segment 结果，在事务外构建有界快照，无 ASR 或文件 I/O。提交时 `UPDATE recordings ... WHERE id=? AND content_revision=?`：成功则令 result_revision 等于捕获版本、替换 result_json 并清 merge_error_json；原件导入或完整性更新抢先发生则丢弃候选，放回调度后再汇总，不在当前循环无限重试。只有唯一工作者修改块结果，所有其他可见写入也必须递增 content_revision，所以不会漏掉新内容。
 
 当前内容版本大于结果版本时调度汇总；每次工作单元之后优先尝试一次。临时数据库错误以进程内退避重试，重启后仍可由版本差发现；永久结构/体积错误保存 merge_error_json 的版本与原因，同一版本不忙循环重试，维护修正或内容变化后再尝试。旧已提交快照一直保持可读，失败不触发 ASR 重跑。
 
 ### 5.3 中断与修复
 
-- 原件完整但来源/业务标记不全：按身份和 hash 对账，幂等补导入。
+- ready 来源尚未导入或业务标记不全：按可信元数据和 hash 对账，幂等补导入；接入侧的未就绪原件不由业务模块修复。
 - WAV 已落盘但索引未提交：重启重解码该份 raw，生成新不可变路径；旧孤儿由分批扫描清理。不再保存 prepared 发布候选。
 - ASR 调用中断：按持久次数重试当前块，其他成功块保持不变；退避状态可继续其他块。
 - 块成功但快照尚未提交：版本差触发重汇总。没有 VTT 文件双写，也没有“字幕落盘但 JSON 未提交”的中间态。
@@ -252,19 +250,18 @@ VTT 固定 UTF-8、无 BOM、LF、HH:MM:SS.mmm，正文先转义 &、<、>，去
 ![录音访问校验、加密数据卷、ASR 与独立备份的职责](assets/diagrams/07-storage-security.svg)
 
 - 用户隔离：所有列表、GET/HEAD/Range、JSON/VTT/Markdown 读取与后台处理先限定 owner；原件 owner 来自验证通过的 Clip 绑定
-- 上传凭证：OPEN、续传和 COMPLETE 检查有效绑定/凭证；撤销后拒绝继续写入，历史归属保持原值
 - 文件路径：raw 沿用服务端 object_id，派生路径使用服务端 segment_id/chunk_id/发布 UUID；历史 owner 不直接拼进路径。以存储根目录句柄逐级 openat/O_NOFOLLOW，拒绝符号链接和非普通文件；路径检查与打开使用同一目录链
 - 元数据写入：使用参数化 SQL，owner 由会话/来源确定；按录音、owner、版本复核关联后提交
 - 存储访问：数据位于 Web 静态资源之外，由专用服务账号访问；目录 0700，音频、SQLite/WAL/SHM、配置和备份 0600
-- 传输：Web 使用 HTTPS，Clip 使用现有认证 DTLS；证书和设备凭证由服务端受控配置
+- Web 与远程 ASR 访问使用 HTTPS；原件接入仅消费可信已就绪来源
 - 静态数据：数据卷与独立备份启用存储层加密；卷解锁和备份密钥由部署环境管理，密钥与备份分开授权
 - 文件完整性：发布、ASR 输入和恢复核对完整 SHA-256；下载使用同一已打开文件句柄检查类型与 size，异常停止读取并标记产物不可用
-- 资源限制：接收检查实际字节数、用户额度和空间；解码限制输出/时长/超时；媒体 GET/HEAD 按 owner 最多 4 个活动请求，超额返回 429 与 Retry-After: 1
+- 资源限制：导入检查实际字节数、用户额度和空间；解码限制输出/时长/超时；媒体 GET/HEAD 按 owner 最多 4 个活动请求，超额返回 429 与 Retry-After: 1
 - 解码执行：以服务账号用参数数组启动受控解码器，输入输出来自验证后的文件标识；部署环境限制 CPU/内存，超时结束子进程及其临时输出
 - ASR 出站：仅调用服务端配置的 HTTPS 或明确登记的本机端点；禁用重定向，校验 TLS 证书，出站网络只放行配置目标；发送已校验 WAV，凭证由服务器侧加载
 - 文本输出：JSON 保留纯文本，Web 用 textContent；VTT 转义，Markdown 用固定模板并转义原文中的 HTML/Markdown 控制字符后作为附件返回；响应设置 nosniff 和 private,no-store
 - 日志：记录 request_id、recording_id/segment_id/chunk_id、阶段、错误码和必要计量；认证凭证与录音/识别正文只用于业务处理
-- 清理：Wi-Fi 密码、Google token 用毕释放引用，ASR 凭证仅服务端持有；临时音频在处理结束后清理，由唯一后台工作者清理无索引/快照/下载引用的残留；原件与 WAV 按第 3 节保留/清理
+- 清理：Wi-Fi 密码、Google token 用毕释放引用，ASR 凭证仅服务端持有；临时音频在处理结束后清理，仅在启动开放服务前由持锁工作者清理无索引/快照引用的派生残留；原件与 WAV 按第 3 节保留/清理
 
 ASR 配置须登记供应方保留期限和删除方式；选择不留存/不用于训练的处理设置。服务端可清理本地副本，供应方数据按其已核实的处理约定执行。
 
@@ -272,8 +269,8 @@ ASR 配置须登记供应方保留期限和删除方式；选择不留存/不用
 
 ### 7.1 一致性备份与恢复
 
-- 默认备份：每日关闭接收入口，停止后台领取、终止未结束子进程并关闭数据库，生成加密快照后重启；待复制完成前保持停写。保留最近 7 个验证成功快照，周期与份数可配置
-- 快照内容：两个数据库及仍存在的 WAL、raw/身份元数据/检查点、核心 WAV、分块结果和录音快照、配置和恢复所需凭证；SHM 在恢复时重建
+- 默认备份：每日暂停原件导入并通过运维暂停既有来源组件写入，停止后台处理、终止未结束子进程并关闭数据库，生成加密快照后重启；待复制完成前保持停写。保留最近 7 个验证成功快照，周期与份数可配置
+- 快照内容：两个数据库及仍存在的 WAL、raw/来源元数据及既有接入组件的恢复数据、核心 WAV、分块结果和录音快照、配置和恢复所需凭证；SHM 在恢复时重建
 - 独立副本：备份置于独立存储介质，恢复授权与线上读写分开；备份清单记录时间、数据库版本、文件 size/hash
 - 验证：在临时验证副本校验数据库完整性、外键、原件数量和文件 size/hash；备份包保持只读，验证成功后才替换旧快照
 - 恢复：在隔离环境解密并校验清单，执行 integrity_check/foreign_key_check；重做来源投影、未提交解码与未更新快照；全部通过再切换数据卷，失败保留原卷。历史录音 owner 保持原值

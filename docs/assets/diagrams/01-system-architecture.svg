@@ -3,7 +3,7 @@
 <rect width="1280" height="100%" fill="white"/>
 <g font-family="PingFang SC,Microsoft YaHei,Noto Sans CJK SC,Arial,sans-serif">
 <text x="40" y="55" font-size="30" font-weight="600" fill="#17283f">系统由哪些部分组成，各自负责什么</text>
-<text x="40" y="88" font-size="17" font-weight="400" fill="#607088">Clip 上传录音；Web 配置设备并查看结果；Server 校验归属、保存文件并处理录音。</text>
+<text x="40" y="88" font-size="17" font-weight="400" fill="#607088">本文从原件与来源元数据已就绪开始，覆盖用户、设备、业务导入、音频处理和 Web 读取。</text>
 <line x1="40" y1="112" x2="1240" y2="112" stroke="#d8e0ea" stroke-width="1.5"/>
 <rect x="40" y="150" width="280" height="210" rx="8" fill="white" stroke="#d8e0ea"/>
 <rect x="40" y="150" width="5" height="210" rx="0" fill="#245cca" stroke="#245cca"/>
@@ -14,11 +14,11 @@
 <text x="62" y="304" font-size="18" font-weight="400" fill="#607088">按块播放音频并下载字幕</text>
 <rect x="347" y="150" width="280" height="210" rx="8" fill="white" stroke="#d8e0ea"/>
 <rect x="347" y="150" width="5" height="210" rx="0" fill="#087f74" stroke="#087f74"/>
-<text x="369" y="184" font-size="21" font-weight="600" fill="#17283f">ReSpeaker Clip</text>
-<text x="369" y="220" font-size="18" font-weight="400" fill="#607088">采集声音并保存 raw 片段</text>
-<text x="369" y="248" font-size="18" font-weight="400" fill="#607088">扫描附近 Wi-Fi 并连接网络</text>
-<text x="369" y="276" font-size="18" font-weight="400" fill="#607088">通过 DTLS 9528 直传原件</text>
-<text x="369" y="304" font-size="18" font-weight="400" fill="#607088">COMPLETE：本次上传已完成</text>
+<text x="369" y="184" font-size="21" font-weight="600" fill="#17283f">已就绪原件来源</text>
+<text x="369" y="220" font-size="18" font-weight="400" fill="#607088">由既有接入组件提供</text>
+<text x="369" y="248" font-size="18" font-weight="400" fill="#607088">raw 文件已经可靠保存</text>
+<text x="369" y="276" font-size="18" font-weight="400" fill="#607088">来源包含归属、会话与段号</text>
+<text x="369" y="304" font-size="18" font-weight="400" fill="#607088">设备传输过程不在本文展开</text>
 <rect x="654" y="150" width="280" height="210" rx="8" fill="white" stroke="#d8e0ea"/>
 <rect x="654" y="150" width="5" height="210" rx="0" fill="#245cca" stroke="#245cca"/>
 <text x="676" y="184" font-size="21" font-weight="600" fill="#17283f">Google 身份服务</text>
@@ -34,13 +34,13 @@
 <text x="983" y="304" font-size="18" font-weight="400" fill="#607088">服务地址由 Server 配置</text>
 <rect x="40" y="405" width="1200" height="650" rx="8" fill="#f3f6fa" stroke="#d8e0ea"/>
 <text x="62" y="445" font-size="25" font-weight="600" fill="#17283f">Server · Python FastAPI 单进程</text>
-<text x="62" y="476" font-size="17" font-weight="400" fill="#607088">接入：HTTPS 9529 提供 Web 与业务 API；HTTPS 9528 保留兼容接口；UDP 9528 接收认证 DTLS 上传。</text>
+<text x="62" y="476" font-size="17" font-weight="400" fill="#607088">HTTP：用户、会话、设备、录音、播放与导出；原件导入仅消费既有 ready 来源。</text>
 <rect x="60" y="502" width="360" height="195" rx="8" fill="white" stroke="#d8e0ea"/>
 <rect x="60" y="502" width="5" height="195" rx="0" fill="#245cca" stroke="#245cca"/>
-<text x="82" y="536" font-size="21" font-weight="600" fill="#17283f">认证与会话</text>
-<text x="82" y="572" font-size="18" font-weight="400" fill="#607088">验证 Google 回调并找到本站账号</text>
-<text x="82" y="600" font-size="18" font-weight="400" fill="#607088">user_id：确定当前请求用户</text>
-<text x="82" y="628" font-size="18" font-weight="400" fill="#607088">检查账号状态与会话有效期</text>
+<text x="82" y="536" font-size="21" font-weight="600" fill="#17283f">用户与会话</text>
+<text x="82" y="572" font-size="18" font-weight="400" fill="#607088">Google 登录并建立本站会话</text>
+<text x="82" y="600" font-size="18" font-weight="400" fill="#607088">users/me：读取本人资料</text>
+<text x="82" y="628" font-size="18" font-weight="400" fill="#607088">仅允许修改本人的显示名称</text>
 <text x="82" y="656" font-size="18" font-weight="400" fill="#607088">CSRF：校验写请求的防伪标记</text>
 <text x="82" y="684" font-size="18" font-weight="400" fill="#607088">会话和登录临时状态只保存在内存</text>
 <rect x="460" y="502" width="360" height="195" rx="8" fill="white" stroke="#d8e0ea"/>
@@ -52,14 +52,14 @@
 <text x="482" y="656" font-size="18" font-weight="400" fill="#607088">移除设备时撤销上传凭证</text>
 <rect x="860" y="502" width="360" height="195" rx="8" fill="white" stroke="#d8e0ea"/>
 <rect x="860" y="502" width="5" height="195" rx="0" fill="#087f74" stroke="#087f74"/>
-<text x="882" y="536" font-size="21" font-weight="600" fill="#17283f">原件接收</text>
-<text x="882" y="572" font-size="18" font-weight="400" fill="#607088">按设备凭证确定原件所属用户</text>
-<text x="882" y="600" font-size="18" font-weight="400" fill="#607088">保存 raw 文件和来源身份记录</text>
-<text x="882" y="628" font-size="18" font-weight="400" fill="#607088">registry.sources 记录接收状态</text>
-<text x="882" y="656" font-size="18" font-weight="400" fill="#607088">持久成功后返回 COMPLETE</text>
+<text x="882" y="536" font-size="21" font-weight="600" fill="#17283f">已就绪原件校验</text>
+<text x="882" y="572" font-size="18" font-weight="400" fill="#607088">读取 registry.sources 的 ready 来源</text>
+<text x="882" y="600" font-size="18" font-weight="400" fill="#607088">owner 与身份来自可信来源记录</text>
+<text x="882" y="628" font-size="18" font-weight="400" fill="#607088">校验原件存在、实际大小与 hash</text>
+<text x="882" y="656" font-size="18" font-weight="400" fill="#607088">检查处理限额，异常来源暂不导入</text>
 <rect x="60" y="710" width="360" height="185" rx="8" fill="white" stroke="#d8e0ea"/>
 <rect x="60" y="710" width="5" height="185" rx="0" fill="#087f74" stroke="#087f74"/>
-<text x="82" y="744" font-size="21" font-weight="600" fill="#17283f">来源导入与录音聚合</text>
+<text x="82" y="744" font-size="21" font-weight="600" fill="#17283f">原件导入与录音聚合</text>
 <text x="82" y="780" font-size="18" font-weight="400" fill="#607088">把来源记录导入业务 SQLite</text>
 <text x="82" y="808" font-size="18" font-weight="400" fill="#607088">按绑定与录音会话归并片段</text>
 <text x="82" y="836" font-size="18" font-weight="400" fill="#607088">用来源唯一键避免重复导入</text>
