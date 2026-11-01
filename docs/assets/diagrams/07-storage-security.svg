@@ -10,7 +10,7 @@
 <text x="62" y="184" font-size="21" font-weight="600" fill="#17283f">浏览器 · 发起读取请求</text>
 <text x="62" y="220" font-size="18" font-weight="400" fill="#607088">Cookie：携带本站会话身份</text>
 <text x="62" y="248" font-size="18" font-weight="400" fill="#607088">录音 ID：指定要读取的录音</text>
-<text x="62" y="276" font-size="18" font-weight="400" fill="#607088">revision：固定需要读取的音频版本</text>
+<text x="62" y="276" font-size="18" font-weight="400" fill="#607088">revision：固定音频清单和字幕快照</text>
 <text x="62" y="304" font-size="18" font-weight="400" fill="#607088">通过 HTTPS 请求音频和文字</text>
 <text x="62" y="332" font-size="18" font-weight="400" fill="#607088">退出时清理播放状态与本地会话状态</text>
 <rect x="450" y="150" width="380" height="255" rx="8" fill="white" stroke="#d8e0ea"/>
@@ -33,7 +33,7 @@
 <rect x="40" y="450" width="5" height="360" rx="0" fill="#087f74" stroke="#087f74"/>
 <text x="62" y="484" font-size="21" font-weight="600" fill="#17283f">私有加密数据卷 · 保存业务数据</text>
 <text x="62" y="520" font-size="18" font-weight="400" fill="#607088">raw：保留设备上传原件</text>
-<text x="62" y="548" font-size="18" font-weight="400" fill="#607088">WAV：保存播放与识别用音频</text>
+<text x="62" y="548" font-size="18" font-weight="400" fill="#607088">核心 WAV：保存无重叠播放块</text>
 <text x="62" y="576" font-size="18" font-weight="400" fill="#607088">VTT：保存与原文对应的字幕</text>
 <text x="62" y="604" font-size="18" font-weight="400" fill="#607088">SQLite：保存归属、版本及原文 JSON</text>
 <text x="62" y="632" font-size="18" font-weight="400" fill="#607088">由专用服务账号访问存储内容</text>

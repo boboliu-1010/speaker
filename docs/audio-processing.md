@@ -1,648 +1,349 @@
-# 音频存储、双写与 VTT 开发设计
+# 分块音频、转写与 VTT 开发设计
 
-v1 · 2026-10-30 · [Server / Web 主文档](../README.md)
+v2 · 2026-11-01 · [Server / Web 主文档](../README.md)
 
 ## 关键点
 
-1. 原件先完成文件和来源索引持久化，再给设备 COMPLETE；解码与 ASR 在后台独立处理。
-2. WAV/VTT 先可靠落盘，再提交 jobs 和录音指针；转写 JSON 与 VTT 指针在同一事务提交。
-3. 每个文件关联 owner、recording_id 和版本；通过鉴权接口读取，存储卷与独立备份采用加密保护。
-4. raw 原件与当前 WAV 分别保留，VTT/Markdown 由同组原文生成；损坏或中断按已提交状态恢复。
+1. 不先合成整条录音的大 WAV。每份 raw 原件独立流式解码，输出有界的播放块；ASR 按块识别，整条录音只合并时间轴与字幕。
+2. 业务库仅保留 accounts、recordings、recording_segments 三张表。删除独立 jobs 表；处理进度、租约、失败重试与分块结果放在原始片段行内，汇总发布状态放在录音行内。
+3. 已完成块持续保存，ASR 失败只重试对应块；后续新片段不会使先前成功块失效。WAV 播放与转写分别推进。
+4. 原件收完整即确认设备；块结果与汇总结果分层提交，可恢复中断。部分结果明确标记 partial，不冒充整条录音已完成。
 
-[收件](#ingest) · [字段](#tables) · [存储](#storage) · [转写](#transcript) · [双写恢复](#publication) · [接口](#media-api) · [安全](#security)
+这是设计替换稿，尚未实现或实机验收。采用前述分块方案；以下默认时长、上下文和限额属于工程设计值，须按实际 ASR 能力配置和验证。
+
+[收件](#ingest) · [字段](#tables) · [存储与分块](#storage) · [转写](#transcript) · [发布恢复](#publication) · [接口](#media-api) · [安全](#security)
 
 <a id="ingest"></a>
 
 ## 1. 原件收件与录音聚合
 
-本文涉及两个独立的 SQLite 数据库：**设备与上传 SQLite（registry）**保存设备绑定、上传凭证和来源记录；**业务 SQLite**保存用户、录音、片段、任务及转写 JSON。下文 `registry.sources` 表示前者中的 `sources` 表；“业务库”指后者。原始音频文件单独存放在私有文件目录。
+两个独立 SQLite 数据库分别是：设备与上传 SQLite（registry）保存绑定、凭证与来源；业务 SQLite 保存用户、录音、原始片段及行内分块结果。raw 文件保存在私有目录，`registry.sources` 是来源表，不是另一种存储服务。
 
-![原始文件接收记录：字段注释与业务导入步骤](assets/diagrams/04-raw-ingest-outbox.svg)
+![原始文件接收记录与导入](assets/diagrams/04-raw-ingest-outbox.svg)
 
 ```mermaid
-sequenceDiagram
-    participant C as Clip
-    participant S as Server
-    participant F as 私有文件存储
-    participant R as 来源库 registry
-    participant B as 业务 SQLite
-    C->>S: 请求上传，声明片段身份、字节数和摘要
-    S->>R: 校验绑定与用户归属，保存 receiving 来源
-    Note over C,S: 凭证、身份或额度校验失败时立即拒绝
-    loop 分块上传，直到收齐原件
-        C->>S: 上传片段数据
-        S->>F: 写 raw 并 fsync，再持久化检查点
-        F-->>S: 返回已持久偏移
-        S-->>C: ACK 已持久偏移
-    end
-    S->>F: 校验完整字节数与 SHA-256
-    alt 原件校验通过
-        S->>F: rename 原件，持久化目录和身份元数据
-        S->>R: 提交来源 state=ready
-        R-->>S: 提交成功
-        S-->>C: COMPLETE，设备结束本次上传
-        Note over S,B: 后台导入业务库，不阻塞设备确认
-        S->>B: 幂等保存录音与 ready 片段，首次导入递增 input_revision
-        alt 业务事务提交成功
-            B-->>S: 返回导入结果
-            S->>R: 更新业务导入完成时间 projected_at
-            opt 片段连续且静默满 10 分钟
-                S->>B: 固定输入快照，建立唯一 decode 任务
-            end
-        else 业务提交或完成标记失败
-            Note over S,B: 保留 ready 来源，后台幂等重放，不重复增加版本
-        end
-    else 原件校验失败
-        S-->>C: 按接收协议报错，仅确认已持久偏移
-    end
+flowchart TD
+    A["Clip 上传 raw segment"] --> B["凭证 / owner / 额度校验"]
+    B --> C["raw + 身份元数据可靠落盘"]
+    C --> D["registry.sources 提交 ready"]
+    D --> E["向 Clip 返回 COMPLETE"]
+    D --> F["幂等导入 recording_segments"]
+    F --> G["独立流式解码，输出多个短 WAV"]
+    G --> H["每块 ASR，成功结果立即入库"]
+    H --> I["recordings 汇总时间轴、文字与 VTT"]
+    G --> J["Web 按分块清单播放"]
 ```
 
-- 原件格式：uint16 little-endian 包长度 + Opus payload；校验包边界、size/hash 与媒体 profile
-- 持久确认：data fsync、持久检查点、完整 hash、rename/目录 fsync；raw、身份元数据及 registry.sources ready 持久后返回 COMPLETE
-- 来源归属：从验证通过的 Clip binding 取得 owner；旧来源 owner 保持原值
-- 聚合键：source_kind + source_namespace + binding_epoch + source_session；source_kind 固定 clip_direct；Clip 的 source_namespace 使用 binding_id
-- 输入版本：原始片段首次 ready 导入时 input_revision 加 1；重复来源保持版本
-- 处理触发：片段从 1 开始连续且静默 10 分钟后处理当前已收内容；缺号时等待补齐
-- 完整性：现有协议缺少整段闭合信息时保持 unknown；确认完整须有协议证据
-
-业务投影使用一个短事务：按 source_namespace/source_id 查询片段；已有 ready 且 owner、recording_id、segment_no、hash/size 全部一致则幂等返回，冲突报 source_identity_conflict；首次 ready 同时保存原件元数据、imported_at 并增加录音版本。business 提交后再更新 registry.sources.projected_at。
-
-启动按每批 500 条核对全部 ready 来源，检查 raw 存在和 size/hash；来源时间 created 从既有秒值转为 UTC 毫秒。receiving 保存上传状态，校验完成后创建处理输入。
+- 来源聚合键为 source_kind + source_namespace + binding_epoch + source_session；source_kind 固定 clip_direct，source_namespace 为绑定 ID；原件 segment_no 从 1 开始。
+- receiving 的持久偏移才可 ACK；原件 size/hash 正确、文件和目录 fsync、身份元数据及来源 ready 均持久化后才 COMPLETE。解码或 ASR 失败不撤销已完成收件。
+- 业务短事务按 source_namespace/source_id 去重；已存在且 owner、录音、段号、size/hash 一致时不重复导入，不重复增加 input_revision，冲突返回 source_identity_conflict。
+- 业务提交后才更新 registry.sources.projected_at；启动每批 500 条对账全部 ready 来源，不只依赖此标记。来源 created 由旧 Unix 秒转为 UTC 毫秒。
+- ready 原件可立即处理，无须等待整条录音静默 10 分钟，也不因缺少前段而停止后段本地解码/识别。缺号只阻止未知全局时间轴的发布。
+- integrity 仍是 unknown / gap / confirmed_complete。静默只能表明暂时无新上传，不能证明录音完整；confirmed_complete 必须有协议闭合证据。
 
 <a id="tables"></a>
 
-## 2. 处理对象与数据表
+## 2. 三张业务表与处理归属
 
-完整 DDL 见[主文档](../README.md#business-sql)。以下 jsonc 展示三张表的行对象，每个字段注明 SQL 类型、约束和用途；注释仅用于文档。时间为 UTC Unix 毫秒，时长为毫秒，size 为字节数。
+完整 DDL 见[主文档](../README.md#business-sql)。保留 accounts；下面展示 recordings 和 recording_segments 新增或变化的字段。SQL JSON 字段均以 TEXT 序列化，以下用 jsonc 展开，每个字段注明含义；时间为 UTC 毫秒，音频位置以 16 kHz PCM 样本数为准。
 
-### 2.1 recordings
-
-```jsonc
-{
-  // TEXT；主键；必填。录音 ID。
-  "id": "demo-recording",
-  // TEXT；必填；外键。所属用户 ID，引用 accounts.user_id。
-  "owner": "demo-user",
-  // TEXT；必填。固定 clip_direct；Clip 经 Wi-Fi/DTLS 直传。
-  "source_kind": "clip_direct",
-  // TEXT；必填。等于 registry.bindings.id；片段与录音使用同一命名空间。
-  "source_namespace": "demo-binding",
-  // INTEGER；必填；>0。Clip 绑定代次，正整数。
-  "binding_epoch": 1,
-  // TEXT；必填。来源的录音 session；与来源/绑定代次一起确定一条录音。
-  "source_session": "demo-session",
-  // INTEGER；可空。录音时间，可空；时间不可信时按 received_at 查询。
-  "recorded_at": null,
-  // TEXT；必填。device_unverified / server_received / client_confirmed。
-  "time_source": "server_received",
-  // INTEGER；必填。首次收件时间。
-  "received_at": 1793318400000,
-  // INTEGER；必填。最近片段收件时间。
-  "last_received_at": 1793318400000,
-  // TEXT；必填；默认 'unknown'。unknown / gap / confirmed_complete；依协议证据更新。
-  "integrity": "unknown",
-  // INTEGER；必填；默认 0；≥0。已收输入版本；新 ready 片段首次导入时加 1。
-  "input_revision": 1,
-  // INTEGER；>0 且 ≤ input_revision。当前 WAV 对应的输入版本，可空。
-  "audio_revision": 1,
-  // INTEGER；>0 且 ≤ input_revision。当前转写对应的输入版本，可空；ready 时等于 audio_revision。
-  "transcript_revision": 1,
-  // TEXT；必填；默认 'pending'。当前输入的解码状态：pending / running / ready / failed。
-  "audio_state": "ready",
-  // TEXT；必填；默认 'pending'。not_configured / pending / running / ready / failed。
-  "transcript_state": "ready",
-  // TEXT；录音/owner/版本复合外键。当前 WAV 的 decode 任务，可空。
-  "wav_job_id": "demo-decode-job",
-  // TEXT；录音/owner/版本复合外键。当前 VTT 的 transcribe 任务，可空。
-  "vtt_job_id": "demo-transcribe-job",
-  // INTEGER；≥0。当前 WAV 时长，毫秒，可空。
-  "duration_ms": 5800,
-  // TEXT；合法 JSON v1；≤8 MiB。转写原文；数据库为序列化 JSON TEXT，此处展开展示。未识别时为 null；静音成功时 cues=[]。
-  "transcript_json": {
-    // integer；持久化结构版本。
-    "schema_version": 1,
-    // string；整数毫秒。
-    "time_unit": "ms",
-    // array；同一 WAV 的识别结果，字段规则见第 4 节。
-    "cues": [
-      {
-        // integer；连续编号，从 1 开始。
-        "cue_index": 1,
-        // integer；相对 WAV 的开始毫秒。
-        "start_ms": 0,
-        // integer；相对 WAV 的结束毫秒。
-        "end_ms": 2400,
-        // string|null；稳定匿名说话人标识。
-        "speaker": "A",
-        // string；识别原文。
-        "text": "我们确认一下今天的安排。"
-      },
-      {
-        // integer；连续编号。
-        "cue_index": 2,
-        // integer；相对 WAV 的开始毫秒。
-        "start_ms": 2400,
-        // integer；相对 WAV 的结束毫秒。
-        "end_ms": 5800,
-        // string|null；另一位说话人。
-        "speaker": "B",
-        // string；识别原文。
-        "text": "先检查设备，再核对录音文字。"
-      }
-    ]
-  },
-  // INTEGER；必填。录音状态或结果更新时间。
-  "updated_at": 1793318400000
-}
-```
-
-### 2.2 recording_segments
+### 2.1 recordings：整条录音及已发布汇总
 
 ```jsonc
 {
-  // TEXT；主键；必填。原始片段 ID。
-  "id": "demo-segment",
-  // TEXT；必填；与录音组成复合外键。所属用户；与 recording_id 对应的录音一致。
-  "owner": "demo-user",
-  // TEXT；必填；与 owner 组成复合外键。所属录音 ID。
-  "recording_id": "demo-recording",
-  // TEXT；必填。等于 registry.bindings.id；片段与录音使用同一命名空间。
-  "source_namespace": "demo-binding",
-  // TEXT；必填；与 source_namespace 组合唯一。来源索引 ID；与 source_namespace 组成幂等键。
-  "source_id": "demo-source",
-  // INTEGER；必填；>0；录音内唯一。录音内片段号，从 1 开始。
-  "segment_no": 1,
-  // TEXT；必填。receiving / ready。
-  "state": "ready",
-  // TEXT；唯一。原件相对路径，可空；ready 时必须存在。
-  "raw_relative_path": "clip/demo-binding/demo-object.bin",
-  // INTEGER；>0。原件字节数，可空；ready 时必须存在。
-  "size_bytes": 1024,
-  // TEXT；64 字符。原件的 SHA-256，可空；ready 时必须存在。
-  "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-  // INTEGER；必填。片段首次接收时间。
-  "received_at": 1793318400000,
-  // INTEGER；可空。首次导入业务库的时间，可空；ready 时填写，兼作来源收据。
-  "imported_at": 1793318400000
-}
-```
-
-### 2.3 jobs
-
-```jsonc
-{
-  // TEXT；主键；必填。任务 ID；一个任务对应一个 WAV 或 VTT 文件。
-  "id": "demo-decode-job",
-  // TEXT；必填；与录音组成复合外键。任务所属用户，与录音 owner 相同。
-  "owner": "demo-user",
-  // TEXT；必填；与 owner 组成复合外键。任务处理的录音 ID。
-  "recording_id": "demo-recording",
-  // INTEGER；必填；>0。任务对应的输入版本。
-  "input_revision": 1,
-  // TEXT；必填；与录音/版本组合唯一。decode / transcribe。
-  "kind": "decode",
-  // TEXT；必填。pending / running / retry_wait / succeeded / failed。
-  "state": "succeeded",
-  // INTEGER；必填；默认 0；0–4。已执行次数；0–4，包含首次执行与 3 次重试。
-  "attempt": 1,
-  // INTEGER；必填。允许领取的最早时间。
-  "run_after": 1793319000000,
-  // TEXT；可空。当前执行的随机标识，可空；running 时填写。
+  // TEXT 主键；owner、来源身份、时间和 integrity 沿用主文档。
+  "id": "recording-001",
+  // INTEGER；新 raw 原件首次导入时递增，表示输入集合变化。
+  "input_revision": 3,
+  // INTEGER；每次发布新音频清单/文字/VTT 时递增；不等于原件数量。
+  "result_revision": 5,
+  // INTEGER；当前结果快照所覆盖的输入版本，发布后不随新上传自动变化。
+  "published_input_revision": 3,
+  // INTEGER；样本数已知且从 segment_no=1 连续的前缀长度。
+  "timeline_prefix_no": 2,
+  // INTEGER；已发布连续前缀总时长；无时间轴时为 null。
+  "duration_ms": 120000,
+  // TEXT；pending / partial / ready / failed。只描述当前已收输入的音频进度。
+  "audio_state": "partial",
+  // TEXT；not_configured / pending / partial / ready / failed。
+  "transcript_state": "partial",
+  // TEXT(JSON)；已发布播放清单，结构见接口；不包含原件磁盘路径。
+  "audio_manifest_json": {"schema_version": 2, "items": []},
+  // TEXT(JSON)；唯一已发布整条文字来源。包含 cues、coverage 和完整性标记。
+  "transcript_json": {"schema_version": 2, "time_unit": "ms", "cues": [], "coverage": []},
+  // TEXT(JSON)|null；当前 VTT 的不可变路径、size/hash、格式版本、ready/missing 状态。
+  "vtt_file_json": null,
+  // INTEGER；存在未汇总的输入或块状态变化时为 1，发布后按 CAS 条件清零。
+  "merge_dirty": 1,
+  // TEXT；idle / pending / running / retry_wait / failed；仅用于汇总，不调用 ASR。
+  "merge_state": "pending",
+  // INTEGER；当前汇总输入快照的执行次数，最多 4 次。
+  "merge_attempt": 0,
+  // INTEGER；下次允许汇总的时间；新块会重新标记 dirty。
+  "merge_run_after": 1793491200000,
+  // TEXT|INTEGER|null；汇总执行租约；running 时必须存在。
   "lease_token": null,
-  // INTEGER；可空。当前执行的到期时间，可空；running 时填写。
   "lease_until": null,
-  // TEXT；必填；合法 JSON。固定输入快照；数据库为序列化 JSON TEXT，此处展开展示；当前例子为 decode，transcribe 与修复附加值见 2.4。
-  "input_json": {
-    // integer；输入快照结构版本，固定 1。
-    "schema_version": 1,
-    // array；按 segment_no 升序，所有片段须属于同一 owner/recording_id。
-    "segments": [{
-      // string；recording_segments.id，运行时从索引取得路径。
-      "segment_id": "demo-segment",
-      // integer >0；录音内片段号，从 1 连续。
-      "segment_no": 1,
-      // integer >0；原件预期字节数。
-      "size_bytes": 1024,
-      // string；64 位小写十六进制 SHA-256。
-      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-    }],
-    // object；固定实际解码参数，普通重试保持不变。
-    "decoder": {
-      // string；可复现的解码器构建版本，部署时填写实际版本。
-      "version": "example-decoder-build",
-      // string；已验证固件音频格式，当前为 16 kHz/mono/20 ms。
-      "raw_profile": "clip-16k-mono-20ms-v1",
-      // integer；输出采样率 Hz。
-      "sample_rate": 16000,
-      // integer；输出声道数。
-      "channels": 1,
-      // string；PCM16 little-endian。
-      "sample_format": "s16le",
-      // integer；固定 WAV 头与编码格式版本。
-      "wav_format_version": 1
-    }
-  },
-  // TEXT；必填；默认 none。none / prepared / ready / missing / abandoned。
-  "publication_state": "ready",
-  // TEXT；唯一。临时产物相对路径，可空；prepared 时填写。
-  "tmp_relative_path": null,
-  // TEXT；唯一。最终文件相对路径，可空；prepared/ready 时填写。
-  "final_relative_path": "derived/demo-decode-job/demo-publication.wav",
-  // INTEGER；>0。最终产物字节数，可空；ready 时填写。
-  "size_bytes": 185644,
-  // TEXT；64 字符。最终产物 SHA-256，可空；ready 时填写。
-  "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-  // INTEGER；≥0。WAV 的 PCM 样本数，可空。
-  "sample_count": 92800,
-  // TEXT；可空。固定错误码，可空；记录失败原因。
+  // TEXT|null；汇总失败原因；分块失败在 segment/chunk 内保存。
+  "merge_error_code": null,
+  // TEXT(JSON)|null；待发布快照及 VTT 元数据，供落盘后补提交，不重新识别。
+  "pending_publication_json": null,
+  // TEXT(JSON)；替代后待清理文件，下载引用释放且删除完成才移除。
+  "retained_files_json": []
+}
+```
+
+`result_revision` 替代旧 audio_revision/transcript_revision。播放清单、汇总 JSON 和 VTT 共用一个结果快照版本，ASR 进度不再依赖整条 WAV。input_revision 只统计原件变化，块识别完成不增加它。
+
+### 2.2 recording_segments：一份原件及其分块处理
+
+一行始终对应一份 raw 原件。chunk 是该原件内部的计算块，保存在行内 JSON 数组中，不增加 chunk 表或 jobs 表。数组按 index 有序，单进程逐项处理；这是减少表数量的取舍，不以此支持大量并发写入。
+
+```jsonc
+{
+  // TEXT；原件 ID，owner/recording_id/source_namespace/source_id 等仍保留。
+  "id": "segment-001",
+  // INTEGER；录音内原件序号，不能当作 chunk 序号。
+  "segment_no": 1,
+  // TEXT；receiving / ready；只表示 raw 是否收到，与转写进度分开。
+  "state": "ready",
+  // TEXT；原件路径，size_bytes/sha256 保留原件含义，不挪作 WAV 元数据。
+  "raw_relative_path": "raw/object-001.bin",
+  // INTEGER；原件解码配置代次，默认 1；主动换模型/切块规则时显式增加。
+  "process_generation": 1,
+  // TEXT(JSON)|null；冻结解码器、模型、语言、切块/上下文及序列化版本，不含凭证。
+  "process_config_json": {"chunk_seconds": 60, "context_seconds": 1, "sample_rate": 16000, "decoder_version": "example-build", "asr_config_version": "example-v1", "vtt_format_version": 2},
+  // TEXT(JSON)|null；主动重处理前的完整旧代配置、样本数和 chunks；新代未全成前仍用于汇总。
+  "previous_generation_json": null,
+  // INTEGER|null；完整扫描原件后得到的准确 PCM 样本总数。
+  "sample_count": 1920000,
+  // TEXT；pending / running / retry_wait / ready / failed。
+  "decode_state": "ready",
+  // TEXT；not_configured / pending / partial / running / retry_wait / ready / failed。
+  "transcript_state": "partial",
+  // TEXT|null；当前领取的工作阶段：decode / transcribe / repair。
+  "work_stage": null,
+  // INTEGER|null；正在识别或修复的块号；解码扫描时可空。
+  "work_chunk_index": null,
+  // INTEGER；解码/修复尝试次数；ASR 时镜像所领取块的 asr_attempt。
+  "attempt": 1,
+  // INTEGER；重试最早时间；60 秒租约每 15 秒续期。
+  "run_after": 1793491200000,
+  // TEXT|INTEGER|null；同一行一次只允许一个执行者处理。
+  "lease_token": null,
+  "lease_until": null,
+  // TEXT|null；当前阶段/块失败原因；永久失败须保留。
   "error_code": null,
-  // INTEGER；必填。任务建立时间。
-  "created_at": 1793319000000,
-  // INTEGER；必填。任务或文件状态更新时间。
-  "updated_at": 1793319000000
+  // TEXT(JSON)；只含本原件的有界分块结果；每次成功提交一块。
+  "chunks_json": [{
+    // TEXT；由 segment_id / generation / index 确定的服务端块标识。
+    "id": "segment-001-g1-c0",
+    // INTEGER；原件内从 0 开始连续。
+    "index": 0,
+    // INTEGER；核心区间 [start_sample,end_sample)，无重叠，相对本原件。
+    "start_sample": 0,
+    "end_sample": 960000,
+    // OBJECT；无重叠的核心 WAV；播放只读取核心音频。
+    "wav": {
+      "state": "ready",
+      "relative_path": "derived/segment-001/g1/c0/publication.wav",
+      "size_bytes": 1920044,
+      "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    // TEXT；pending / running / retry_wait / ready / failed / not_configured。
+    "asr_state": "ready",
+    // INTEGER；本块 ASR 的执行次数，与其他块独立。
+    "asr_attempt": 1,
+    // INTEGER；本块下次识别时间；切换处理其他块后仍保留。
+    "asr_run_after": 1793491200000,
+    // ARRAY；替代后待清理文件描述，删除并 fsync 后才移除。
+    "retired_paths": [],
+    // ARRAY|null；相对原件的毫秒时间；null 未成功，[] 表示识别成功但静音。
+    "cues": [{"start_ms": 0, "end_ms": 2400, "speaker": "segment-001-g1-c0:A", "text": "确认一下今天的安排。"}],
+    // TEXT|null；本块最终失败码；成功块不能因别块失败而清空。
+    "asr_error_code": null
+  }],
+  // TEXT(JSON)|null；当前块 prepared 文件元数据或修复预期；不改变已发布结果。
+  "pending_artifact_json": null
 }
 ```
 
-- owner：片段、任务与录音 owner 相同
-- 来源唯一键：source_namespace + source_id
-- 录音内片段：recording_id + segment_no 唯一
-- 后台处理：recording_id + input_revision + kind 唯一；一个 running
-- 当前文件指针：复合 FK 保证录音/owner/版本；读写逻辑校验 WAV=decode、VTT=transcribe
-- registry.sources：保存原件身份和 ready/projected_at，业务投影后再更新标记
+数组内的 wav 元数据、cues 字段类型、枚举、范围与上限由应用层校验，DDL 只保证 JSON 外层和体积。每次修改 chunks_json 都在短事务内复核原件 hash、generation、阶段、块号及有效租约，并更新整行；不得以旧数组覆盖其他已提交结果。同一事务将 recordings.merge_dirty=1。
 
-### 2.4 jobs.input_json
+### 2.3 领取与状态规则
 
-decode 输入已在上一节 jobs.input_json 中展开。
-
-转写任务输入：
-
-```jsonc
-{
-  // integer；输入快照结构版本。
-  "schema_version": 1,
-  // object；已发布 WAV 快照。
-  "wav": {
-    // string；对应 decode jobs.id。
-    "job_id": "demo-decode-job",
-    // integer >0；WAV 字节数。
-    "size_bytes": 185644,
-    // string；WAV SHA-256，执行前复核。
-    "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-    // integer >=0；PCM 样本数。
-    "sample_count": 92800
-  },
-  // object；固定识别参数，凭证由服务端配置读取。
-  "asr": {
-    // string；端点/凭证配置引用及版本。
-    "config_version": "example-asr-config-v1",
-    // string；实际部署模型标识。
-    "model": "example-model",
-    // string；供应方约定的语言参数。
-    "language": "zh"
-  },
-  // integer；VTT 序列化版本，重建时沿用。
-  "vtt_format_version": 1
-}
-```
-
-已提交文件修复时，在原快照中附加 repair_expected：
-
-```jsonc
-{
-  // object；修复前已发布文件的预期元数据。
-  "repair_expected": {
-    // integer >0；原文件字节数。
-    "size_bytes": 185644,
-    // string；原文件 SHA-256，修复结果须一致。
-    "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-    // integer|null；WAV 原样本数；VTT 为 null。
-    "sample_count": 92800,
-    // string；原最终路径，修复后按下载引用清理。
-    "final_relative_path": "derived/demo-decode-job/demo-publication.wav"
-  }
-}
-```
-
-领取时再按 owner/recording_id 校验片段与任务，路径从索引取得。修复必须取得原版本解码器/格式，无法取得时记 repair_dependency_unavailable。
+- 一个后台调度循环顺序处理解码、单块 ASR、修复、录音汇总；每次 ASR 只发送一个核心块加上下文。每次单块 ASR 完成即归还调度；一次原件解码扫描受时长/超时上限约束，汇总与其他可执行原件在扫描结束后继续轮转。
+- `BEGIN IMMEDIATE` 领取目标行，保存随机 lease_token、lease_until、work_stage 和 work_chunk_index。外部调用、解码与文件 I/O 在事务外执行，发布用条件更新；租约过期者不得提交。
+- segment.attempt 保存当前 decode/repair 次数，ASR 时只是所领取块 asr_attempt 的镜像；每块的 asr_attempt/asr_run_after 是持久重试依据。最多 4 次，间隔 30 秒、2 分钟、10 分钟，切换其他块不清除失败块的次数和待执行时间。行 run_after 是下一可执行工作的最早时间，由扫描块状态重新计算；汇总使用 recordings.merge_attempt。
+- 暂时故障（超时、429、5xx、临时存储故障）进入 retry_wait；原件/hash/格式冲突、配额和结构超限直接 failed。失败块保留，调度可继续其他块；维护确认后才显式重试永久失败块。
+- 已成功块按原件 hash + generation + index + 固定配置复用；补传新 segment 不重跑旧块。主动改变配置是显式重处理，冻结旧已发布快照；重处理中的 segment 在新 generation 全部解码和识别完成前，仍引用该 segment 的旧已发布块，首次处理则允许 partial。新代开始前在同一事务将旧 generation、process_config_json、sample_count 和完整 chunks_json 保存到 previous_generation_json，再初始化当前代。汇总在新代未全成前选择 previous_generation_json；新代全部成功后以事务切换并触发汇总。旧代字段及文件保留到已发布/下载引用释放。只有显式重处理终止或成功后才允许再次更换 generation，不能丢失尚在使用的旧代。
+- 未配置 ASR 时 decode 继续，块与 segment 文字状态为 not_configured；配置完成后冻结 ASR 设置并补识别，不能覆盖已有成功块。更换已有识别配置须新 generation。
 
 <a id="storage"></a>
 <a id="decode"></a>
 
-## 3. 音频文件存储
+## 3. 流式解码与分块存储
 
-### 3.1 保存对象与读取条件
+### 3.1 原件与计算块
 
-- raw：原件文件；registry.sources 和 recording_segments 保存归属、size/hash、路径；完整校验后 sources/segment 为 ready；持续保存，用于重试和恢复
-- WAV：文件；decode jobs 保存最终路径、size/hash、sample_count；文件 ready 且被 recordings.wav_job_id 引用；每条录音一个当前版本；旧版本在引用释放后清理
-- 转写 JSON：recordings.transcript_json、transcript_revision；与当前音频同版本且文字 ready；整体替换为新版本原文
-- VTT：文件；transcribe jobs 保存路径、size/hash；文件 ready 且被 recordings.vtt_job_id 引用；与对应 JSON 一起发布和保留
-- Markdown：从同版本 JSON 即时生成；文字 ready；随本次下载返回
+原始 segment 是上传协议的文件边界，chunk 是 Server 的识别边界；两者不必一一对应。默认核心块 60 秒，最后一块不足时保持实际长度。切块按 PCM 样本数固定，区间无重叠、无丢帧，空文件或零样本原件拒绝。
 
-raw 与 WAV 是两种分别保存的音频。双写是文件持久化与 SQLite 记录提交，具体顺序见[第 5 节](#publication)。文件索引继续使用现有三张处理表，DDL 见[主文档](../README.md#business-sql)。
+raw 格式仍是 uint16 little-endian 长度 + Opus payload；支持 16 kHz、mono、20 ms profile，每包 320 样本、payload 1–2000 字节。每份原件独立建立 decoder，完整校验包边界、size/hash，不拼 raw 后共用解码器，不擅自裁剪 pre-skip 或补帧。其他 profile 报 unsupported_media_profile。
 
-### 3.2 文件保存规则
+解码器顺序读取原件并流式输出有界 WAV；不把整份 PCM 放入内存，不生成整条录音 WAV。完整扫描结束才提交 segment.sample_count 与 decode_state=ready；仅在此后领取该原件的 ASR 块，确保上下文和完整性已经确定；扫描失败时已落盘的块只作为可核验缓存，该 segment 不进入全局播放时间轴。扫描重试可从原件开头重做并复用同内容缓存，无须重做已有成功 ASR。
 
-- 文件标识：owner、recording_id、job_id 由 Server 取得或生成；final_relative_path 按输入版本和本次执行生成，发布后保持不变
-- 路径使用：路径只保存在索引中；Web 使用录音 API 地址；原件沿用现有 ResumeStore
-- 临时文件：创建时独占新文件，放在与最终文件相同的文件系统；写入期间 publication_state=prepared
-- 完整性：raw 入库、派生产物发布、ASR 调用前与备份恢复时校验 size/SHA-256；WAV 另核对格式、样本数和时长
-- 容量检查：OPEN 按原件声明 size 预留；生成前按 raw 包时长计算 WAV 上限，VTT 按 64 MiB 上限预留；检查用户余额与实际空闲空间，另留至少 256 MiB。写入时继续检查，空间不足立即停止
-- 用户额度：部署必须配置每用户额度，单位为正整数字节数。raw 按 registry.sources 唯一来源计费：ready 计实际 size，receiving 计完整声明 size；业务片段索引不重复计费。加上该 owner 的派生文件、临时文件和待清理旧文件；同一物理文件的硬链接只计一次。续传沿用原预留，超额反馈 storage_quota_exceeded
-- 清理：放弃的临时文件在执行结束后清理；旧产物须无当前指针、任务输入或下载引用。先将 jobs 同时置 state=failed、publication_state=abandoned、error_code=artifact_superseded 并提交，再删除文件并 fsync 目录，最后删除无引用 jobs 行；中断后继续清理，下载断开时释放引用
-- 原件缺失：保留来源索引，暂停依赖该原件的处理并记录 source_missing；由校验通过的备份恢复
+- 核心 WAV 固定 16 kHz、单声道、PCM16 little-endian；固定 fmt/data 头。60 秒核心 PCM 为 1,920,000 字节；实际 ASR 输入还包含上下文与 WAV 头。
+- 相邻核心块是紧接的样本区间。识别时读取同一原件内前后核心 WAV 各至多 1 秒作为上下文，形成临时短 WAV；播放始终使用无上下文的核心 WAV。
+- 只在同一原件内部提供重叠；原始 segment 边界不借用尚未到达的相邻原件，避免新上传使旧识别失效。边界句子可能受截断影响，这是 v2 明确限制，不能宣称完整消除了断句。
+- 默认 raw 原件上限 8 MiB、单原件解码时长上限 1 小时、已收录音总时长上限 12 小时；每个 segment 的 chunks_json ≤8 MiB、process_config_json ≤64 KiB，previous_generation_json ≤16 MiB（含旧分块及配置包装），汇总原文 ≤8 MiB、VTT ≤64 MiB。超限明确失败，不能静默截断；这些是待压测的产品限额。
+- 默认单原件解码 10 分钟超时、单块 ASR 120 秒；ASR adapter 须登记实际输入时长/字节上限，启动校验核心时长加双侧上下文及 WAV 体积不超限。实际供应方能力尚待选型验证。
 
-存储失败按发生位置返回：
+### 3.2 文件生命周期与容量
 
-- 原件接收：使用既有 HTTP/DTLS 接收协议反馈过限、空间不足或身份/hash 冲突；失败时仅保留已持久偏移
-- 后台生成：error_code 保存 storage_full、storage_quota_exceeded、source_missing 等；仅临时故障进入 retry_wait，重试规则见第 5 节；终止后 state=failed
-- Web 查询：详情返回 audio_error_code / transcript_error_code；已成功发布的旧结果继续按版本读取
-- 媒体读取：文件不可用时返回 503 audio_unavailable / vtt_unavailable；错误格式见主文档
+raw 永久按保留策略保存，核心 WAV 是默认播放产物；识别临时 WAV 用后删除。VTT 属于录音汇总；Markdown 从已提交 JSON 生成。不再维护整条合成 WAV，也不提供默认完整 WAV 导出；将来如有导出需求，可单独设计流式导出，不作为转写前置条件。
 
-### 3.3 解码与产物校验
+路径使用服务端 segment_id、generation、chunk_id 和发布 UUID；不可把 owner 或客户端路径直接拼接为磁盘地址。每次发布使用新路径，不覆盖旧文件。接收预留 raw 声明大小，解码按采样上限预留核心 WAV 与一份临时识别 WAV；汇总预留 JSON/VTT 上限，额外保留至少 256 MiB 空闲空间。
 
-固定来源清单，按 segment_no 从 1 连续读取。逐包解析 uint16 little-endian 长度与 Opus payload，检查包边界、size/hash 和媒体 profile；临时解码后合成一份 **16 kHz、mono、PCM16 little-endian WAV**。
-
-支持的 raw profile 固定为 16 kHz、mono、20 ms Opus：每包解码得到 320 个样本，单包 payload 为 1–2000 字节；逐段创建 decoder，保留完整解码样本，不自行补帧或裁剪 pre-skip。其他 profile 返回 unsupported_media_profile。sample_count 为拼接后的样本总数，duration_ms=round(sample_count×1000/16000)；原件的段号和包顺序保持不变。任务固定解码器/格式配置，已发布结果沿用原配置。
-
-- 单 raw 段：8 MiB；按实际已收字节执行限制
-- 连续录音：默认上限 8 小时，PCM16 约 115.2 MB/小时
-- 输出文件：WAV 上限 1 GiB，VTT 上限 64 MiB；写入过程中执行限制
-- 执行时间：decode 默认 10 分钟，ASR 默认 60 分钟
-- 空间不足：接收或生成停止，原件和上一份已提交结果保留；错误为 storage_full
-
-解码成功后将 size_bytes、sha256、sample_count 保存到对应 jobs 行，按第 5 节发布。解码错误使用 packet_invalid、segment_gap、decode_timeout 等固定 code。WAV 使用固定 fmt/data 头和 PCM 内容，避免时间戳等可变头信息影响同版本修复的 hash。
+用户额度包含唯一 raw 原件、全部核心 WAV、临时文件、当前及尚待清理的旧结果；硬链接只计一份。无引用产物先在事务内标记 retired，再等待下载句柄释放、删除并 fsync；清理中断后可重入。chunk 数组保留 retired_paths 直至删除完成，避免失去待清理文件索引。原件缺失时保留记录，停止依赖处理，以可信备份恢复。
 
 <a id="transcript"></a>
 
-## 4. 识别原文与 VTT
+## 4. 分块识别、时间轴与字幕合并
 
 ```mermaid
 sequenceDiagram
-    participant W as Server 后台任务
-    participant B as 业务 SQLite
-    participant F as 私有文件存储
-    participant A as 受控 ASR
-    Note over W,F: WAV 已双写发布，audio_revision 固定当前音频版本
-    alt ASR 未配置
-        W->>B: 设置 transcript_state=not_configured
-        Note over W,B: WAV 仍可独立读取
-    else ASR 已配置
-        W->>B: 建立并领取 transcribe 任务，固定 WAV 快照与执行租约
-        W->>F: 读取 WAV，校验字节数和完整摘要
-        W->>A: 发送校验后的 WAV，使用固定识别配置
-        A-->>W: 返回识别结果，或返回调用错误
-        alt 识别成功且全部 cues 合法，含静音结果
-            W->>B: 提交 prepared 状态和本次临时、最终路径
-            W->>F: 按固定格式生成临时 VTT，fsync 文件
-            F-->>W: 返回文件字节数与 SHA-256
-            W->>B: 提交 VTT 预期字节数和摘要
-            W->>F: link 原子创建最终文件，禁止覆盖，再 fsync 目录
-            W->>B: 开始最终事务，核对归属、版本、WAV 快照和有效租约
-            alt 全部发布条件仍满足
-                W->>B: 同事务提交 JSON、VTT 指针、文字版本、ready 与任务成功
-                B-->>W: 提交成功，新结果可读取
-                W->>F: 删除临时硬链接并持久化目录
-                Note over W,B: JSON 与 VTT 同版本；Markdown 从已提交 JSON 生成
-            else 版本已改变或租约失效
-                Note over W,B: 停止本次发布；旧执行者不得覆盖当前任务与已提交结果
-                Note over W,F: 无引用产物按清理规则回收
-            end
-        else ASR 调用失败或 cues 校验失败
-            W->>B: 临时故障进入 retry_wait；不可重试或次数耗尽则 failed
-            Note over W,B: 只更新对应任务与当前版本状态，保留之前已提交结果
-        end
+    participant W as 后台调度
+    participant S as recording_segments
+    participant A as ASR
+    participant R as recordings
+    W->>S: 领取一个未成功块，冻结配置与租约
+    W->>A: 发送核心音频加同原件内上下文
+    alt 本块成功且结果校验通过
+        A-->>W: 块内时间戳、文字及局部 speaker
+        W->>S: CAS 保存本块 cues、成功状态，标记录音 dirty
+        W->>R: 生成当前可定位结果快照与 VTT
+        Note over W,R: 失败块仍有占时，字幕不向前压缩；成功块不重识别
+    else 本块超时或失败
+        W->>S: 仅记录该块失败或重试时间
+        Note over W,S: 返回调度循环，继续其他可处理块
     end
 ```
 
-持久格式为 `{schema_version:1,time_unit:"ms",cues:[...]}`。接口补充 recording_id、revision 和 next_cursor：
+### 4.1 块内校验与边界归属
 
-<a id="json-example"></a>
+ASR 输入相对时间先换算为整数样本，随后加上本次上下文的 segment 内起点。按 cue 中点是否落在核心区间 [start_sample,end_sample) 决定由哪一块负责；最后将保留 cue 的范围裁到核心区间，再换算为整数毫秒。这样上下文不进入播放时长，不重复计入时间轴。忽略仅属于邻块上下文的 cue，不能按字符串相同粗暴删除真实重复发言。
+
+中点规则是一种确定性的合并策略，跨次 ASR 的措辞和断句仍可能不同，需要边界样本验收，不保证语言层面零重复或零漏字。每次返回须校验编码、非空白文字、0≤start<end≤输入时长；最多 1 ms 的舍入越界可夹到范围，其他越界整块失败，不能丢掉坏 cue 后假装成功。每句 ≤10000 字符，整条最多 100000 cues，仍受 JSON 体积限制。
+
+局部 speaker A/B 只在本次 ASR 有意义；持久化为 segment_id/generation/chunk_index 加局部编号，不跨块认作同一个人。没有 speaker 返回 null。要识别整条录音同一人需另加跨块说话人匹配，v2 不包含。
+
+### 4.2 全局时间轴与部分结果
+
+- 主动重处理时，时间轴与文字一律使用当前被选中的同一代；新代尚未全成则使用 previous_generation_json 内的旧 sample_count/chunks/config，不能混用新代时长与旧代文字。
+- 按 segment_no 升序累加 **准确 PCM 样本数** 得到 segment 全局偏移，再加块内时间。用整数样本累计，最后统一换毫秒，不能逐段四舍五入后累计漂移。
+- 只对从 1 开始连续、decode_state=ready 的前缀建立全局时间轴；缺失片段或样本数未知处停止。后段可提前识别并缓存相对时间，不能用收件时间或“少一段就跳过”猜偏移；补齐后只重汇总，旧块无需重新 ASR。
+- 音频已知但 ASR 失败的块保留其真实时间区间；后续成功字幕按原时间出现，失败区间在 coverage 标记 failed/pending。成功静音块为 ready 且 cues=[]，不能与失败混淆。
+- recordings.audio_state/transcript_state 是当前进度缓存，导入、领取、块提交、失败及恢复时均在同一事务按当前 segment 状态重算，不能等到汇总发布才更新；已发布快照中的 partial/coverage 则只在新 result_revision 提交时更换。`audio_state=ready` 表示当前已收输入全部可定位、核心 WAV 可读；`transcript_state=ready` 表示这些块全部识别成功。两者都不等于设备已录完，是否完整由 integrity 单独表示。
+- 有可用音频或成功文字、但存在缺号/待处理/失败块时为 partial；无可用结果且仍在处理为 pending；无可用结果且所需处理已终止为 failed。未配置识别时文字为 not_configured。
+- 部分字幕允许下载，但 JSON coverage、详情状态和下载响应 `X-Recording-Partial: true` 必须标识；Web 展示“部分结果”及缺口，不把缺口显示成静音。
+
+### 4.3 汇总 JSON 与 VTT
 
 ```jsonc
 {
-  // integer；结构版本，固定 1。
-  "schema_version": 1,
-  // string；仅接口返回，recordings.id；不写入 transcript_json。
-  "recording_id": "demo-recording",
-  // integer；仅接口返回，recordings.transcript_revision；须等于 audio_revision。
-  "revision": 1,
-  // string；时间单位，固定 ms。
+  // INTEGER；对应 recordings.result_revision，不依赖是否有完整 WAV。
+  "revision": 5,
+  // INTEGER；此次快照使用的原件集合版本。
+  "input_revision": 3,
+  // BOOLEAN；仍有未定位/未识别输入，或录音完整性尚未得到协议确认。
+  "partial": true,
+  // INTEGER；JSON 结构版本。
+  "schema_version": 2,
+  // STRING；所有 cue 与 coverage 为全局毫秒时间。
   "time_unit": "ms",
-  // array；持久化原文；静音成功时为空数组。
-  "cues": [
-    {
-      // integer；从 1 连续，按起点和供应方稳定顺序排列。
-      "cue_index": 1,
-      // integer；相对当前 WAV 的起点毫秒，>=0。
-      "start_ms": 0,
-      // integer；start_ms < end_ms <= duration_ms。
-      "end_ms": 2400,
-      // string|null；A/B/C…稳定匿名映射，缺失时 null。
-      "speaker": "A",
-      // string；UTF-8 原文，CRLF/CR 统一为 LF，保留标点和换行。
-      "text": "我们确认一下今天的安排。"
-    },
-    {
-      // integer；下一句连续编号。
-      "cue_index": 2,
-      // integer；相对 WAV 的起点毫秒，允许多人发言重叠。
-      "start_ms": 2400,
-      // integer；相对 WAV 的终点毫秒。
-      "end_ms": 5800,
-      // string|null；另一位说话人。
-      "speaker": "B",
-      // string；识别原文，输出时按格式转义。
-      "text": "先检查设备，再核对录音文字。"
-    }
-  ],
-  // string|null；仅接口返回，不透明分页游标；末页为 null。
-  "next_cursor": null
+  // ARRAY；保留每块覆盖状态，失败区间不能压缩或伪装静音。
+  "coverage": [{"segment_id": "segment-001", "chunk_id": "segment-001-g1-c0", "start_ms": 0, "end_ms": 60000, "state": "ready"}],
+  // ARRAY；未知全局位置的后段单列 ID，不伪造时间。
+  "unpositioned_segment_ids": ["segment-003"],
+  // ARRAY；排序后从 1 编号，合法多人重叠保留。
+  "cues": [{"cue_index": 1, "start_ms": 0, "end_ms": 2400, "speaker": "segment-001-g1-c0:A", "text": "确认一下今天的安排。"}]
 }
 ```
 
-秒数在 ASR adapter 中转换为整数毫秒，最多 1ms 的边界精度误差夹到音频范围，处理后仍须 start<end。拒绝 NUL、非法编码、空白句和非法时间，整批校验后发布；合法多人重叠保留。每句最多 10000 字符、每录音最多 100000 cues，JSON 最多 8 MiB UTF-8，超限返回 transcript_limit_exceeded。
-
-静音识别成功保存 cues=[]、状态 ready 和 `WEBVTT\n\n`；ASR 未配置为 not_configured，识别失败为 failed。WAV 独立可播放。
-
-<a id="vtt-example"></a>
-
-对应 VTT：
-
-```vtt
-WEBVTT
-
-1
-00:00:00.000 --> 00:00:02.400
-<v A>我们确认一下今天的安排。</v>
-
-2
-00:00:02.400 --> 00:00:05.800
-<v B>先检查设备，再核对录音文字。</v>
-```
-
-VTT format v1 固定使用 UTF-8、无 BOM、LF 换行。文件以 `WEBVTT\n\n` 开始，各 cue 为编号、`HH:MM:SS.mmm --> HH:MM:SS.mmm`、正文和一个空行，末尾同样保留空行。正文先去掉首尾换行，将内部空白行合并为一个换行，再依次转义 `&`、`<`、`>` 为实体；speaker 非空时套 `<v A>…</v>`，为空时输出正文。重建沿用同一格式版本，JSON 原文保持不变。格式依据：[W3C WebVTT](https://www.w3.org/TR/webvtt1/)。
-
-Web 用 textContent 渲染原文。Markdown 标题使用有效录音日期，按 cue 顺序输出时间、speaker 和转义后的原文；结果作为附件下载。
+`partial` 还取决于 integrity，所以当前已收块 ready 但闭合未知时仍可为 true。纯静音成功可发布 cues=[] 和 `WEBVTT\n\n`。VTT 格式版本 2 固定 UTF-8、无 BOM、LF，使用 HH:MM:SS.mmm；正文转义 &、<、>，去掉首尾换行并压平内部空白行；speaker 只使用服务端安全匿名 ID。Markdown 从同版本 JSON 生成，部分结果在导出标题中注明。原文不因字幕转义而改变。
 
 <a id="publication"></a>
 
-## 5. 文件与数据库双写
+## 5. 分层提交与失败恢复
 
-![文件发布字段注释、提交步骤与中断恢复](assets/diagrams/06-file-database-publication.svg)
+![分块保存与录音汇总发布](assets/diagrams/06-file-database-publication.svg)
 
-### 5.1 原件双写与业务投影
+### 5.1 核心 WAV 与块结果
 
-- 1：校验有效上传凭证、owner、绑定代次和原件身份，保存 receiving 来源；接收请求可继续
-- 2：写 raw 数据并 fsync，再持久化检查点；恢复时以检查点偏移为准；ACK 已持久偏移
-- 3：收完整后验证 size/hash，原件 rename，目录 fsync，保存可恢复的身份元数据；等待完成确认
-- 4：registry.sources 提交 ready，保留 owner、binding/session/segment、object_id、size/hash；返回 COMPLETE
-- 5：业务短事务提交 recordings、recording_segments、imported_at 与输入版本；随后标记 projected_at；后台执行
+1. 按 owner、raw hash、generation 和有效租约领取工作。WAV 使用同文件系统临时文件，先在 segment.pending_artifact_json 保存块号、临时/最终路径与 frozen config。
+2. 写核心 WAV、校验样本范围、size/hash 并 fsync，提交预期文件元数据；link 到新最终路径，禁止覆盖已有文件，fsync 目录。
+3. 短事务复核 raw hash、generation、租约；将对应 chunk.wav 标记 ready 并清理 pending 描述，记录临时清理路径。所有块与完整样本数校验后才将 segment.decode_state 置 ready。
+4. 单块识别成功时先校验 cues，再在事务内保存该块 cues/asr_state=ready、保存该块 asr_attempt/asr_run_after、同时清 lease_token/lease_until/work_stage/work_chunk_index 并标记录音 merge_dirty；即使稍后汇总失败也不重新识别成功块。外部识别成功但本地提交前崩溃仍可能再次调用 ASR，无法承诺外部调用 exactly-once。
 
-原件与 registry 双写完成是 COMPLETE 的条件。业务库暂不可用时，ready 来源留待投影，设备确认继续按原件持久结果执行。业务提交后标记失败则重放，相同来源只增加一次版本。
+### 5.2 录音汇总与原子发布
 
-### 5.2 WAV/VTT 双写提交
+1. 领取 recordings 汇总租约，捕获 input_revision、所有相关 segment 的 generation 与块结果摘要。只做清单/文本合并，不调用 ASR，不等待合成大音频。
+2. 将完整候选音频清单、JSON、覆盖状态、VTT 格式及新 result_revision 写入 pending_publication_json；记录新 VTT 路径与预期 size/hash。候选 JSON 有同样体积上限，旧已发布字段保持可读。
+3. 写临时 VTT 并 fsync、校验、link 到不可变最终路径、fsync 目录。汇总没有可定位成功文字时可不生成 VTT，候选明确将文字链接置空。
+4. 一个事务按汇总租约、base result_revision、输入版本及捕获的 segment 摘要做 CAS；同时替换 audio_manifest_json、transcript_json、vtt_file_json、result_revision、published_input_revision 和时长；进度缓存按当前片段重新核算，清理 pending 并置 idle。只有捕获内容未变化才清 merge_dirty；有新块时放弃候选并再次汇总。
+5. CAS 失败不覆盖旧结果，候选文件登记后清理。新输入只使汇总重做，不能重置已成功块。持续上传时每个调度周期只做一次有界汇总，分块处理与汇总公平轮转。
 
-- 1：短事务保存 owner、recording_id、input_revision、输入快照、lease、临时/最终路径，提交 prepared；处理结果未发布
-- 2：生成临时文件，校验内容、size/hash，文件 fsync；短事务提交 jobs.size_bytes/sha256，WAV 同时提交 sample_count；处理结果未发布
-- 3：复核任务身份与版本；同一文件系统以 link(tmp,final) 原子创建最终文件，禁止覆盖；fsync 目录；文件已存在，API 仍等待提交
-- 4：一个短事务核对 owner、录音/输入版本、kind、lease_token 与有效期；提交 jobs ready/succeeded 及录音结果；当前版本可读
-- WAV 结果：wav_job_id、audio_revision、duration_ms 同事务更新；文字按配置置 pending/not_configured；音频可读取
-- 转写结果：transcript_json、vtt_job_id、transcript_revision、文字 ready 与 jobs 成功同事务更新；文字与 VTT 一起发布
+### 5.3 中断、缺失与重试
 
-最终路径已存在时核对该任务、版本及 size/hash；相同内容幂等复用，冲突记 file_publication_conflict 并保留已有文件。提交后删除临时硬链接并 fsync 目录；最终事务失败时保留原录音指针，由恢复流程处理已落盘文件。
+- 原件完整但 registry ready 未提交：按身份文件和 hash 对账；业务已提交但 projected_at 未填：幂等导入。
+- 核心 WAV 已落盘、chunk 元数据未提交：按 pending 描述与租约重新领取后校验并补提交；不符则清理重解码该原件。ASR 成功块保持不变。
+- ASR 失败：只重试对应块，下一块拥有独立重试预算。识别临时 WAV 从核心及同原件邻块重建，成功块不重发。
+- 块结果成功、汇总失败：直接从 chunks_json 重新合并；VTT 落盘而录音事务未提交时按 pending 候选补提交或重新汇总，不重跑 ASR。
+- 已提交 VTT 丢失：保留 JSON/Markdown，从同版本 JSON 与固定格式重建；验证原 size/hash，使用新路径原子替换 vtt_file_json。修复不改变 result_revision，也不改变文字。
+- 核心 WAV 丢失：标记 missing、保留 cue 结果和原预期 hash/样本范围；修复描述保存 target_generation，普通处理只提交到当前 generation，旧代修复则 CAS 校验该旧代仍被 previous_generation_json 或当前发布快照引用，不能写入新代数组；用固定解码器从原件流式重建目标块并核验，成功后替换不可变路径并重汇总清单。缺依赖报 repair_dependency_unavailable，内容不符报 repair_content_mismatch，不能静默改音频。
+- lease 过期：将相应阶段及被领取块置 retry_wait，并同时清 lease_token/lease_until/work_stage/work_chunk_index，保留 prepared 描述和块号供重新领取；补提交不计一次新的外部处理，真正重做才增加 attempt。启动先恢复 pending 发布，再领取新工作。
+- 保留正在下载的旧文件直至句柄释放；录音以 retained_files_json 记录已被新结果替代、但尚未删除的文件，清理完成后移除条目。绝不因换 generation 提前删除旧快照引用的核心 WAV。
 
-发布事务使用以下条件，任一不符都放弃本次结果：
+### 5.4 替换旧设计
 
-- 新 WAV：owner/recording_id 匹配；kind=decode；任务版本等于 recordings.input_revision
-- 新转写：kind=transcribe；任务版本同时等于 input_revision 与 audio_revision；wav_job_id 等于输入快照的 WAV job_id，且该文件 ready、hash 与快照一致
-- 文件修复：按 5.4 的当前指针与已发布版本判断；保留原文字，不要求等于最新 input_revision
-- 所有类型：owner/recording_id 匹配；jobs.state=running、publication_state=prepared、lease_token 匹配且未到期；最终文件 size/hash 与已存元数据一致
-
-### 5.3 后台执行与恢复
-
-```mermaid
-sequenceDiagram
-    participant W as Server 恢复任务
-    participant B as 业务 SQLite
-    participant F as 私有文件存储
-    participant A as 受控 ASR
-    W->>B: 查询 VTT 任务、已提交原文和当前结果指针
-    alt 同版本 JSON 尚未提交
-        W->>F: 放弃未提交 VTT，按引用规则清理
-        opt 任务仍符合发布条件且未超过重试上限
-            W->>A: 按原输入快照重新识别 WAV
-            A-->>W: 返回新的识别结果
-            Note over W,B: 按转写发布时序，整体提交新 JSON 与 VTT
-        end
-    else JSON 已提交，但 VTT 缺失或损坏
-        W->>B: 标记 missing，保存 repair_expected，复用原 jobs 行排队修复
-        Note over W,B: repair_expected 保存原字节数、摘要和最终路径
-        W->>B: 领取修复任务，提交新租约、新路径和 prepared 状态
-        B-->>W: 返回同版本 JSON 与原 VTT 格式版本
-        W->>F: 从 JSON 重建临时 VTT，fsync 并计算字节数与摘要
-        Note over W,A: 此分支直接使用已提交原文，无须调用 ASR
-        alt 修复文件与预期元数据一致
-            W->>B: 提交修复文件的预期字节数和摘要
-            W->>F: link 创建新最终文件，禁止覆盖，再 fsync 目录
-            W->>B: 开始事务，复核当前指针、已发布版本与有效租约
-            alt 仍指向原任务且租约有效
-                W->>B: 提交新文件元数据和任务成功，保持录音版本与原文不变
-                B-->>W: VTT 恢复可读
-                W->>F: 释放下载引用后清理旧路径与临时文件
-            else 当前结果已替换或租约失效
-                Note over W,F: 不提交过时修复结果，按执行归属与引用条件清理
-            end
-        else 修复内容与预期不一致
-            W->>B: 记录 repair_content_mismatch，停止发布
-        end
-    end
-```
-
-- kind / 去重键：decode、transcribe；recording_id + input_revision + kind
-- 执行：顺序领取一个任务，固定 owner、输入版本与配置
-- 租约：60 秒，15 秒续期；发布时校验 token、有效期和版本
-- 重试：最多 4 次执行，间隔 30 秒 / 2 分钟 / 10 分钟
-- 旧版本：普通待处理旧版本设 state=failed、error_code=input_superseded；执行中发现版本变化也停止发布。当前已发布文件的修复按指针判断
-- 恢复次数：启动先将过期 running 置 retry_wait 并清 lease，保留 prepared 文件与元数据；重新领取后核验补提交不增加 attempt，真正重做增加 attempt，达到上限标 failed
-- 故障分类：ASR 超时/429/5xx、临时存储或数据库故障进入 retry_wait；包/hash/身份冲突、额度/输出超限、配置缺失和修复不匹配直接 failed。状态更新与对应错误码同事务保存
-
-- raw 数据已写，检查点尚未提交：按持久检查点恢复，未确认的尾部截断后续传
-- raw 完整，registry ready 未提交：由身份元数据和 size/hash 对账补 ready，再响应重试请求
-- 业务已提交，projected_at 未更新：幂等重放，保持一次版本递增
-- WAV 已落盘，DB 最终事务未提交：校验元数据、当前输入和新租约后补提交
-- VTT 已落盘，JSON 未提交：放弃本次未提交产物，重跑 ASR 后整体发布
-- JSON 已提交，VTT 缺失/不可信：保留原文，从同版本 JSON 重建 VTT
-- WAV 缺失/不可信：jobs.publication_state=missing，从校验通过的 raw 重建
-- 原件缺失：记录 source_missing，保持来源归属，等待备份恢复
-- 文件冲突、磁盘满、事务失败：保留 raw 与上一份已提交结果；API 返回明确状态
-
-- 新来源投影：同事务增加 input_revision、置 audio_state=pending，保留已发布文件与文字
-- 满足处理条件：片段连续且静默满 10 分钟，固定当前快照并幂等建立 decode 任务；启动补建符合条件的缺失任务
-- 领取 / 发布 WAV：领取置 audio_state=running；发布同事务置 ready、更新 WAV，并按配置置文字 pending/not_configured；已配置时建立同版本 transcribe 任务
-- 领取 / 发布文字：领取置 transcript_state=running；发布时 JSON、VTT 指针和 ready 同事务提交
-- 任务终止：仅当前版本普通任务回写对应录音状态 failed；过时任务只更新 jobs
-- 文件修复：只改变 jobs 的文件状态，JSON/Markdown 继续按已提交文字状态读取
-
-### 5.4 已提交文件修复
-
-- 开始修复：当前已成功产物首次变为 missing 时，复用同一 jobs 行，原 size/hash/sample_count/最终路径写入 input_json.repair_expected，再置 pending、attempt=0；修复失败按本轮上限停止，维护确认后才可再次重启
-- 新路径：每次发布另生成 Server UUID 作为唯一标识；重试和修复使用新路径，避免复用旧 attempt 路径
-- WAV 修复：使用原输入快照和固定解码配置，从 raw 重建；输出 size/hash/sample_count 必须与 repair_expected 一致，否则 repair_content_mismatch
-- VTT 修复：直接从已提交同版本 JSON 重建，不重新 ASR；校验结果与 repair_expected 的 size/hash 一致
-- 修复提交：WAV 复核 wav_job_id/audio_revision 仍指向本任务/版本；VTT 复核 vtt_job_id、transcript_revision、audio_revision 与 JSON 仍对应；只替换文件元数据，不改变录音版本和文字；提交后按下载引用清理 repair_expected 保存的旧路径
-- 已被替换：当前指针已更新或版本不再匹配时，放弃旧文件修复并清理本次临时产物
-
-普通新结果发布以当前 input_revision 为条件；修复以当前已发布指针和版本为条件。两者都在最终事务内复核 owner 和租约，旧执行结果不能覆盖新结果。
+删除 jobs、wav_job_id、vtt_job_id、audio_revision/transcript_revision 以及“整条 WAV 就绪才转写”的规则。DDL 是 v2 新库参考，不是线上迁移脚本。已有数据必须停写备份后执行专用迁移：保留 raw、用户/owner 和来源幂等键；旧合成 WAV/整体转写不能直接冒充逐块结果，先留作只读旧版本，按 raw 生成新块并校验后再切换。未知高版本拒绝启动；迁移及 user_version 更新在同一事务，切换完成前不删除旧产物。
 
 <a id="media-api"></a>
 
-## 6. 音频与文字 API
+## 6. 播放、文字与版本 API
 
-路径前缀 `/api/boa/v1`，携带本站会话，owner 取自会话；统一错误格式见[主文档](../README.md#web-api)。
+前缀 `/api/boa/v1`；列表和详情仍见主文档。所有接口先鉴权并按 owner 限定录音，跨 owner 返回 404。Web 不接收磁盘路径。
 
-- GET `/recordings/{id}/audio.wav`：revision；可选 Range；audio/wav，200 或 206
-- HEAD `/recordings/{id}/audio.wav`：revision；200，资源头和空 body；忽略 Range
-- GET `/recordings/{id}/transcript`：revision、cursor；JSON v1，每页最多 200 cues
-- GET `/recordings/{id}/transcript.vtt`：revision；text/vtt; charset=utf-8，附件
-- GET `/recordings/{id}/transcript.md`：revision；text/markdown; charset=utf-8，附件
+- GET `/recordings/{id}/audio?revision=N`：返回同版本播放清单；无清单为 409 audio_not_ready。每个 item 包含 chunk_id、segment_id、start_ms、duration_ms、sample_count 和授权读取 URL；按全局时间排序。内部 audio_manifest_json 的每项还必须保存 generation、原件 hash、核心样本区间、该代原件 sample_count 和完整 frozen 解码/切块配置；这些内部字段不直接返回 Web。旧代修复使用快照内配置，不能读取已被新代覆盖的 process_config_json；旧配置和文件直到所有已发布/下载引用释放才清理。
+- GET/HEAD `/recordings/{id}/chunks/{chunk_id}.wav?revision=N`：读取当前快照实际引用的核心 WAV。必须在该录音/版本清单中，不能仅凭 chunk_id 绕过 owner、generation 或版本检查。
+- GET `/recordings/{id}/transcript?revision=N`：返回第 4 节 JSON；允许 partial，未配置为 503 asr_not_configured，无成功可定位文字为 409 transcript_not_ready。成功静音不属于“无成功结果”。
+- GET/HEAD `/recordings/{id}/transcript.vtt?revision=N`、`transcript.md?revision=N`：返回同版本字幕或 Markdown。VTT 缺失仅影响 VTT；JSON 和 Markdown 继续可用。
+- 当前版本不等于 N 返回 409 recording_revision_changed；详情 links 使用 result_revision。新版本发布前旧已提交快照保持可读；版本切换后新请求重新获取清单，已打开下载句柄可完成。
 
-- 401 / 403：会话失效 / 账号禁用
-- 404：不存在或不属于当前 owner
-- 409 recording_revision_changed：请求版本与当前音频不符
-- 409 audio_not_ready / transcript_not_ready：对应结果处理中
-- 503 asr_not_configured / transcript_failed：ASR 未配置 / 识别失败
-- 503 audio_unavailable / vtt_unavailable：WAV / VTT 文件缺失或不可用；VTT 缺失时已存 JSON 和 Markdown 仍可读取
-- 429：单用户媒体请求超过并发上限
-- 416：GET 字节范围无效
+播放清单示例：
 
-### 6.1 版本与分页
+```jsonc
+{
+  // INTEGER；整份清单及文字的共同快照版本。
+  "revision": 5,
+  // BOOLEAN；不完整音频、缺号或闭合尚未知时为 true。
+  "partial": true,
+  // INTEGER；可定位前缀总时长，毫秒。
+  "duration_ms": 120000,
+  // ARRAY；核心块无重叠，播放到块尾切换下一块；不播放识别上下文。
+  "items": [{"chunk_id": "segment-001-g1-c0", "segment_id": "segment-001", "start_ms": 0, "duration_ms": 60000, "sample_count": 960000, "url": "/api/boa/v1/recordings/recording-001/chunks/segment-001-g1-c0.wav?revision=5"}]
+}
+```
 
-详情先固定 recordings.audio_revision。所有媒体请求的 revision 为正整数；文字接口返回的 revision 取自 transcript_revision，并须等于 audio_revision。游标绑定 recording_id、revision、last_cue_index。
+Web 把全局 seek 映射为某个核心块与块内偏移；预取最多下一块，仍受媒体并发限制。默认逐块播放器可能存在切换间隙，不承诺 sample-accurate 无缝播放；如需无缝，再单独评估缓冲播放方案。缺号处停止，不把后段压到前段时间轴。新版本到达时按全局样本位置恢复播放，不静默混用两个版本。
 
-- 录音不存在或 owner 不匹配：404
-- audio_revision 为空：解码失败为 503 audio_unavailable，其余为 409 audio_not_ready
-- 请求 revision 与当前 audio_revision 不同：409 recording_revision_changed
-- 文字请求且 transcript_state 为 not_configured / failed：503 asr_not_configured / transcript_failed
-- 文字处理中或 transcript_revision 尚未匹配：409 transcript_not_ready
-- 文件请求：校验 jobs.kind、publication_state、路径；WAV 来自 decode，VTT 来自 transcribe；文件缺失分别返回 503 audio_unavailable / vtt_unavailable
+### 6.1 Range、HEAD 与响应
 
-先在同一数据库快照内取得 owner、版本和文件元数据，再打开受控文件句柄；响应开始前复核会话有效。audio_state 描述当前输入的处理进度；已有 WAV 以 wav_job_id/audio_revision 及对应文件状态判断可用性。VTT 文件缺失不影响同版本 JSON/Markdown 读取。
+核心 WAV 支持单一 bytes=start-end、start-、-suffix；按实际大小裁 end，非法/越界范围返回 416 与 `Content-Range: bytes */size`；多范围按整文件 200。HEAD 忽略 Range，返回整文件元数据和空 body。VTT/Markdown 按导出整份返回，HEAD 使用同版本已确定的字节内容计算长度。
 
-JSON 使用 json_each 按 cue 数组下标读取 201 条：返回前 200 条，第 201 条决定 next_cursor。Markdown 迭代同一快照的全部 cues。复制取齐同版本全部页后再写剪贴板；仅遇到 409 recording_revision_changed 时重置旧音频和分页；not_ready 状态继续查询处理结果。
+文件使用同一打开句柄核验普通文件和 size；发布与恢复校验完整 hash。ETag 为对应核心 WAV/VTT 的 sha256，Markdown 为确定性序列化后摘要。响应设置 X-Recording-Revision、X-Recording-Partial、Cache-Control: private,no-store、nosniff，文件名由 Server 生成。JSON 同样 no-store。
 
-### 6.2 Range 与响应头
-
-支持单一 `bytes=start-end`、`bytes=start-`、`bytes=-suffix`。end 截至 size-1，省略 end 时取 size-1；suffix>0 时 start=max(0,size-suffix)。start≥size、start>end 或 suffix=0 返回 416 与 `Content-Range: bytes */<size>`。多范围请求按普通 GET 返回整文件 200。
-
-以 1000 字节文件为例：
-
-- GET，bytes=0-99：206；bytes 0-99/1000；Content-Length=100
-- GET，bytes=900-2000：206；bytes 900-999/1000；Content-Length=100
-- GET，bytes=-200：206；bytes 800-999/1000；Content-Length=200
-- GET，bytes=1000-：416；bytes */1000
-- HEAD，bytes=0-99：200；Content-Length=1000，空 body
-
-所有媒体请求重新鉴权。JSON body 返回 revision，文件响应设置 X-Recording-Revision。WAV/VTT 使用不可变路径，ETag 取对应 jobs.sha256；响应设置 Cache-Control: private, no-store。导出文件名由 Server 生成。Range/HEAD 依据 [RFC 9110 §14.2](https://www.rfc-editor.org/rfc/rfc9110.html#section-14.2)。
+错误统一使用主文档 error/request_id：401 会话失效、403 权限/CSRF、404 不存在/跨 owner、409 版本或未就绪、422 参数、429 并发超限、503 audio_unavailable/vtt_unavailable 等依赖或文件故障。单 owner 最多 4 个活动媒体请求，超额 Retry-After: 1。
 
 <a id="security"></a>
 
@@ -652,7 +353,7 @@ JSON 使用 json_each 按 cue 数组下标读取 201 条：返回前 200 条，�
 
 - 用户隔离：所有列表、GET/HEAD/Range、JSON/VTT/Markdown 读取与后台处理先限定 owner；原件 owner 来自验证通过的 Clip 绑定
 - 上传凭证：OPEN、续传和 COMPLETE 检查有效绑定/凭证；撤销后拒绝继续写入，历史归属保持原值
-- 文件路径：raw 沿用服务端 object_id，派生路径使用服务端 job_id/发布 UUID；历史 owner 不直接拼进路径。以存储根目录句柄逐级 openat/O_NOFOLLOW，拒绝符号链接和非普通文件；路径检查与打开使用同一目录链
+- 文件路径：raw 沿用服务端 object_id，派生路径使用服务端 segment_id/chunk_id/发布 UUID；历史 owner 不直接拼进路径。以存储根目录句柄逐级 openat/O_NOFOLLOW，拒绝符号链接和非普通文件；路径检查与打开使用同一目录链
 - 元数据写入：使用参数化 SQL，owner 由会话/来源确定；按录音、owner、版本复核关联后提交
 - 存储访问：数据位于 Web 静态资源之外，由专用服务账号访问；目录 0700，音频、SQLite/WAL/SHM、配置和备份 0600
 - 传输：Web 使用 HTTPS，Clip 使用现有认证 DTLS；证书和设备凭证由服务端受控配置
@@ -662,7 +363,7 @@ JSON 使用 json_each 按 cue 数组下标读取 201 条：返回前 200 条，�
 - 解码执行：以服务账号用参数数组启动受控解码器，输入输出来自验证后的文件标识；部署环境限制 CPU/内存，超时结束子进程及其临时输出
 - ASR 出站：仅调用服务端配置的 HTTPS 或明确登记的本机端点；禁用重定向，校验 TLS 证书，出站网络只放行配置目标；发送已校验 WAV，凭证由服务器侧加载
 - 文本输出：JSON 保留纯文本，Web 用 textContent；VTT 转义，Markdown 用固定模板并转义原文中的 HTML/Markdown 控制字符后作为附件返回；响应设置 nosniff 和 private,no-store
-- 日志：记录 request_id、recording_id/job_id、阶段、错误码和必要计量；认证凭证与录音/识别正文只用于业务处理
+- 日志：记录 request_id、recording_id/segment_id/chunk_id、阶段、错误码和必要计量；认证凭证与录音/识别正文只用于业务处理
 - 清理：Wi-Fi 密码、Google token 用毕释放引用，ASR 凭证仅服务端持有；临时音频在处理结束后清理，启动时回收无任务引用的残留；原件与旧产物按第 3 节保留/清理
 
 ASR 配置须登记供应方保留期限和删除方式；选择不留存/不用于训练的处理设置。服务端可清理本地副本，供应方数据按其已核实的处理约定执行。
@@ -672,7 +373,7 @@ ASR 配置须登记供应方保留期限和删除方式；选择不留存/不用
 ### 7.1 一致性备份与恢复
 
 - 默认备份：每日关闭接收入口，停止后台领取、终止未结束子进程并关闭数据库，生成加密快照后重启；待复制完成前保持停写。保留最近 7 个验证成功快照，周期与份数可配置
-- 快照内容：两个数据库及仍存在的 WAL、raw/身份元数据/检查点、当前 WAV/VTT、配置和恢复所需凭证；SHM 在恢复时重建
+- 快照内容：两个数据库及仍存在的 WAL、raw/身份元数据/检查点、当前分块 WAV、分块结果和汇总 VTT、配置和恢复所需凭证；SHM 在恢复时重建
 - 独立副本：备份置于独立存储介质，恢复授权与线上读写分开；备份清单记录时间、数据库版本、文件 size/hash
 - 验证：在临时验证副本校验数据库完整性、外键、原件数量和文件 size/hash；备份包保持只读，验证成功后才替换旧快照
 - 恢复：在隔离环境解密并校验清单，执行 integrity_check/foreign_key_check；重做来源投影和未提交发布；全部通过再切换数据卷，失败保留原卷。历史录音 owner 保持原值

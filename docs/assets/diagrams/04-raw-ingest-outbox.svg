@@ -19,7 +19,7 @@
 <text x="80" y="441" font-size="16" font-weight="400" fill="#17283f">&quot;device&quot;: &quot;clip-001&quot;,</text>
 <text x="80" y="466" font-size="15" font-weight="400" fill="#607088">// 设备录音会话 ID；与绑定及代次一起归并为一条录音</text>
 <text x="80" y="487" font-size="16" font-weight="400" fill="#17283f">&quot;session&quot;: &quot;session-001&quot;,</text>
-<text x="80" y="512" font-size="15" font-weight="400" fill="#607088">// 会话内片段序号；从 1 开始，按此顺序拼接音频</text>
+<text x="80" y="512" font-size="15" font-weight="400" fill="#607088">// 会话内原件序号；从 1 开始，确定全局时间偏移</text>
 <text x="80" y="533" font-size="16" font-weight="400" fill="#17283f">&quot;segment&quot;: 1,</text>
 <text x="80" y="558" font-size="15" font-weight="400" fill="#607088">// 原始文件字节数；用于接收限额与完整性校验</text>
 <text x="80" y="579" font-size="16" font-weight="400" fill="#17283f">&quot;size&quot;: 1024,</text>

@@ -11,7 +11,7 @@
 <text x="62" y="220" font-size="18" font-weight="400" fill="#607088">发起登录并查看本人录音</text>
 <text x="62" y="248" font-size="18" font-weight="400" fill="#607088">HTTPS 9529：请求业务数据</text>
 <text x="62" y="276" font-size="18" font-weight="400" fill="#607088">通过 BLE 把配置写入 Clip</text>
-<text x="62" y="304" font-size="18" font-weight="400" fill="#607088">播放音频并下载字幕</text>
+<text x="62" y="304" font-size="18" font-weight="400" fill="#607088">按块播放音频并下载字幕</text>
 <rect x="347" y="150" width="280" height="210" rx="8" fill="white" stroke="#d8e0ea"/>
 <rect x="347" y="150" width="5" height="210" rx="0" fill="#087f74" stroke="#087f74"/>
 <text x="369" y="184" font-size="21" font-weight="600" fill="#17283f">ReSpeaker Clip</text>
@@ -28,7 +28,7 @@
 <rect x="961" y="150" width="279" height="210" rx="8" fill="white" stroke="#d8e0ea"/>
 <rect x="961" y="150" width="5" height="210" rx="0" fill="#087f74" stroke="#087f74"/>
 <text x="983" y="184" font-size="21" font-weight="600" fill="#17283f">受控 ASR 服务</text>
-<text x="983" y="220" font-size="18" font-weight="400" fill="#607088">接收已校验的 WAV 音频</text>
+<text x="983" y="220" font-size="18" font-weight="400" fill="#607088">每次接收一个短块及上下文</text>
 <text x="983" y="248" font-size="18" font-weight="400" fill="#607088">返回识别原文和时间戳</text>
 <text x="983" y="276" font-size="18" font-weight="400" fill="#607088">speaker 表示匿名说话人</text>
 <text x="983" y="304" font-size="18" font-weight="400" fill="#607088">服务地址由 Server 配置</text>
@@ -74,20 +74,20 @@
 <rect x="860" y="710" width="360" height="185" rx="8" fill="white" stroke="#d8e0ea"/>
 <rect x="860" y="710" width="5" height="185" rx="0" fill="#087f74" stroke="#087f74"/>
 <text x="882" y="744" font-size="21" font-weight="600" fill="#17283f">后台任务与恢复</text>
-<text x="882" y="780" font-size="18" font-weight="400" fill="#607088">顺序领取任务并续期执行租约</text>
-<text x="882" y="808" font-size="18" font-weight="400" fill="#607088">调用解码器生成 WAV</text>
-<text x="882" y="836" font-size="18" font-weight="400" fill="#607088">调用 ASR 并保存原文和 VTT</text>
-<text x="882" y="864" font-size="18" font-weight="400" fill="#607088">恢复未完成发布，按规则重试</text>
+<text x="882" y="780" font-size="18" font-weight="400" fill="#607088">从片段行领取单块并续租</text>
+<text x="882" y="808" font-size="18" font-weight="400" fill="#607088">成功块持续保存，失败块单独重试</text>
+<text x="882" y="836" font-size="18" font-weight="400" fill="#607088">汇总时间轴、原文与整条 VTT</text>
+<text x="882" y="864" font-size="18" font-weight="400" fill="#607088">恢复未提交发布，不重跑成功块</text>
 <rect x="60" y="923" width="1160" height="101" rx="8" fill="white" stroke="#d8e0ea"/>
 <text x="82" y="958" font-size="21" font-weight="600" fill="#087f74">受控解码子进程</text>
-<text x="82" y="994" font-size="18" font-weight="400" fill="#17283f">校验并按序解码 raw Opus，输出 16 kHz 单声道 PCM16 WAV；执行受资源限制与超时控制。</text>
+<text x="82" y="994" font-size="18" font-weight="400" fill="#17283f">每份 raw 流式解码为短 WAV，不合成整条音频；默认 60 秒核心块，ASR 另加同原件内上下文。</text>
 <rect x="40" y="1095" width="380" height="255" rx="8" fill="white" stroke="#d8e0ea"/>
 <rect x="40" y="1095" width="5" height="255" rx="0" fill="#087f74" stroke="#087f74"/>
 <text x="62" y="1129" font-size="21" font-weight="600" fill="#17283f">业务 SQLite · 保存录音业务数据</text>
 <text x="62" y="1165" font-size="18" font-weight="400" fill="#607088">accounts：保存本站用户身份</text>
-<text x="62" y="1193" font-size="18" font-weight="400" fill="#607088">recordings：保存录音版本与原文 JSON</text>
-<text x="62" y="1221" font-size="18" font-weight="400" fill="#607088">recording_segments：索引原始片段</text>
-<text x="62" y="1249" font-size="18" font-weight="400" fill="#607088">jobs：保存执行状态和产物元数据</text>
+<text x="62" y="1193" font-size="18" font-weight="400" fill="#607088">recordings：汇总版本、清单、JSON/VTT</text>
+<text x="62" y="1221" font-size="18" font-weight="400" fill="#607088">recording_segments：原件与行内分块结果</text>
+<text x="62" y="1249" font-size="18" font-weight="400" fill="#607088">共三张表，不另设 jobs 或 chunk 表</text>
 <rect x="450" y="1095" width="380" height="255" rx="8" fill="white" stroke="#d8e0ea"/>
 <rect x="450" y="1095" width="5" height="255" rx="0" fill="#087f74" stroke="#087f74"/>
 <text x="472" y="1129" font-size="21" font-weight="600" fill="#17283f">设备与上传 SQLite · registry</text>
@@ -99,7 +99,7 @@
 <rect x="860" y="1095" width="5" height="255" rx="0" fill="#087f74" stroke="#087f74"/>
 <text x="882" y="1129" font-size="21" font-weight="600" fill="#17283f">私有文件存储 · 保存文件内容</text>
 <text x="882" y="1165" font-size="18" font-weight="400" fill="#607088">raw：保留设备上传原件</text>
-<text x="882" y="1193" font-size="18" font-weight="400" fill="#607088">WAV：提供播放与识别输入</text>
+<text x="882" y="1193" font-size="18" font-weight="400" fill="#607088">核心 WAV：按块播放与生成 ASR 输入</text>
 <text x="882" y="1221" font-size="18" font-weight="400" fill="#607088">VTT：保存可下载字幕</text>
 <text x="882" y="1249" font-size="18" font-weight="400" fill="#607088">通过鉴权接口读取，路径不对外公开</text>
 </g>

@@ -1,6 +1,6 @@
 # ReSpeaker Clip · Server / Web 开发设计
 
-v1 · 2026-10-30
+v2 · 2026-11-01
 
 ## 1. 整体架构与主要模块
 
@@ -13,7 +13,7 @@ v1 · 2026-10-30
 - **客户端**：浏览器经同源 HTTPS 调用 Server，经 BLE 与 Clip 交互；Clip 经 Wi-Fi 使用 DTLS 直传录音。BLE 用于设备配置，录音上传走 Clip 到 Server 的连接。
 - **Server**：按图中 Python / FastAPI 单进程基线组织接入、认证、设备、录音和后台任务模块；解码使用受控子进程。模块是职责划分，后台任务按顺序领取执行。
 - **外部依赖**：Google 提供登录身份验证，本站会话由 Server 维护；ASR 通过服务端配置的受控端点接收 WAV，返回文字、时间戳和 speaker。未配置 ASR 时仍可生成和播放 WAV。
-- **存储边界**：设备与上传 SQLite（registry）保存设备绑定、凭证和上传来源；业务 SQLite 保存用户、录音、片段、任务及转写 JSON；两者是独立的 SQLite 数据库，分别提交事务；私有文件目录保存 raw、WAV 和 VTT。会话与登录临时状态保存在内存。
+- **存储边界**：设备与上传 SQLite（registry）保存设备绑定、凭证和上传来源；业务 SQLite 保存用户、录音、片段、行内处理状态及转写 JSON；两者是独立的 SQLite 数据库，分别提交事务；私有文件目录保存 raw、WAV 和 VTT。会话与登录临时状态保存在内存。
 
 图中 Web 9529、HTTPS 兼容接口 9528、UDP/DTLS 9528 表示接入基线；Web 对外访问使用 HTTPS，Google 回调地址按部署配置精确登记。本文描述设计约定，部署和实机验收需另行验证。
 
@@ -25,9 +25,9 @@ v1 · 2026-10-30
 - 设备与绑定：Server；UID 登记校验、绑定/激活、上传配置发放与确认、改名、凭证撤销；[设备规则](#ble)
 - 上传接收：Server；校验凭证与 owner、断点续传、raw 和来源索引持久化；完成后返回 COMPLETE；[原件收件](docs/audio-processing.md#ingest)
 - 来源投影与录音聚合：Server 后台；将设备与上传 SQLite（registry）的 ready 来源幂等投影到业务 SQLite，按来源/session 聚合片段并更新输入版本；[收件与聚合](docs/audio-processing.md#ingest)
-- 任务调度与恢复：Server 后台；持久任务、顺序领取、租约、重试、版本检查、发布恢复与文件修复；[双写与恢复](docs/audio-processing.md#publication)
-- 音频解码：受控子进程；校验并按序解码 raw Opus，生成 16 kHz、单声道 PCM16 WAV；[音频存储与解码](docs/audio-processing.md#storage)
-- 转写与导出生成：Server 后台 / ASR；调用 ASR、校验 cues，提交转写 JSON 与 VTT；Markdown 从同组原文生成；[转写设计](docs/audio-processing.md#transcript)
+- 分块调度与恢复：Server 后台；扫描片段行内状态、顺序领取单块、租约与局部重试，恢复发布与文件；[双写与恢复](docs/audio-processing.md#publication)
+- 音频解码：受控子进程；每份原件独立流式解码为短 WAV，不先合成整条录音；[音频存储与解码](docs/audio-processing.md#storage)
+- 转写与字幕汇总：Server 后台 / ASR；按块识别，成功块单独保存；统一时间偏移并发布整条录音 JSON/VTT，Markdown 从同版本原文生成；[转写设计](docs/audio-processing.md#transcript)
 - 录音查询与媒体读取：Server；按 owner 返回录音与当前版本链接，鉴权读取 WAV/JSON/VTT/Markdown，支持音频 Range；[Web API](#web-api)、[媒体 API](docs/audio-processing.md#media-api)
 - 持久存储与备份：Server 数据卷 / 独立备份；管理设备与上传 SQLite（registry）、业务 SQLite、私有文件、文件/数据库双写、加密快照与恢复；[数据模型](#data-model)、[存储安全](docs/audio-processing.md#security)
 
@@ -35,7 +35,9 @@ v1 · 2026-10-30
 
 ## 2. 对象与数据表
 
-所有录音来自 Clip 直传。设备与上传 SQLite（registry）保存绑定与来源，业务 SQLite 保存 accounts、recordings、recording_segments、jobs；转写原文保存在 recordings.transcript_json。owner 始终引用 accounts.user_id。
+所有录音来自 Clip 直传。设备与上传 SQLite（registry）保存绑定与来源，业务 SQLite 仅保留 accounts、recordings、recording_segments 三张表。recording_segments 一行对应一个原始文件，其 chunks_json 保存该文件的分块结果与状态；recordings 保存整条录音的汇总状态、播放清单与转写 JSON。独立 jobs 表取消。owner 始终引用 accounts.user_id。
+
+默认按 60 秒核心音频分块，同一原件内识别时增加前后至多 1 秒上下文，失败只重试对应块；新上传不重跑成功块。播放按无重叠核心 WAV 清单进行，整条字幕按样本偏移合并，不以完整音频合成为前置条件。详细字段、缺号处理、部分结果和恢复规则见[分块处理设计](docs/audio-processing.md#tables)。
 
 对象统一用带注释的 JSON（jsonc）说明。注释用于开发文档，实际请求/响应为标准 JSON；时间为 UTC Unix 毫秒，hash 和凭证均为示例值。
 
@@ -66,7 +68,7 @@ v1 · 2026-10-30
 
 新用户 ID 使用 uuid4().hex，历史 user_id 原样迁移。相同 sub 复用用户；邮箱与其他 sub 冲突时返回 account_identity_conflict，保留原归属。
 
-设备别名保存到 bindings.display_name，配置确认保存到 binding_profiles.confirmed_revision；UID 映射由 device_uids 维护。音频相关三张表的[字段说明](docs/audio-processing.md#tables)在音频文档，完整 DDL 见[本页 SQL](#sql)。
+设备别名保存到 bindings.display_name，配置确认保存到 binding_profiles.confirmed_revision；UID 映射由 device_uids 维护。音频相关两张表的[字段说明](docs/audio-processing.md#tables)在音频文档，完整 DDL 见[本页 SQL](#sql)。
 
 <a id="web-api"></a>
 
@@ -239,11 +241,11 @@ GET `/devices` 返回 `{items:[设备对象]}`；POST `/devices/activate` 返回
   "recorded_at": null,
   // integer；首次收件时间，UTC Unix 毫秒。
   "received_at": 1793318400000,
-  // integer|null；当前 WAV 时长，毫秒。
+  // integer|null；当前可定位连续音频前缀的时长，毫秒。
   "duration_ms": 5800,
-  // enum；pending / running / ready / failed，表示当前输入的解码状态。
+  // enum；pending / partial / ready / failed，表示当前已收输入的音频进度。
   "audio_state": "ready",
-  // enum；not_configured / pending / running / ready / failed。
+  // enum；not_configured / pending / partial / ready / failed。
   "transcript_state": "ready",
   // string；同版本转写第一句，未就绪或静音时为空字符串。
   "preview_text": "我们确认一下今天的安排。",
@@ -251,21 +253,23 @@ GET `/devices` 返回 `{items:[设备对象]}`；POST `/devices/activate` 返回
   "integrity": "unknown",
   // integer >=0；已收输入版本。
   "input_revision": 1,
-  // integer|null；当前已发布 WAV 的版本。
-  "audio_revision": 1,
-  // integer|null；当前文字版本，ready 时等于 audio_revision。
-  "transcript_revision": 1,
-  // string|null；当前 input_revision 失败 decode 任务的 jobs.error_code。
+  // integer；已发布音频清单、JSON 和 VTT 的共同结果版本；首次发布前为 0。
+  "result_revision": 1,
+  // integer|null；当前结果使用的输入集合版本。
+  "published_input_revision": 1,
+  // boolean；存在未完成块、缺号或设备录音闭合尚未知时为 true。
+  "partial": true,
+  // string|null；当前所需 segment 的解码/核心 WAV 错误，按段号取首个。
   "audio_error_code": null,
-  // string|null；当前 audio_revision 失败 transcribe 任务的 jobs.error_code。
+  // string|null；当前块识别或汇总错误，按段号/块号取首个，再取汇总错误。
   "transcript_error_code": null,
-  // string|null；链接使用 audio_revision；具体状态仍由媒体 API 复核。
+  // object；链接共用 result_revision；无可用结果时对应值为 null。
   "links": {
-    // 当前 WAV publication_state=ready 时提供。
-    "audio": "/api/boa/v1/recordings/demo-recording/audio.wav?revision=1",
-    // transcript_state=ready 且 transcript_revision=audio_revision 时提供。
+    // 有已发布的可定位音频清单时提供；返回分块播放清单。
+    "audio": "/api/boa/v1/recordings/demo-recording/audio?revision=1",
+    // 有已发布的成功文字结果时提供；允许明确标记的 partial 或成功静音。
     "transcript": "/api/boa/v1/recordings/demo-recording/transcript?revision=1",
-    // 文字可读且当前 VTT publication_state=ready 时提供。
+    // 同版本文字可读、VTT 文件 ready 时提供。
     "vtt": "/api/boa/v1/recordings/demo-recording/transcript.vtt?revision=1",
     // 文字可读时提供，从同版本 JSON 生成。
     "markdown": "/api/boa/v1/recordings/demo-recording/transcript.md?revision=1"
@@ -284,7 +288,7 @@ GET `/devices` 返回 `{items:[设备对象]}`；POST `/devices/activate` 返回
 }
 ```
 
-新输入处理中仍可返回上一份已发布音频的链接；VTT 文件修复失败只影响 vtt 链接，JSON/Markdown 按已提交文字状态返回。错误字段未失败时为 null。
+新输入或分块处理中仍返回上一份已提交快照的链接；进度状态描述当前输入，links 指向明确的 result_revision。允许部分音频/文字，partial 和 coverage 须展示缺口；当前输入 ready 不代表设备录音已闭合。VTT 修复失败只影响 vtt 链接，JSON/Markdown 保持可读。错误字段无对应失败时为 null。
 
 from/to 为 YYYY-MM-DD，默认时区 Asia/Shanghai，结束日包含当天。列表按有效录音时间/id 降序：recorded_at 非空且 time_source=client_confirmed 时使用 recorded_at，其余使用 received_at。默认 30 条、上限 100；筛选改变时重置游标，空列表返回 items=[]、next_cursor=null。
 
@@ -401,8 +405,7 @@ Clip Wi-Fi 扫描结果由 Web 的 BLE 适配层读取：
 运行时每个数据库连接都设置 foreign_keys=ON、synchronous=FULL、busy_timeout=5000；两个库分别提交，跨库顺序见音频文档。
 
 ```sql
--- 录音助手 v1：四张业务表初始 DDL。
--- 原始音频/派生文件在磁盘；转写 JSON 在 recordings；会话只在内存。
+-- v2 新库设计：三张业务表；此段不是旧库迁移脚本。
 PRAGMA foreign_keys=ON;
 PRAGMA journal_mode=WAL;
 PRAGMA synchronous=FULL;
@@ -427,75 +430,71 @@ CREATE TABLE recordings (
   received_at INTEGER NOT NULL, last_received_at INTEGER NOT NULL,
   integrity TEXT NOT NULL DEFAULT 'unknown' CHECK(integrity IN ('unknown','gap','confirmed_complete')),
   input_revision INTEGER NOT NULL DEFAULT 0 CHECK(input_revision>=0),
-  audio_revision INTEGER, transcript_revision INTEGER,
-  audio_state TEXT NOT NULL DEFAULT 'pending' CHECK(audio_state IN ('pending','running','ready','failed')),
-  transcript_state TEXT NOT NULL DEFAULT 'pending' CHECK(transcript_state IN ('not_configured','pending','running','ready','failed')),
-  wav_job_id TEXT, vtt_job_id TEXT, duration_ms INTEGER CHECK(duration_ms>=0),
-  -- 唯一文字主源：{"schema_version":1,"time_unit":"ms","cues":[...]}。
-  -- cue 结构/时间/speaker 校验由应用负责；数据库保证外层结构与体积。
-  transcript_json TEXT,
+  result_revision INTEGER NOT NULL DEFAULT 0 CHECK(result_revision>=0),
+  published_input_revision INTEGER CHECK(published_input_revision>0 AND published_input_revision<=input_revision),
+  timeline_prefix_no INTEGER NOT NULL DEFAULT 0 CHECK(timeline_prefix_no>=0),
+  duration_ms INTEGER CHECK(duration_ms>=0),
+  audio_state TEXT NOT NULL DEFAULT 'pending' CHECK(audio_state IN ('pending','partial','ready','failed')),
+  transcript_state TEXT NOT NULL DEFAULT 'pending' CHECK(transcript_state IN ('not_configured','pending','partial','ready','failed')),
+  audio_manifest_json TEXT, transcript_json TEXT, vtt_file_json TEXT,
+  merge_dirty INTEGER NOT NULL DEFAULT 1 CHECK(merge_dirty IN (0,1)),
+  merge_state TEXT NOT NULL DEFAULT 'pending' CHECK(merge_state IN ('idle','pending','running','retry_wait','failed')),
+  merge_attempt INTEGER NOT NULL DEFAULT 0 CHECK(merge_attempt BETWEEN 0 AND 4),
+  merge_run_after INTEGER NOT NULL,
+  lease_token TEXT, lease_until INTEGER, merge_error_code TEXT,
+  pending_publication_json TEXT,
+  retained_files_json TEXT NOT NULL DEFAULT '[]',
   updated_at INTEGER NOT NULL,
   UNIQUE(source_kind,source_namespace,binding_epoch,source_session), UNIQUE(id,owner),
-  CHECK(audio_revision IS NULL OR (audio_revision>0 AND audio_revision<=input_revision)),
-  CHECK(transcript_revision IS NULL OR (transcript_revision>0 AND transcript_revision<=input_revision)),
-  CHECK(audio_state<>'ready' OR (wav_job_id IS NOT NULL AND audio_revision IS NOT NULL)),
-  CHECK(transcript_json IS NULL OR CASE WHEN json_valid(transcript_json) THEN
-    length(CAST(transcript_json AS BLOB))<=8388608
-    AND COALESCE(json_type(transcript_json)='object'
-      AND json_type(transcript_json,'$.schema_version')='integer'
-      AND json_extract(transcript_json,'$.schema_version')=1
-      AND json_extract(transcript_json,'$.time_unit')='ms'
-      AND json_type(transcript_json,'$.cues')='array',0)
-    ELSE 0 END),
-  CHECK(transcript_state<>'ready' OR (vtt_job_id IS NOT NULL AND transcript_json IS NOT NULL
-    AND transcript_revision IS NOT NULL AND audio_revision IS NOT NULL AND transcript_revision=audio_revision)),
-  FOREIGN KEY(wav_job_id,id,owner,audio_revision) REFERENCES jobs(id,recording_id,owner,input_revision) DEFERRABLE INITIALLY DEFERRED,
-  FOREIGN KEY(vtt_job_id,id,owner,transcript_revision) REFERENCES jobs(id,recording_id,owner,input_revision) DEFERRABLE INITIALLY DEFERRED
+  CHECK(merge_state<>'running' OR (lease_token IS NOT NULL AND lease_until IS NOT NULL)),
+  CHECK(result_revision=0 OR published_input_revision IS NOT NULL),
+  -- 当前进度可能先于汇总成功，因此不以 transcript_json 非空约束 ready。
+  CHECK(audio_manifest_json IS NULL OR CASE WHEN json_valid(audio_manifest_json) THEN json_type(audio_manifest_json)='object' AND length(CAST(audio_manifest_json AS BLOB))<=8388608 ELSE 0 END),
+  CHECK(transcript_json IS NULL OR CASE WHEN json_valid(transcript_json) THEN json_type(transcript_json)='object' AND length(CAST(transcript_json AS BLOB))<=8388608 ELSE 0 END),
+  CHECK(vtt_file_json IS NULL OR CASE WHEN json_valid(vtt_file_json) THEN json_type(vtt_file_json)='object' AND length(CAST(vtt_file_json AS BLOB))<=65536 ELSE 0 END),
+  CHECK(pending_publication_json IS NULL OR CASE WHEN json_valid(pending_publication_json) THEN json_type(pending_publication_json)='object' AND length(CAST(pending_publication_json AS BLOB))<=33554432 ELSE 0 END),
+  CHECK(retained_files_json IS NULL OR CASE WHEN json_valid(retained_files_json) THEN json_type(retained_files_json)='array' AND length(CAST(retained_files_json AS BLOB))<=8388608 ELSE 0 END)
 );
 CREATE INDEX recordings_owner_date ON recordings(owner,recorded_at DESC,id DESC);
 CREATE INDEX recordings_owner_received ON recordings(owner,received_at DESC,id DESC);
+CREATE INDEX recordings_merge ON recordings(merge_dirty,merge_state,merge_run_after);
 CREATE TABLE recording_segments (
   id TEXT PRIMARY KEY NOT NULL, owner TEXT NOT NULL, recording_id TEXT NOT NULL,
   source_namespace TEXT NOT NULL, source_id TEXT NOT NULL,
   segment_no INTEGER NOT NULL CHECK(segment_no>0),
   state TEXT NOT NULL CHECK(state IN ('receiving','ready')),
-  -- 同一行兼作 raw 文件索引与来源幂等收据，未收完整时允许为空。
   raw_relative_path TEXT UNIQUE,
   size_bytes INTEGER CHECK(size_bytes>0), sha256 TEXT CHECK(length(sha256)=64),
   received_at INTEGER NOT NULL, imported_at INTEGER,
+  process_generation INTEGER NOT NULL DEFAULT 1 CHECK(process_generation>0),
+  process_config_json TEXT, previous_generation_json TEXT,
+  sample_count INTEGER CHECK(sample_count>0),
+  decode_state TEXT NOT NULL DEFAULT 'pending' CHECK(decode_state IN ('pending','running','retry_wait','ready','failed')),
+  transcript_state TEXT NOT NULL DEFAULT 'pending' CHECK(transcript_state IN ('not_configured','pending','partial','running','retry_wait','ready','failed')),
+  work_stage TEXT CHECK(work_stage IN ('decode','transcribe','repair')),
+  work_chunk_index INTEGER CHECK(work_chunk_index>=0),
+  attempt INTEGER NOT NULL DEFAULT 0 CHECK(attempt BETWEEN 0 AND 4),
+  run_after INTEGER NOT NULL, lease_token TEXT, lease_until INTEGER,
+  error_code TEXT,
+  chunks_json TEXT NOT NULL DEFAULT '[]', pending_artifact_json TEXT,
+  updated_at INTEGER NOT NULL,
   UNIQUE(source_namespace,source_id), UNIQUE(recording_id,segment_no),
   FOREIGN KEY(recording_id,owner) REFERENCES recordings(id,owner),
   CHECK(state<>'ready' OR (raw_relative_path IS NOT NULL AND size_bytes IS NOT NULL
-    AND sha256 IS NOT NULL AND imported_at IS NOT NULL))
+    AND sha256 IS NOT NULL AND imported_at IS NOT NULL)),
+  CHECK(decode_state<>'ready' OR (sample_count IS NOT NULL AND process_config_json IS NOT NULL)),
+  CHECK((decode_state<>'running' AND transcript_state<>'running' AND work_stage IS NULL)
+    OR (work_stage IS NOT NULL AND lease_token IS NOT NULL AND lease_until IS NOT NULL)),
+  CHECK(process_config_json IS NULL OR CASE WHEN json_valid(process_config_json) THEN json_type(process_config_json)='object' AND length(CAST(process_config_json AS BLOB))<=65536 ELSE 0 END),
+  CHECK(previous_generation_json IS NULL OR CASE WHEN json_valid(previous_generation_json) THEN json_type(previous_generation_json)='object' AND length(CAST(previous_generation_json AS BLOB))<=16777216 ELSE 0 END),
+  CHECK(chunks_json IS NULL OR CASE WHEN json_valid(chunks_json) THEN json_type(chunks_json)='array' AND length(CAST(chunks_json AS BLOB))<=8388608 ELSE 0 END),
+  CHECK(pending_artifact_json IS NULL OR CASE WHEN json_valid(pending_artifact_json) THEN json_type(pending_artifact_json)='object' AND length(CAST(pending_artifact_json AS BLOB))<=8388608 ELSE 0 END)
 );
-CREATE TABLE jobs (
-  id TEXT PRIMARY KEY NOT NULL, owner TEXT NOT NULL, recording_id TEXT NOT NULL,
-  input_revision INTEGER NOT NULL CHECK(input_revision>0),
-  kind TEXT NOT NULL CHECK(kind IN ('decode','transcribe')),
-  state TEXT NOT NULL CHECK(state IN ('pending','running','retry_wait','succeeded','failed')),
-  attempt INTEGER NOT NULL DEFAULT 0 CHECK(attempt BETWEEN 0 AND 4), run_after INTEGER NOT NULL,
-  lease_token TEXT, lease_until INTEGER,
-  input_json TEXT NOT NULL CHECK(json_valid(input_json)),
-  -- 一个 decode 只产出 WAV，一个 transcribe 只产出 VTT；原文同时提交到 recordings。
-  -- 文件索引与发布记录并入本行；每次发布使用新 UUID 路径，重试和修复不覆盖旧文件。
-  publication_state TEXT NOT NULL DEFAULT 'none' CHECK(publication_state IN ('none','prepared','ready','missing','abandoned')),
-  tmp_relative_path TEXT UNIQUE, final_relative_path TEXT UNIQUE,
-  size_bytes INTEGER CHECK(size_bytes>0), sha256 TEXT CHECK(length(sha256)=64),
-  sample_count INTEGER CHECK(sample_count>=0),
-  error_code TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,
-  UNIQUE(recording_id,input_revision,kind), UNIQUE(id,recording_id,owner,input_revision),
-  FOREIGN KEY(recording_id,owner) REFERENCES recordings(id,owner),
-  CHECK(state<>'running' OR (lease_token IS NOT NULL AND lease_until IS NOT NULL)),
-  CHECK(publication_state<>'prepared' OR (tmp_relative_path IS NOT NULL AND final_relative_path IS NOT NULL)),
-  CHECK(publication_state<>'ready' OR (state='succeeded' AND final_relative_path IS NOT NULL
-    AND size_bytes IS NOT NULL AND sha256 IS NOT NULL)),
-  CHECK(state<>'succeeded' OR publication_state IN ('ready','missing'))
-);
-CREATE INDEX jobs_claim ON jobs(state,run_after,id);
-CREATE UNIQUE INDEX jobs_single_running ON jobs((1)) WHERE state='running';
--- 用户/归属/版本由 FK 与 CHECK 约束；指针对应任务 kind、ready/hash 由发布和读取接口核验。
--- 迁移与 PRAGMA user_version 更新同事务执行，未知更高版本返回启动错误。
-PRAGMA user_version=1;
+CREATE INDEX segments_decode ON recording_segments(state,decode_state,run_after);
+CREATE INDEX segments_transcribe ON recording_segments(state,transcript_state,run_after);
+-- JSON 内部字段、核心样本连续性、cues、owner/generation/租约 CAS 由应用层校验。
+-- 一个调度进程串行执行；跨两张表的“全局一个执行者”不靠本 DDL 保证。
+PRAGMA user_version=2;
 COMMIT;
 ```
 
@@ -534,12 +533,19 @@ COMMIT;
 ```dotenv
 # 设备与上传 SQLite（registry）：设备绑定、凭证、来源记录。
 SPEAKER_REGISTRY_DB_PATH=/var/lib/speaker/db/registry.sqlite3
-# 业务 SQLite：账号、录音、片段、任务、转写 JSON。
+# 业务 SQLite：账号、录音、原始片段、行内分块状态及转写 JSON。
 SPEAKER_BUSINESS_DB_PATH=/var/lib/speaker/db/business.sqlite3
-# 私有音频目录：raw 原件、WAV、VTT 和处理临时文件。
+# 私有音频目录：raw 原件、核心分块 WAV、汇总 VTT 和处理临时文件。
 SPEAKER_STORAGE_ROOT=/var/lib/speaker/audio
 # 独立加密备份的挂载目录；加密密钥由部署环境单独提供。
 SPEAKER_BACKUP_ROOT=/mnt/speaker-backup
+
+# 分块设计默认值；须适配实际 ASR 的输入时长/体积限制。
+SPEAKER_CHUNK_SECONDS=60
+SPEAKER_CONTEXT_SECONDS=1
+SPEAKER_ASR_TIMEOUT_SECONDS=120
+# ASR 端点、模型、输入上限、凭证及版本另由服务端部署配置登记。
+# 未登记有效 ASR 配置时仍解码并播放，文字状态为 not_configured。
 
 # Web 对外 HTTPS 地址及 Google 登录配置。
 PUBLIC_WEB_ORIGIN=https://speaker.example.com
@@ -570,4 +576,5 @@ EnvironmentFile=/etc/speaker/server.env
 - 检查必填路径为绝对路径，两个数据库不指向同一文件，数据卷已解锁，服务账号具有所需读写权限。
 - 首次部署按第 6 节初始化数据库；已有部署检查数据库版本并执行迁移。配置指向的既有数据库缺失时应报错，避免误建空库后继续运行。
 - 校验备份目录、加密密钥与用户额度配置；要求与[音频存储及恢复设计](docs/audio-processing.md#security)一致，未满足时拒绝启动。
-- 完成数据库和存储校验后，恢复过期任务、对账 ready 来源，再开放接收入口与 Web API。
+- 配置 ASR 时校验分块长度为正、上下文小于核心块长，且含上下文 WAV 的总时长/体积不超 ASR 上限；已有成功块沿用冻结配置，修改默认值不自动触发历史重识别。
+- 完成数据库和存储校验后，恢复片段/录音行内租约及未提交发布、对账 ready 来源，再开放接收入口与 Web API。
