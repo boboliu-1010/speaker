@@ -1,9 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1280" height="1010" viewBox="0 0 1280 1010">
-<title>已就绪原件如何进入业务库</title>
+<title>原件导入</title>
 <rect width="1280" height="100%" fill="white"/>
 <g font-family="PingFang SC,Microsoft YaHei,Noto Sans CJK SC,Arial,sans-serif">
-<text x="40" y="55" font-size="30" font-weight="600" fill="#17283f">已就绪原件如何进入业务库</text>
-<text x="40" y="88" font-size="17" font-weight="400" fill="#607088">registry 提供 ready 来源；业务模块校验、幂等导入并记录投影进度，不定义设备传输。</text>
+<text x="40" y="55" font-size="30" font-weight="600" fill="#17283f">原件导入</text>
+<text x="40" y="88" font-size="17" font-weight="400" fill="#607088">读取 ready 来源，校验原件和归属，写入业务记录后标记导入完成。</text>
 <line x1="40" y1="112" x2="1240" y2="112" stroke="#d8e0ea" stroke-width="1.5"/>
 <rect x="40" y="150" width="760" height="738" rx="8" fill="white" stroke="#d8e0ea"/>
 <text x="62" y="189" font-size="23" font-weight="600" fill="#17283f">registry.sources · 已就绪原件的来源记录</text>
@@ -29,7 +29,7 @@
 <text x="80" y="671" font-size="16" font-weight="400" fill="#17283f">&quot;object_id&quot;: &quot;object-001&quot;,</text>
 <text x="80" y="696" font-size="15" font-weight="400" fill="#607088">// 来源建立时间；既有字段使用 Unix 秒，导入业务时转毫秒</text>
 <text x="80" y="717" font-size="16" font-weight="400" fill="#17283f">&quot;created&quot;: 1793318400,</text>
-<text x="80" y="742" font-size="15" font-weight="400" fill="#607088">// 业务模块只消费 ready 来源；其他状态由接入组件管理</text>
+<text x="80" y="742" font-size="15" font-weight="400" fill="#607088">// 只导入 ready 来源；其他状态由接入组件管理</text>
 <text x="80" y="763" font-size="16" font-weight="400" fill="#17283f">&quot;state&quot;: &quot;ready&quot;,</text>
 <text x="80" y="788" font-size="15" font-weight="400" fill="#607088">// 业务导入完成时间，Unix 毫秒；null 表示尚未标记导入完成</text>
 <text x="80" y="809" font-size="16" font-weight="400" fill="#17283f">&quot;projected_at&quot;: null</text>
@@ -37,9 +37,9 @@
 <rect x="840" y="150" width="400" height="158" rx="8" fill="white" stroke="#d8e0ea"/>
 <rect x="840" y="150" width="5" height="158" rx="0" fill="#087f74" stroke="#087f74"/>
 <text x="862" y="184" font-size="21" font-weight="600" fill="#17283f">1 · 读取 ready 来源</text>
-<text x="862" y="220" font-size="18" font-weight="400" fill="#607088">从既有来源记录取得原件身份</text>
+<text x="862" y="220" font-size="18" font-weight="400" fill="#607088">读取原件来源记录</text>
 <text x="862" y="248" font-size="18" font-weight="400" fill="#607088">owner、会话与段号取可信元数据</text>
-<text x="862" y="276" font-size="18" font-weight="400" fill="#607088">本文以原件已可靠保存为前提</text>
+<text x="862" y="276" font-size="18" font-weight="400" fill="#607088">原件已由接入组件可靠保存</text>
 <rect x="840" y="334" width="400" height="140" rx="8" fill="white" stroke="#d8e0ea"/>
 <rect x="840" y="334" width="5" height="140" rx="0" fill="#245cca" stroke="#245cca"/>
 <text x="862" y="368" font-size="21" font-weight="600" fill="#17283f">2 · 校验原件与归属</text>

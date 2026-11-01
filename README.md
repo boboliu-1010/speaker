@@ -1,43 +1,43 @@
 # ReSpeaker Clip · Server / Web 开发设计
 
-v2 简化修订 · 2026-11-01
+v2 · 2026-11-02
 
 ## 1. 整体架构与主要模块
 
-本文描述 Server / Web 的开发设计，覆盖用户、设备、已就绪原件导入、后台音频处理及结果读取。Clip 与 Server 之间的文件传输由既有接入组件负责；本文从原件和来源元数据已就绪的边界开始，不定义设备传输协议。
+Server / Web 负责用户和设备管理、录音处理、播放与导出。原始文件及其归属信息由接入组件提供，文件就绪后导入业务库。设备传输协议不在本文范围内。
 
 ### 1.1 架构总览
 
 ![整体架构：客户端、Server 模块、外部服务与存储](docs/assets/diagrams/01-system-architecture.svg)
 
-- **客户端**：浏览器经同源 HTTPS 调用用户、设备和录音接口，经 BLE 配置设备；原件导入以接入组件提供的已就绪来源为输入。
-- **Server**：按图中 Python / FastAPI 单进程基线组织接入、认证、设备、录音和后台任务模块；解码使用受控子进程。后台只有一个工作者，持有本地独占锁并按顺序处理；禁止多 Uvicorn worker 或多机共享数据目录运行。
-- **外部依赖**：Google 提供登录身份验证，本站会话由 Server 维护；ASR 通过服务端配置的受控端点接收 WAV，返回文字、时间戳和 speaker。未配置 ASR 时仍可生成和播放 WAV。
-- **存储边界**：设备与上传 SQLite（registry）保存设备绑定、凭证和上传来源；业务 SQLite 保存用户、录音、片段及行内分块结果；两者是独立的 SQLite 数据库，分别提交事务；私有文件目录保存 raw 与核心 WAV；VTT/Markdown 从数据库快照生成。会话与登录临时状态保存在内存。
+- **Web**：通过同源 HTTPS 调用用户、设备和录音接口，通过 BLE 配置设备。
+- **Server**：使用 Python / FastAPI 单进程部署。一个后台工作者持有独占锁，顺序处理解码、识别和恢复；解码在受资源限制的子进程中执行。多 Uvicorn worker 和多机共享数据目录暂不支持。
+- **外部服务**：Google 验证登录身份，Server 管理本站会话。ASR 接收短 WAV，返回文字、时间戳和说话人标识；未配置 ASR 时仍可解码和播放音频。
+- **存储**：设备与上传 SQLite（registry）保存绑定、凭证和来源记录；业务 SQLite 保存用户、录音、片段及分块结果。两个库分别提交事务。raw 原件与核心 WAV 存在私有目录，VTT 和 Markdown 从 JSON 快照生成。登录临时状态和会话只保存在内存。
 
-Web 服务端口基线为 9529，对外通过 HTTPS 访问；Google 回调地址按部署配置精确登记。本文描述设计约定，部署和实机验收需另行验证。
+Web 服务端口为 9529，对外使用 HTTPS。Google 回调地址须与部署配置一致。当前为设计稿，尚未完成实现和实机验收。
 
 ### 1.2 主要模块
 
-- Web 页面与设备交互：浏览器；登录入口、设备/录音列表、播放与导出；经 BLE 配置设备并读回确认；[Web API](#web-api)、[设备规则](#ble)
-- 用户与会话：Server；Google OIDC、本站会话、当前用户资料读取与修改、CSRF 和账号状态检查；[用户接口](#users-api)、[登录与会话](#oauth)
-- 设备与绑定：Server；UID 登记校验、绑定/激活、上传配置发放与确认、改名、凭证撤销；[设备规则](#ble)
-- 原件导入与录音聚合：Server 后台；读取 registry 的 ready 来源，校验原件及归属，幂等导入业务库并更新 content_revision；[原件导入](docs/audio-processing.md#ingest)
-- 分块调度与恢复：Server 后台；扫描行内状态、单工作者独占锁与分块重试，恢复未完成处理及 WAV；[双写与恢复](docs/audio-processing.md#publication)
-- 音频解码：受控子进程；每份原件独立流式解码为短 WAV，不先合成整条录音；[音频存储与解码](docs/audio-processing.md#storage)
-- 转写与字幕汇总：Server 后台 / ASR；按块识别，成功块单独保存；统一时间偏移并保存录音 JSON 快照，VTT/Markdown 按请求从快照生成；[转写设计](docs/audio-processing.md#transcript)
-- 录音查询与媒体读取：Server；按 owner 返回录音与快照版本链接，鉴权读取 WAV/JSON 并生成 VTT/Markdown，支持音频 Range；[Web API](#web-api)、[媒体 API](docs/audio-processing.md#media-api)
-- 持久存储与备份：Server 数据卷 / 独立备份；管理设备与上传 SQLite（registry）、业务 SQLite、私有文件、文件/数据库双写、加密快照与恢复；[数据模型](#data-model)、[存储安全](docs/audio-processing.md#security)
+- Web：提供登录、设备与录音列表、播放和导出页面，通过 BLE 写入并读回设备配置。[Web API](#web-api)、[设备规则](#ble)
+- 用户与会话：处理 Google 登录、会话、本人资料和账号状态，校验 CSRF。[用户接口](#users-api)、[登录与会话](#oauth)
+- 设备与绑定：校验 UID 登记，处理激活、配置确认、改名和解绑。[设备规则](#ble)
+- 原件导入：读取 registry 的 ready 来源，校验文件及归属，按录音会话导入业务库并更新 content_revision。[原件导入](docs/audio-processing.md#ingest)
+- 后台调度：按片段和块状态安排处理、重试及 WAV 修复。[提交与恢复](docs/audio-processing.md#publication)
+- 音频解码：将每份原件独立、流式解码为短 WAV。[音频存储与解码](docs/audio-processing.md#storage)
+- 转写与汇总：逐块识别并保存结果，换算全局时间后生成录音快照；VTT 和 Markdown 在下载时生成。[转写设计](docs/audio-processing.md#transcript)
+- 录音与媒体接口：按用户查询录音和快照，校验权限后读取音频、文字及导出内容，音频支持 Range。[Web API](#web-api)、[媒体 API](docs/audio-processing.md#media-api)
+- 存储与备份：管理两个 SQLite 库、私有文件、加密备份及恢复，保证文件与索引的提交顺序。[数据模型](#data-model)、[存储安全](docs/audio-processing.md#security)
 
 <a id="data-model"></a>
 
 ## 2. 对象与数据表
 
-业务处理以既有接入组件提供的 ready 原始片段为输入。设备与上传 SQLite（registry）保存绑定与来源，业务 SQLite 仅保留 accounts、recordings、recording_segments 三张表。recording_segments 一行对应一个原始文件，其 chunks_json 保存该文件的分块结果与状态；recordings 保存内容版本和一份可重建的结果快照，包含播放清单、覆盖状态与汇总文字。独立 jobs 表取消。owner 始终引用 accounts.user_id。
+业务库有三张表：accounts 保存用户，recordings 保存一次录音，recording_segments 保存各个原始文件。每份原件的分块状态与识别结果放在 chunks_json，整条录音的播放清单、覆盖状态和文字保存在 recordings.result_json 快照中。owner 引用 accounts.user_id。设备绑定及来源记录仍保存在 registry。
 
-默认按 60 秒核心音频分块，同一原件内识别时增加前后至多 1 秒上下文，失败只重试对应块；新上传不重跑成功块。播放按无重叠核心 WAV 清单进行，整条字幕按样本偏移合并，不以完整音频合成为前置条件。详细字段、缺号处理、部分结果和恢复规则见[分块处理设计](docs/audio-processing.md#tables)。
+每份原件默认切为 60 秒核心音频块，识别时增加同一原件内前后至多 1 秒的上下文。失败只重试对应块，已有成功结果保留。播放器按核心 WAV 清单播放，字幕按样本偏移汇总，无须先合成整条音频。字段、缺号及恢复规则见[分块处理设计](docs/audio-processing.md#tables)。
 
-对象统一用带注释的 JSON（jsonc）说明。注释用于开发文档，实际请求/响应为标准 JSON；时间为 UTC Unix 毫秒，hash 和凭证均为示例值。
+字段示例使用 JSONC，实际请求和响应使用标准 JSON。时间统一为 UTC Unix 毫秒，示例中的 hash 和凭证不是真实数据。
 
 ### accounts 用户对象
 
@@ -55,7 +55,7 @@ Web 服务端口基线为 9529，对外通过 HTTPS 访问；Google 回调地址
   "status": "active",
   // INTEGER；必填；默认 1；>0。认证版本；变更后使旧会话失效。
   "auth_version": 1,
-  // INTEGER；可空。最近登录时间，可空。
+  // INTEGER；可空。最近登录时间。
   "last_login_at": 1793318400000,
   // INTEGER；必填。用户建立时间。
   "created_at": 1793318400000,
@@ -113,9 +113,9 @@ PATCH `/users/me` 请求：
 }
 ```
 
-Server 检查 Origin 和会话 CSRF，只允许 display_name，缺少字段、类型错误、超长或出现额外字段返回 422；不能通过请求修改 user_id、email、google_sub、status、auth_version 或业务 owner。使用参数化 SQL，仅更新会话用户的 display_name 与 updated_at，再返回数据库中的当前资料。
+PATCH 请求须通过 Origin 和 CSRF 检查，且只能包含 display_name。缺少字段、类型错误、超过 100 字符或包含其他字段，均返回 422。Server 使用参数化 SQL 更新本人记录的 display_name、updated_at，并返回最新资料。user_id、email、google_sub、status、auth_version 和 owner 均不可由此接口修改。
 
-`GET /auth/session` 用于获取登录状态和 CSRF，其 user 与 `/users/me` 同样从 accounts 当前行读取，不缓存旧名称。Google 首次建号时可初始化显示名称，后续登录保留本站已设置的名称。当前范围包含本人资料，不增加管理员用户列表、任意用户编辑或账号删除接口。
+`GET /auth/session` 返回登录状态和 CSRF，其中的 user 与 `/users/me` 都读取 accounts 当前记录。首次 Google 登录可初始化名称，后续登录保留本站名称。用户接口仅管理本人资料；管理员操作和账号删除不在本版范围内。
 
 ### 设备写入请求与响应
 
@@ -320,7 +320,7 @@ GET `/devices` 返回 `{items:[设备对象]}`；POST `/devices/activate` 返回
 }
 ```
 
-进度从当前 segment/chunk 在同一读事务内计算，不在 recordings 重复存储；duration、preview、partial 和 links 来自已提交快照。result_stale 表示快照尚未包含最新变化。当前输入 ready 不代表设备录音已闭合；VTT/Markdown 生成失败只影响本次下载，不改变识别结果。错误字段无对应失败时为 null。
+Server 在同一读事务中根据 segment/chunk 计算当前进度；duration、preview、partial 和 links 则读取已提交快照。result_stale 表示有新内容待汇总。ready 只表示已收到的内容处理完成，录音是否完整由 integrity 表示。导出失败不改变识别结果，错误字段没有对应错误时返回 null。
 
 from/to 为 YYYY-MM-DD，默认时区 Asia/Shanghai，结束日包含当天。列表按有效录音时间/id 降序：recorded_at 非空且 time_source=client_confirmed 时使用 recorded_at，其余使用 received_at。默认 30 条、上限 100；筛选改变时重置游标，空列表返回 items=[]、next_cursor=null。
 
@@ -533,11 +533,11 @@ COMMIT;
 
 ## 7. 设置与启动配置
 
-本节约定 Server 的启动配置。当前仓库为开发设计文档，以下环境变量名和 systemd 片段作为后续实现的配置契约；实际启动入口随 Server 实现补齐。
+Server 使用以下环境变量。启动程序尚未实现，ExecStart 命令待实现时补充。
 
 ### 7.1 数据库与文件地址
 
-配置集中保存在服务器 `/etc/speaker/server.env`，由启动项加载。数据库填写 **SQLite 文件的绝对路径**，音频与备份填写目录绝对路径；路径按部署环境修改。
+配置文件为 `/etc/speaker/server.env`，由启动项加载。两个 DB 地址填写 SQLite 文件的绝对路径，音频和备份地址填写目录绝对路径。
 
 ```dotenv
 # 设备与上传 SQLite（registry）：设备绑定、凭证、来源记录。
@@ -576,7 +576,7 @@ Linux 使用 systemd 时，在 Server 服务单元的 `[Service]` 中加载同�
 EnvironmentFile=/etc/speaker/server.env
 ```
 
-这段内容合入实际 Server 的 systemd 启动项；`ExecStart` 使用 Server 实现提供的启动命令。配置文件路径不加 `-` 前缀，文件缺失时启动失败。Server 从启动环境读取上述设置，不依赖启动时的当前目录。
+将以上配置加入 Server 的 systemd 服务单元，ExecStart 填写实际启动命令。EnvironmentFile 路径不加 `-` 前缀，文件缺失时启动失败。所有数据路径从环境变量读取，与启动目录无关。
 
 修改配置或启动项后，重启对应 Server 服务；修改 systemd 单元时先执行 `systemctl daemon-reload`。数据库文件地址变更须先停写并按一致性备份/恢复规则迁移两个库和关联文件，再修改路径；仅修改环境变量不会迁移已有数据。
 

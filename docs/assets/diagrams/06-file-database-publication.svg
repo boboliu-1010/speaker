@@ -1,26 +1,26 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1280" height="1070" viewBox="0 0 1280 1070">
-<title>只保存原件、核心音频与 JSON，字幕按请求生成</title>
+<title>分块处理与结果汇总</title>
 <rect width="1280" height="100%" fill="white"/>
 <g font-family="PingFang SC,Microsoft YaHei,Noto Sans CJK SC,Arial,sans-serif">
-<text x="40" y="55" font-size="30" font-weight="600" fill="#17283f">只保存原件、核心音频与 JSON，字幕按请求生成</text>
-<text x="40" y="88" font-size="17" font-weight="400" fill="#607088">三张业务表；单工作者持独占锁；分块重试与录音快照各有明确的数据来源。</text>
+<text x="40" y="55" font-size="30" font-weight="600" fill="#17283f">分块处理与结果汇总</text>
+<text x="40" y="88" font-size="17" font-weight="400" fill="#607088">原件解码为短 WAV，逐块识别并保存结果，汇总后用于播放和字幕导出。</text>
 <line x1="40" y1="112" x2="1240" y2="112" stroke="#d8e0ea" stroke-width="1.5"/>
 <rect x="40" y="150" width="585" height="245" rx="8" fill="white" stroke="#d8e0ea"/>
 <rect x="40" y="150" width="5" height="245" rx="0" fill="#087f74" stroke="#087f74"/>
-<text x="62" y="184" font-size="21" font-weight="600" fill="#17283f">recording_segments · 保存处理主数据</text>
+<text x="62" y="184" font-size="21" font-weight="600" fill="#17283f">recording_segments · 原件与分块结果</text>
 <text x="62" y="220" font-size="18" font-weight="400" fill="#607088">raw：路径、大小、hash 和原件序号</text>
 <text x="62" y="248" font-size="18" font-weight="400" fill="#607088">sample_count：校验后的原件样本总数</text>
-<text x="62" y="276" font-size="18" font-weight="400" fill="#607088">decode_state / decode_attempt：解码预算</text>
+<text x="62" y="276" font-size="18" font-weight="400" fill="#607088">decode_state / decode_attempt：解码次数</text>
 <text x="62" y="304" font-size="18" font-weight="400" fill="#607088">chunks_json：WAV、原文、每块状态与次数</text>
-<text x="62" y="332" font-size="18" font-weight="400" fill="#607088">配置开始前冻结，不做双代在线切换</text>
+<text x="62" y="332" font-size="18" font-weight="400" fill="#607088">处理开始前固定配置</text>
 <rect x="655" y="150" width="585" height="245" rx="8" fill="white" stroke="#d8e0ea"/>
 <rect x="655" y="150" width="5" height="245" rx="0" fill="#245cca" stroke="#245cca"/>
 <text x="677" y="184" font-size="21" font-weight="600" fill="#17283f">recordings · 缓存一份结果快照</text>
 <text x="677" y="220" font-size="18" font-weight="400" fill="#607088">content_revision：当前可见内容版本</text>
 <text x="677" y="248" font-size="18" font-weight="400" fill="#607088">result_revision：已汇总到哪个内容版本</text>
 <text x="677" y="276" font-size="18" font-weight="400" fill="#607088">result_json：清单、时间轴、覆盖状态和原文</text>
-<text x="677" y="304" font-size="18" font-weight="400" fill="#607088">版本不同就重汇总，不另存 dirty 或任务状态</text>
-<text x="677" y="332" font-size="18" font-weight="400" fill="#607088">进度读时从片段计算，不重复保存</text>
+<text x="677" y="304" font-size="18" font-weight="400" fill="#607088">内容版本与结果版本不同时重新汇总</text>
+<text x="677" y="332" font-size="18" font-weight="400" fill="#607088">查询时根据片段计算进度</text>
 <rect x="40" y="435" width="280" height="235" rx="8" fill="white" stroke="#d8e0ea"/>
 <rect x="40" y="435" width="5" height="235" rx="0" fill="#245cca" stroke="#245cca"/>
 <text x="62" y="469" font-size="21" font-weight="600" fill="#17283f">1 · 解码核心块</text>
@@ -53,15 +53,15 @@
 <rect x="40" y="710" width="5" height="145" rx="0" fill="#087f74" stroke="#087f74"/>
 <text x="62" y="744" font-size="21" font-weight="600" fill="#17283f">识别成功但汇总中断</text>
 <text x="62" y="780" font-size="18" font-weight="400" fill="#607088">版本差仍然存在，重新汇总即可，不重跑成功块。</text>
-<text x="62" y="808" font-size="18" font-weight="400" fill="#607088">没有 VTT 文件发布候选，也没有字幕文件恢复流程。</text>
+<text x="62" y="808" font-size="18" font-weight="400" fill="#607088">字幕由已提交 JSON 生成，不单独保存文件。</text>
 <rect x="655" y="710" width="585" height="145" rx="8" fill="white" stroke="#d8e0ea"/>
 <rect x="655" y="710" width="5" height="145" rx="0" fill="#087f74" stroke="#087f74"/>
 <text x="677" y="744" font-size="21" font-weight="600" fill="#17283f">核心 WAV 缺失或损坏</text>
 <text x="677" y="780" font-size="18" font-weight="400" fill="#607088">按原件和冻结配置重建，验证原摘要与样本范围。</text>
-<text x="677" y="808" font-size="18" font-weight="400" fill="#607088">保留已有文字；不把缺失块的时间压缩掉。</text>
+<text x="677" y="808" font-size="18" font-weight="400" fill="#607088">保留已有文字和缺失块的时间区间。</text>
 <rect x="40" y="895" width="1200" height="125" rx="8" fill="#f3f6fa" stroke="#d8e0ea"/>
-<text x="62" y="932" font-size="23" font-weight="600" fill="#17283f">部分结果与实施边界</text>
+<text x="62" y="932" font-size="23" font-weight="600" fill="#17283f">部分结果与运行限制</text>
 <text x="62" y="970" font-size="19" font-weight="400" fill="#17283f">partial 描述快照缺口；result_stale 表示还有新内容；单进程单工作者禁止多机并行运行。</text>
-<text x="62" y="1003" font-size="18" font-weight="400" fill="#607088">局部 speaker 不冒认同一人；原件边界识别与逐块播放切换仍须实际验收。</text>
+<text x="62" y="1003" font-size="18" font-weight="400" fill="#607088">speaker 编号仅在单块内有效；原件边界识别与播放切换效果需实机验证。</text>
 </g>
 </svg>

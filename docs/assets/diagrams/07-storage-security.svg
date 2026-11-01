@@ -1,8 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1280" height="1070" viewBox="0 0 1280 1070">
-<title>录音文件由谁访问，Server 如何保护数据</title>
+<title>文件访问与数据保护</title>
 <rect width="1280" height="100%" fill="white"/>
 <g font-family="PingFang SC,Microsoft YaHei,Noto Sans CJK SC,Arial,sans-serif">
-<text x="40" y="55" font-size="30" font-weight="600" fill="#17283f">录音文件由谁访问，Server 如何保护数据</text>
+<text x="40" y="55" font-size="30" font-weight="600" fill="#17283f">文件访问与数据保护</text>
 <text x="40" y="88" font-size="17" font-weight="400" fill="#607088">浏览器不能直接访问存储目录；Server 核对用户归属和版本后，才读取或处理对应文件。</text>
 <line x1="40" y1="112" x2="1240" y2="112" stroke="#d8e0ea" stroke-width="1.5"/>
 <rect x="40" y="150" width="380" height="255" rx="8" fill="white" stroke="#d8e0ea"/>
@@ -63,7 +63,7 @@
 <text x="882" y="688" font-size="18" font-weight="400" fill="#607088">恢复时先校验清单和数据库完整性</text>
 <text x="882" y="716" font-size="18" font-weight="400" fill="#607088">恢复后撤销旧凭证，重新确认访问</text>
 <rect x="40" y="850" width="1200" height="175" rx="8" fill="#f3f6fa" stroke="#d8e0ea"/>
-<text x="62" y="887" font-size="23" font-weight="600" fill="#17283f">访问、保存与恢复分别承担什么责任</text>
+<text x="62" y="887" font-size="23" font-weight="600" fill="#17283f">访问控制、存储与恢复</text>
 <text x="62" y="926" font-size="19" font-weight="400" fill="#17283f">访问控制：阻止其他用户读取录音。加密存储：保护离线数据卷与备份中的内容。</text>
 <text x="62" y="961" font-size="19" font-weight="400" fill="#17283f">文件与数据库双写：保持产物和索引一致。独立备份：提供数据卷损坏后的恢复点。</text>
 <text x="62" y="996" font-size="18" font-weight="400" fill="#607088">日志只保留定位信息和错误码，认证凭证与录音正文不写入日志。</text>
