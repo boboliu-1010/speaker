@@ -63,21 +63,21 @@
 <text x="82" y="780" font-size="18" font-weight="400" fill="#607088">把来源记录导入业务 SQLite</text>
 <text x="82" y="808" font-size="18" font-weight="400" fill="#607088">按绑定与录音会话归并片段</text>
 <text x="82" y="836" font-size="18" font-weight="400" fill="#607088">用来源唯一键避免重复导入</text>
-<text x="82" y="864" font-size="18" font-weight="400" fill="#607088">新片段使 input_revision 增加一次</text>
+<text x="82" y="864" font-size="18" font-weight="400" fill="#607088">可见内容变化递增 content_revision</text>
 <rect x="460" y="710" width="360" height="185" rx="8" fill="white" stroke="#d8e0ea"/>
 <rect x="460" y="710" width="5" height="185" rx="0" fill="#245cca" stroke="#245cca"/>
 <text x="482" y="744" font-size="21" font-weight="600" fill="#17283f">录音查询与媒体读取</text>
 <text x="482" y="780" font-size="18" font-weight="400" fill="#607088">只查询当前用户拥有的录音</text>
 <text x="482" y="808" font-size="18" font-weight="400" fill="#607088">核对版本后打开已发布文件</text>
 <text x="482" y="836" font-size="18" font-weight="400" fill="#607088">Range：读取指定音频字节区间</text>
-<text x="482" y="864" font-size="18" font-weight="400" fill="#607088">从同版本原文生成 Markdown</text>
+<text x="482" y="864" font-size="18" font-weight="400" fill="#607088">从同快照生成 VTT 与 Markdown</text>
 <rect x="860" y="710" width="360" height="185" rx="8" fill="white" stroke="#d8e0ea"/>
 <rect x="860" y="710" width="5" height="185" rx="0" fill="#087f74" stroke="#087f74"/>
 <text x="882" y="744" font-size="21" font-weight="600" fill="#17283f">后台任务与恢复</text>
-<text x="882" y="780" font-size="18" font-weight="400" fill="#607088">从片段行领取单块并续租</text>
+<text x="882" y="780" font-size="18" font-weight="400" fill="#607088">一个工作者持独占锁，顺序处理</text>
 <text x="882" y="808" font-size="18" font-weight="400" fill="#607088">成功块持续保存，失败块单独重试</text>
-<text x="882" y="836" font-size="18" font-weight="400" fill="#607088">汇总时间轴、原文与整条 VTT</text>
-<text x="882" y="864" font-size="18" font-weight="400" fill="#607088">恢复未提交发布，不重跑成功块</text>
+<text x="882" y="836" font-size="18" font-weight="400" fill="#607088">有版本差时重建录音结果快照</text>
+<text x="882" y="864" font-size="18" font-weight="400" fill="#607088">保留执行次数，重启恢复未完成块</text>
 <rect x="60" y="923" width="1160" height="101" rx="8" fill="white" stroke="#d8e0ea"/>
 <text x="82" y="958" font-size="21" font-weight="600" fill="#087f74">受控解码子进程</text>
 <text x="82" y="994" font-size="18" font-weight="400" fill="#17283f">每份 raw 流式解码为短 WAV，不合成整条音频；默认 60 秒核心块，ASR 另加同原件内上下文。</text>
@@ -85,7 +85,7 @@
 <rect x="40" y="1095" width="5" height="255" rx="0" fill="#087f74" stroke="#087f74"/>
 <text x="62" y="1129" font-size="21" font-weight="600" fill="#17283f">业务 SQLite · 保存录音业务数据</text>
 <text x="62" y="1165" font-size="18" font-weight="400" fill="#607088">accounts：保存本站用户身份</text>
-<text x="62" y="1193" font-size="18" font-weight="400" fill="#607088">recordings：汇总版本、清单、JSON/VTT</text>
+<text x="62" y="1193" font-size="18" font-weight="400" fill="#607088">recordings：内容/结果版本与 JSON 快照</text>
 <text x="62" y="1221" font-size="18" font-weight="400" fill="#607088">recording_segments：原件与行内分块结果</text>
 <text x="62" y="1249" font-size="18" font-weight="400" fill="#607088">共三张表，不另设 jobs 或 chunk 表</text>
 <rect x="450" y="1095" width="380" height="255" rx="8" fill="white" stroke="#d8e0ea"/>
@@ -100,7 +100,7 @@
 <text x="882" y="1129" font-size="21" font-weight="600" fill="#17283f">私有文件存储 · 保存文件内容</text>
 <text x="882" y="1165" font-size="18" font-weight="400" fill="#607088">raw：保留设备上传原件</text>
 <text x="882" y="1193" font-size="18" font-weight="400" fill="#607088">核心 WAV：按块播放与生成 ASR 输入</text>
-<text x="882" y="1221" font-size="18" font-weight="400" fill="#607088">VTT：保存可下载字幕</text>
+<text x="882" y="1221" font-size="18" font-weight="400" fill="#607088">VTT / Markdown：从 JSON 即时生成</text>
 <text x="882" y="1249" font-size="18" font-weight="400" fill="#607088">通过鉴权接口读取，路径不对外公开</text>
 </g>
 </svg>

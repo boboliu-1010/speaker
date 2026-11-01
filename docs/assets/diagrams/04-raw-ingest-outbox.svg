@@ -50,7 +50,7 @@
 <text x="862" y="534" font-size="21" font-weight="600" fill="#17283f">3 · 后台导入业务库</text>
 <text x="862" y="570" font-size="18" font-weight="400" fill="#607088">binding 映射为片段 source_namespace</text>
 <text x="862" y="598" font-size="18" font-weight="400" fill="#607088">id 映射为片段 source_id</text>
-<text x="862" y="626" font-size="18" font-weight="400" fill="#607088">同一事务保存录音、片段与输入版本</text>
+<text x="862" y="626" font-size="18" font-weight="400" fill="#607088">同一事务保存原件并递增内容版本</text>
 <text x="862" y="654" font-size="18" font-weight="400" fill="#607088">重复导入同一来源不再增加版本</text>
 <rect x="840" y="704" width="400" height="184" rx="8" fill="white" stroke="#d8e0ea"/>
 <rect x="840" y="704" width="5" height="184" rx="0" fill="#245cca" stroke="#245cca"/>

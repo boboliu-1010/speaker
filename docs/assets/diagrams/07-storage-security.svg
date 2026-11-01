@@ -24,17 +24,17 @@
 <rect x="860" y="150" width="380" height="255" rx="8" fill="white" stroke="#d8e0ea"/>
 <rect x="860" y="150" width="5" height="255" rx="0" fill="#245cca" stroke="#245cca"/>
 <text x="882" y="184" font-size="21" font-weight="600" fill="#17283f">Server · 校验文件并执行任务</text>
-<text x="882" y="220" font-size="18" font-weight="400" fill="#607088">核对请求版本和文件发布状态</text>
+<text x="882" y="220" font-size="18" font-weight="400" fill="#607088">核对快照版本与核心 WAV 状态</text>
 <text x="882" y="248" font-size="18" font-weight="400" fill="#607088">以受控路径打开普通文件句柄</text>
 <text x="882" y="276" font-size="18" font-weight="400" fill="#607088">拒绝符号链接和存储根之外的路径</text>
 <text x="882" y="304" font-size="18" font-weight="400" fill="#607088">解码使用受限子进程并设置超时</text>
-<text x="882" y="332" font-size="18" font-weight="400" fill="#607088">发布前核对大小、摘要和有效租约</text>
+<text x="882" y="332" font-size="18" font-weight="400" fill="#607088">写索引前核对 WAV 大小与摘要</text>
 <rect x="40" y="450" width="380" height="360" rx="8" fill="white" stroke="#d8e0ea"/>
 <rect x="40" y="450" width="5" height="360" rx="0" fill="#087f74" stroke="#087f74"/>
 <text x="62" y="484" font-size="21" font-weight="600" fill="#17283f">私有加密数据卷 · 保存业务数据</text>
 <text x="62" y="520" font-size="18" font-weight="400" fill="#607088">raw：保留设备上传原件</text>
 <text x="62" y="548" font-size="18" font-weight="400" fill="#607088">核心 WAV：保存无重叠播放块</text>
-<text x="62" y="576" font-size="18" font-weight="400" fill="#607088">VTT：保存与原文对应的字幕</text>
+<text x="62" y="576" font-size="18" font-weight="400" fill="#607088">字幕不落盘，由 JSON 快照生成</text>
 <text x="62" y="604" font-size="18" font-weight="400" fill="#607088">SQLite：保存归属、版本及原文 JSON</text>
 <text x="62" y="632" font-size="18" font-weight="400" fill="#607088">由专用服务账号访问存储内容</text>
 <text x="62" y="660" font-size="18" font-weight="400" fill="#607088">目录权限 0700：仅服务账号可进入</text>
