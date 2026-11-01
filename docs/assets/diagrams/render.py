@@ -79,7 +79,7 @@ p.card(860, 710, 360, 185, '后台任务与恢复', ['一个工作者持独占�
 p.rect(60, 923, 1160, 101, 'white')
 p.text(82, 958, '受控解码子进程', 21, TEAL, '600')
 p.text(82, 994, '设备每 5 分钟生成一段原件，每段解码为一个 WAV 并独立识别；Server 不再二次切块。', 18)
-p.card(40, 1095, 380, 255, '业务 SQLite · 保存录音业务数据', ['accounts：保存本站用户身份', 'recordings：内容/结果版本与 JSON 快照', 'recording_segments：原件、WAV 与识别结果', '每段保存一份 WAV 和识别结果'], TEAL)
+p.card(40, 1095, 380, 255, '业务 SQLite · 保存录音业务数据', ['accounts：保存本站用户身份', 'recordings：内容/结果版本与 JSON 快照', 'recording_segments：片段与识别结果', '每段保存一份 WAV 和识别结果'], TEAL)
 p.card(450, 1095, 380, 255, '设备与上传 SQLite · registry', ['bindings：保存设备归属与凭证', 'device_uids：映射硬件 UID 与设备', 'binding_profiles：保存上传配置版本', 'sources：记录每份原件及导入进度'], TEAL)
 p.card(860, 1095, 380, 255, '私有文件存储 · 保存文件内容', ['raw：保留设备上传原件', '片段 WAV：同时用于播放和 ASR', 'VTT / Markdown：从 JSON 即时生成', '通过鉴权接口读取，路径不对外公开'], TEAL)
 p.save('01-system-architecture')
