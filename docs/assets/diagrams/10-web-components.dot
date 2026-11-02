@@ -5,7 +5,7 @@ edge [fontname="PingFang SC", fontsize=13, color="#53667c", fontcolor="#34465d",
 subgraph cluster_0 { label="登录与用户"; color="#d1dce8"; style=rounded; fontsize=19; margin=20;
 auth_api [width=3.30, label="HTTP请求
 登录 / 会话 / 本人资料"];
-user [width=3.60, label="登录与用户 §5.1
+user [width=3.60, label="登录与用户 §3.1
 Google OIDC / 会话校验"];
 account [width=3.40, label="accounts
 用户身份 / 本人资料"];
@@ -15,7 +15,7 @@ user -> account [label="建立 / 查询 / 更新用户"];
 subgraph cluster_1 { label="设备管理"; color="#d1dce8"; style=rounded; fontsize=19; margin=20;
 device_api [width=3.30, label="HTTP请求
 激活 / 配置确认 / 解绑"];
-device [width=3.60, label="设备管理 §5.2
+device [width=3.60, label="设备管理 §3.2
 会话 / 归属 / 配置校验"];
 project [width=3.40, label="devices及授权文件
 更新设备 / 发布或撤销授权"];
@@ -25,7 +25,7 @@ device -> project [label="按授权变更顺序提交"];
 subgraph cluster_2 { label="成品读取"; color="#d1dce8"; style=rounded; fontsize=19; margin=20;
 record_api [width=3.30, label="HTTP请求
 录音列表 / 播放 / 下载"];
-read [width=3.60, label="成品读取 §5.3
+read [width=3.60, label="成品读取 §3.3
 会话owner / 按ID推导路径"];
 files [width=3.40, label="本人正式录音目录
 完整WAV / VTT / MD及信息"];

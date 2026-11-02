@@ -22,7 +22,7 @@ sequenceDiagram
             W->>F: 保存结果，任务succeeded
         else 可重试错误且未满4次
             W->>F: retry_wait，保存下次执行时间
-            Note over W,F: 到期回到pending；只重试失败阶段
+            Note over W,F: 30秒 / 2分钟 / 10分钟后回pending<br/>只重试失败阶段，等待不计次数
         else 不可重试或已满4次
             W->>F: 任务及本录音处理标记failed
             Note over W,F: 终止本录音后续任务，保留已生成文件

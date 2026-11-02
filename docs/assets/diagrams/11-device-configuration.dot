@@ -1,7 +1,8 @@
 digraph G {
-graph [rankdir=LR, bgcolor="white", pad="0.35", nodesep="0.4", ranksep="0.5", splines=line, fontname="PingFang SC", fontsize=23, labelloc=t, label="设备绑定 · HTTP与蓝牙分别调用"];
+graph [rankdir=LR, bgcolor="white", pad="0.35", nodesep="0.4", ranksep="0.5", splines=line, fontname="PingFang SC", fontsize=23, labelloc=t, label="设备配置 · 绑定与解绑"];
 node [shape=box, style="rounded,filled", fillcolor="#267bb9", color="#2366a0", fontcolor=white, fontname="PingFang SC", fontsize=17, margin="0.22,0.18"];
 edge [fontname="PingFang SC", fontsize=13, color="#53667c", fontcolor="#34465d", arrowsize=0.85];
+subgraph cluster_bind { label="绑定"; color="#d1dce8"; style=rounded; fontsize=19; margin=20;
 n0 [width=3.5, label="浏览器 → Clip设备\nBLE：读取UID及绑定能力"];
 n1 [width=3.6, label="浏览器 → Web Server\nHTTP：激活并获取绑定配置"];
 n2 [width=3.8, label="浏览器 → Clip设备\nBLE：写BINDCFG并读回核验"];
@@ -9,4 +10,12 @@ n3 [width=3.6, label="浏览器 → Web Server\nHTTP：提交读回值确认完�
 n0 -> n1 [label="设备UID"];
 n1 -> n2 [label="configuration"];
 n2 -> n3 [label="身份 / 版本 / saved"];
+}
+subgraph cluster_unbind { label="解绑"; color="#d1dce8"; style=rounded; fontsize=19; margin=20;
+u0 [width=3.6, label="浏览器 → Web Server\nHTTP：先撤销上传授权"];
+u1 [width=3.8, label="Web Server\nstate=revoked\ndevice_cleanup_pending=true"];
+u2 [width=3.8, label="浏览器 → Clip设备\nBLE清理绑定；离线则等待清理"];
+u0 -> u1 [label="服务端拒绝后续上传"];
+u1 -> u2 [label="不恢复上传权限"];
+}
 }

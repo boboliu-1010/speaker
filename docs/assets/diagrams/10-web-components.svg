@@ -36,7 +36,7 @@
 <g id="node2" class="node">
 <title>user</title>
 <path fill="#267bb9" stroke="#2366a0" d="M621.05,-94.36C621.05,-94.36 385.85,-94.36 385.85,-94.36 379.85,-94.36 373.85,-88.36 373.85,-82.36 373.85,-82.36 373.85,-39.64 373.85,-39.64 373.85,-33.64 379.85,-27.64 385.85,-27.64 385.85,-27.64 621.05,-27.64 621.05,-27.64 627.05,-27.64 633.05,-33.64 633.05,-39.64 633.05,-39.64 633.05,-82.36 633.05,-82.36 633.05,-88.36 627.05,-94.36 621.05,-94.36"/>
-<text xml:space="preserve" text-anchor="middle" x="503.45" y="-66.1" font-family="PingFang SC" font-size="17.00" fill="white">登录与用户 §5.1</text>
+<text xml:space="preserve" text-anchor="middle" x="503.45" y="-66.1" font-family="PingFang SC" font-size="17.00" fill="white">登录与用户 §3.1</text>
 <text xml:space="preserve" text-anchor="middle" x="503.45" y="-45.7" font-family="PingFang SC" font-size="17.00" fill="white">Google OIDC / 会话校验</text>
 </g>
 <!-- auth_api&#45;&gt;user -->
@@ -71,7 +71,7 @@
 <g id="node5" class="node">
 <title>device</title>
 <path fill="#267bb9" stroke="#2366a0" d="M621.05,-239.36C621.05,-239.36 385.85,-239.36 385.85,-239.36 379.85,-239.36 373.85,-233.36 373.85,-227.36 373.85,-227.36 373.85,-184.64 373.85,-184.64 373.85,-178.64 379.85,-172.64 385.85,-172.64 385.85,-172.64 621.05,-172.64 621.05,-172.64 627.05,-172.64 633.05,-178.64 633.05,-184.64 633.05,-184.64 633.05,-227.36 633.05,-227.36 633.05,-233.36 627.05,-239.36 621.05,-239.36"/>
-<text xml:space="preserve" text-anchor="middle" x="503.45" y="-211.1" font-family="PingFang SC" font-size="17.00" fill="white">设备管理 §5.2</text>
+<text xml:space="preserve" text-anchor="middle" x="503.45" y="-211.1" font-family="PingFang SC" font-size="17.00" fill="white">设备管理 §3.2</text>
 <text xml:space="preserve" text-anchor="middle" x="503.45" y="-190.7" font-family="PingFang SC" font-size="17.00" fill="white">会话 / 归属 / 配置校验</text>
 </g>
 <!-- device_api&#45;&gt;device -->
@@ -106,7 +106,7 @@
 <g id="node8" class="node">
 <title>read</title>
 <path fill="#267bb9" stroke="#2366a0" d="M621.05,-384.36C621.05,-384.36 385.85,-384.36 385.85,-384.36 379.85,-384.36 373.85,-378.36 373.85,-372.36 373.85,-372.36 373.85,-329.64 373.85,-329.64 373.85,-323.64 379.85,-317.64 385.85,-317.64 385.85,-317.64 621.05,-317.64 621.05,-317.64 627.05,-317.64 633.05,-323.64 633.05,-329.64 633.05,-329.64 633.05,-372.36 633.05,-372.36 633.05,-378.36 627.05,-384.36 621.05,-384.36"/>
-<text xml:space="preserve" text-anchor="middle" x="503.45" y="-356.1" font-family="PingFang SC" font-size="17.00" fill="white">成品读取 §5.3</text>
+<text xml:space="preserve" text-anchor="middle" x="503.45" y="-356.1" font-family="PingFang SC" font-size="17.00" fill="white">成品读取 §3.3</text>
 <text xml:space="preserve" text-anchor="middle" x="503.45" y="-335.7" font-family="PingFang SC" font-size="17.00" fill="white">会话owner / 按ID推导路径</text>
 </g>
 <!-- record_api&#45;&gt;read -->
