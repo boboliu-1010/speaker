@@ -48,13 +48,15 @@ Web串行执行设备授权变更：先写deny，再更新devices，最后发布
 
 ### 4.4 原件收件与续传
 
-验证后采用设备上报信息，仍检查格式、大小、hash及用户额度。上传先写临时文件和进度，校验通过才发布原件及ready记录；按已确认偏移续传。相同来源重传幂等，不同内容报冲突。
+Server不管理Clip设备的录音、队列或运行状态，只检查上传文件是否收完整。验证身份后接收临时文件，核对大小和hash，原子保存原件并持久化收件记录，然后返回成功回执；回执只表示收件成功，不表示转写完成。同一录音、段号及hash重传时复用文件并重发回执，不同内容报冲突。
+
+上传中只保存服务端已接收的偏移，用于断点续传；回执后由Server后台执行解码、转写及合并，设备不必等待。
 
 单片最多300秒、8MiB，整条最多12小时；默认每用户10GiB，跨其所有Clip计算。收件预留原件、分段WAV及完整WAV空间，空间不足暂停。
 
 ### 4.5 录音聚合与结束判定
 
-按已验证绑定、会话和段号聚合。必须有会话结束声明及最终段号N，并收齐1..N且全部解码、转写成功，才能发布；缺片不跳号、不补静音。
+一条录音分多个文件时，上传元数据需说明所属录音、段号和最终段号N；Server只记录哪些文件已收齐。收齐1..N且全部解码、转写成功后才发布；缺片不跳号、不补静音。最终段号写入服务端收件记录，不跟踪设备内部状态。
 
 **现有v3文件上传完成消息不能代表整条录音结束；固件需补充受认证的session_end。** 未支持时可收件和预处理，不能靠超时猜测录完。
 
@@ -74,10 +76,8 @@ ${SPEAKER_DATA_ROOT}/
     │   └── progress.json
     ├── raw/<recording_id>/<segment_no>.opus
     ├── segments/<recording_id>/<segment_no>.wav
-    ├── processing/<recording_id>/              # Clip内部状态
+    ├── processing/<recording_id>/              # 服务端处理进度
     │   ├── state.json
-    │   ├── sources/<source_id>.json
-    │   ├── session-events/<event_id>.json
     │   ├── transcripts/<segment_no>.json
     │   └── jobs/<job_id>.json
     └── recordings/<recording_id>/              # 正式成品，Web只读
@@ -91,7 +91,7 @@ owner来自已验证授权，Web读取时来自登录会话。不同用户、不
 
 owner、recording_id采用`[a-z0-9][a-z0-9_-]{0,127}`，device_id同样字符但最多32位；段号1..999999999。禁止任意路径及符号链接。生产recording_id为紧凑UTF-8 JSON数组`[owner,device_id,binding_id,epoch,source_session]`的SHA-256小写十六进制，epoch为整数；本文短ID仅作示意。
 
-processing内的state.json保存归属、段号、原件hash、各阶段结果及发布状态；job只需保存阶段、输入摘要、状态、尝试次数、执行标识和下次执行时间。它们不提供给Web。
+processing只保存Server自身的处理进度：state.json记录归属、已收文件及hash、最终段号和处理结果；job记录解码、转写、合并任务的状态和重试信息，供重启后续跑。它们不记录Clip设备内部状态，也不提供给Web。
 
 ### 4.7 调度与重试
 
@@ -199,7 +199,7 @@ Google OIDC登录后按sub建立或复用accounts用户，创建本站内存会�
 | accounts | 用户ID、Google sub、邮箱、显示名、账号状态及时间 |
 | devices | 设备ID/UID、当前owner、绑定ID/代次、配置版本、确认版本、状态及凭证材料引用 |
 
-只由Web使用参数化SQL访问。device_uid唯一，owner关联accounts；凭证材料放私有文件。录音、Clip运行状态和job不建表。
+只由Web使用参数化SQL访问。device_uid唯一，owner关联accounts；凭证材料放私有文件。录音和job用文件，不建表；不保存Clip设备运行状态。
 
 ## 6. 接口
 

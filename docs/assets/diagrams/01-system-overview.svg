@@ -25,8 +25,9 @@
 <text x="1205" y="602" text-anchor="middle" font-size="19" font-weight="400" fill="#253247">[HTTP / 127.0.0.1:9529]</text>
 <path d="M 365 260 L 365 660" fill="none" stroke="#64748b" stroke-width="2.5" stroke-dasharray="7 5" stroke-linejoin="round"/>
 <polygon points="365.0,660.0 357.0,640.0 373.0,640.0" fill="#64748b"/>
-<rect x="253.1" y="447" width="223.7" height="62" rx="4" fill="white" fill-opacity="0.97"/>
-<text x="365" y="470" text-anchor="middle" font-size="19" font-weight="400" fill="#253247">上传 Opus 与录完声明</text>
+<polygon points="365.0,260.0 373.0,280.0 357.0,280.0" fill="#64748b"/>
+<rect x="233.2" y="447" width="263.6" height="62" rx="4" fill="white" fill-opacity="0.97"/>
+<text x="365" y="470" text-anchor="middle" font-size="19" font-weight="400" fill="#253247">上传 Opus / 返回收件回执</text>
 <text x="365" y="497" text-anchor="middle" font-size="19" font-weight="400" fill="#253247">[DTLS / UDP 9528]</text>
 <path d="M 1340 660 L 1340 550 L 1640 550 L 1640 660" fill="none" stroke="#64748b" stroke-width="2.5" stroke-dasharray="7 5" stroke-linejoin="round"/>
 <polygon points="1640.0,660.0 1632.0,640.0 1648.0,640.0" fill="#64748b"/>

@@ -13,7 +13,7 @@ C4Container
     Rel(user, device, "本地读取与配置", "BLE / AT")
     Rel(user, nginx, "使用网页和 API", "HTTPS / TCP 443")
     Rel(nginx, web, "反向代理", "HTTP / 127.0.0.1:9529")
-    Rel(device, clip, "上传 Opus 与录完声明", "DTLS / UDP 9528")
+    BiRel(device, clip, "上传 Opus / 返回收件回执", "DTLS / UDP 9528")
     Rel(web, google, "交换并验证登录身份", "OIDC / HTTPS")
     BiRel(clip, files, "读取授权；写原件、中间状态和完整成品", "本机文件 I/O + flock")
     BiRel(web, files, "只读成品；写设备授权", "本机文件 I/O + flock")
