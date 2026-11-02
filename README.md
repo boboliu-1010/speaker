@@ -194,24 +194,161 @@ Google OIDC登录后建立或复用accounts用户，校验回调及账号状态�
 
 先订阅TX再写RX，命令串行、UTF-8最多255字节；通知分片拼成JSON，超时重连读回，异步事件单独处理。
 
-返回JSON示例（键为命令，值为响应；仅列主要字段）：
+以下返回示例仅列主要字段。
+
+#### AT+IDENTITY? — 读取设备身份
 
 ```json
 {
-  "AT+IDENTITY?": {"ok":true,"data":{"device_uid":"0011223344556677","binding_protocol_version":1}},
-  "AT+BINDING? / AT+BINDCFG=host,port,device_id,token,binding_id,epoch,revision": {
-    "ok":true,"data":{"device_uid":"0011223344556677","bound":true,"saved":true,"binding_id":"00112233445566778899aabbccddeeff","epoch":1,"revision":1}
-  },
-  "AT+BINDCLR=binding_id,revision": {"ok":true,"data":{"bound":false,"saved":true,"cleared_binding_id":"00112233445566778899aabbccddeeff"}},
-  "AT+NETCFG=ssid,password / AT+NETCFG?": {"ok":true,"data":{"configured":true,"saved":true,"networks":[{"slot":1,"ssid_hex":"44656d6f"}]}},
-  "AT+NETSCAN": {"ok":true,"data":{"accepted":true,"job":1,"state":"scanning"}},
-  "AT+NETCHECK": {"ok":true,"data":{"accepted":true,"job":2,"state":"checking","scope":"wifi_dhcp"}},
-  "AT+NETCHECK?": {"ok":true,"data":{"job":2,"state":"succeeded","scope":"wifi_dhcp","ip":"192.168.1.20","error":0}},
-  "不支持的命令": {"ok":false,"msg":"Unknown command"}
+  "ok": true,
+  "data": {
+    "device_uid": "0011223344556677",
+    "binding_protocol_version": 1
+  }
 }
 ```
 
-Wi-Fi扫描结果通过异步事件返回，job对应上面的扫描请求：
+#### AT+BINDING? — 读取绑定
+
+```json
+{
+  "ok": true,
+  "data": {
+    "device_uid": "0011223344556677",
+    "bound": true,
+    "saved": true,
+    "binding_id": "00112233445566778899aabbccddeeff",
+    "epoch": 1,
+    "revision": 1
+  }
+}
+```
+
+#### AT+BINDCFG — 保存绑定
+
+`AT+BINDCFG=host,port,device_id,token,binding_id,epoch,revision`
+
+```json
+{
+  "ok": true,
+  "data": {
+    "device_uid": "0011223344556677",
+    "bound": true,
+    "saved": true,
+    "binding_id": "00112233445566778899aabbccddeeff",
+    "epoch": 1,
+    "revision": 1
+  }
+}
+```
+
+#### AT+BINDCLR — 清理绑定
+
+`AT+BINDCLR=binding_id,revision`
+
+```json
+{
+  "ok": true,
+  "data": {
+    "bound": false,
+    "saved": true,
+    "cleared_binding_id": "00112233445566778899aabbccddeeff"
+  }
+}
+```
+
+#### AT+NETCFG — 保存Wi-Fi
+
+`AT+NETCFG=ssid,password`
+
+```json
+{
+  "ok": true,
+  "data": {
+    "configured": true,
+    "saved": true,
+    "networks": [
+      {
+        "slot": 1,
+        "ssid_hex": "44656d6f"
+      }
+    ]
+  }
+}
+```
+
+#### AT+NETCFG? — 读取Wi-Fi配置
+
+```json
+{
+  "ok": true,
+  "data": {
+    "configured": true,
+    "saved": true,
+    "networks": [
+      {
+        "slot": 1,
+        "ssid_hex": "44656d6f"
+      }
+    ]
+  }
+}
+```
+
+#### AT+NETSCAN — 扫描Wi-Fi
+
+```json
+{
+  "ok": true,
+  "data": {
+    "accepted": true,
+    "job": 1,
+    "state": "scanning"
+  }
+}
+```
+
+#### AT+NETCHECK — 启动联网检查
+
+```json
+{
+  "ok": true,
+  "data": {
+    "accepted": true,
+    "job": 2,
+    "state": "checking",
+    "scope": "wifi_dhcp"
+  }
+}
+```
+
+#### AT+NETCHECK? — 查询联网检查
+
+```json
+{
+  "ok": true,
+  "data": {
+    "job": 2,
+    "state": "succeeded",
+    "scope": "wifi_dhcp",
+    "ip": "192.168.1.20",
+    "error": 0
+  }
+}
+```
+
+#### 不支持的命令
+
+```json
+{
+  "ok": false,
+  "msg": "Unknown command"
+}
+```
+
+#### Wi-Fi扫描结果事件
+
+异步返回，job对应AT+NETSCAN请求：
 
 ```json
 {
