@@ -1,6 +1,6 @@
 # ReSpeaker Clip · Server / Web 架构与模块设计
 
-v11 · 2026-11-02 · 目标设计，尚未实现服务代码。
+v12 · 2026-11-02 · 目标设计，尚未实现服务代码。
 
 <a id="overview"></a>
 
@@ -87,11 +87,9 @@ Clip独占音频处理和成品写入；Web独占数据库和授权变更。请�
 
 ### 4.1 启动与生命周期模块
 
-**职责**：组装收件、文件仓储、后台调度、解码执行器和内置模型，管理一个Clip实例。
+配置、授权、既有录音/job和模型清单 → DTLS监听、处理循环及健康状态。
 
-**输入与输出**：配置、授权、既有录音/job和模型清单 → DTLS监听、处理循环及健康状态。
-
-**处理流程与边界**：校验路径/格式/证书 → 取得clip.instance.lock → 确认旧执行已停止 → 对账进度、来源、录音、job与成品发布 → 开放DTLS并启动处理循环 → 异步加载离线模型。DTLS和处理状态分别报告；模型未就绪时可收件和解码，暂停ASR及成品发布。
+校验路径/格式/证书 → 取得clip.instance.lock → 确认旧执行已停止 → 对账进度、来源、录音、job与成品发布 → 开放DTLS并启动处理循环 → 异步加载离线模型。DTLS和处理状态分别报告；模型未就绪时可收件和解码，暂停ASR及成品发布。
 
 SIGTERM先停止新连接和job领取，保存已确认进度、取消排队任务，再等待正在执行的解码/推理/合并。释放角色锁前必须确认旧执行不能再提交；默认停机窗口45秒，OP托管器超时终止整个进程组。Clip崩溃后按持久job预算恢复，不重跑已提交识别结果。
 
@@ -99,46 +97,32 @@ SIGTERM先停止新连接和job领取，保存已确认进度、取消排队任�
 
 ![设备接入与录音聚合](docs/assets/diagrams/09a-clip-ingest.svg)
 
-**职责**：处理既有固件的DTLS连接及v3协议，将有界网络输入转换为已验证消息。
+网络帧与证书配置 → 认证、上传、续传和会话完成消息。
 
-**输入与输出**：网络帧与证书配置 → 认证、上传、续传和会话完成消息。
-
-**处理流程与边界**：验证长度、版本和状态机；身份验证和最终提交交给对应模块。协议层不生成任意文件路径，不接触数据库，不把连接对象传入音频规则。DTLS事件循环不等待模型推理。
+验证长度、版本和状态机；身份验证和最终提交交给对应模块。协议层不生成任意文件路径，不接触数据库，不把连接对象传入音频规则。DTLS事件循环不等待模型推理。
 
 <a id="clip-verification"></a>
 
 ### 4.3 身份与凭证验证模块
 
-**职责**：完全通过本地授权文件及校验材料确认设备与归属。
+连接凭证、上报身份和授权版本 → 已验证设备上下文，失败即拒绝。
 
-**输入与输出**：连接凭证、上报身份、授权版本 → VerifiedDeviceContext，失败则拒绝。
+Web依据devices发布`SPEAKER_STATE_ROOT/device-authorizations/<device_id>.json`；Clip只读该文件和私有凭证材料，不查数据库或来源表。文件包含schema_version、device_id/device_uid、owner、binding_id、epoch、credential_version、state和verification_material_ref。只有active且全部身份、代次和凭证匹配才接收；缺失、损坏、撤销或不匹配均拒绝。
 
-**处理流程与边界**：只有身份、owner、binding与epoch一致才采用上报会话/段号。Web负责授权文件的发布和撤销，Clip只读；文件与凭证规则如下。
+验证后采用设备的session、segment、时间和完整性声明，仍核对格式、限额和实际size/hash。设备时间标为device_unverified，不能据此保证时钟准确。Web内同一配置mutex覆盖设备操作及启动对账的完整文件/SQL流程：
 
-Clip Server 完全不连接 SQLite，沿用既有接入协议的认证及完整性验证，不通过查询上传表或来源表确认每次上报。Web Server 根据 devices 发布 `device-authorizations/<device_id>.json`，Clip Server 只读该文件及其引用的私有校验材料。此文件是设备授权的本地投影，不是额外数据库或第二套绑定业务状态。
+1. 激活、换绑或轮换：持短state锁发布deny并fsync → 释放锁后提交devices事务 → 原子发布匹配新行的active。active落盘后才返回可用配置。
+2. 解绑或禁用账号：先持久化对应设备deny，再更新数据库；失败仍保持deny。
+3. Clip在握手、续传和原件最终接受时复核授权，最终复核与ready发布同一临界区完成，旧连接不能绕过撤销。
+4. Web启动对账：deny、缺失或版本不一致保持拒绝，配置未明确完成时不自动恢复active；接口显示配置待修复。
 
-校验文件包含 schema_version、device_id、device_uid、owner、binding_id、epoch、credential_version、state、verification_material_ref。只有完整 active 授权允许收件；文件缺失、损坏、revoked 或凭证不匹配即拒绝，不猜测归属。设备连接/凭证必须与校验文件中的身份一致，payload 中的 owner/binding/epoch 也必须一致；不能只验证“某台设备的凭证有效”就允许它冒用另一 owner。
-
-验证通过后，直接采用 Clip 上报的 session、segment、recorded_at、采样 profile 和完整性声明，不再要求有一行预登记的来源记录。仍验证字段格式、长度、数值范围、实际音频大小与完整 hash；认证通过不允许任意文件路径、无限文件大小或不同内容覆盖同一来源。设备时间保持 device_unverified 标记，不把认证等同于时钟已校准。
-
-授权投影的写入规则：
-
-设备配置操作与启动对账在 Web 内由同一个配置 mutex 串行化，覆盖下面完整文件/SQL步骤，防止旧的激活操作在较新的撤销后重新发布 active；state.lock 仍只保护文件的短提交，不覆盖数据库事务。配置确认和设备 API 还须核对投影版本，deny/缺失/不一致时显示配置待修复，不声称设备可上传。
-
-- 激活/换绑/凭证轮换前，先在 state 排他锁内原子发布 deny（revoked）并 fsync，阻止旧授权继续收件；释放文件锁后提交 devices 事务，再发布与新行完全一致的 active 文件。active 发布成功后才返回可用上传配置。
-- 解绑或禁用账户先持锁发布对应设备 deny，再在 SQLite 更新行；成功响应时 deny 必须已持久化。数据库更新失败也保持 deny，不能因失败把旧授权自动放开。
-- Clip 在握手以及最终发布 ready 前均持共享/排他 state 锁复核当前授权；不能仅用连接建立时的旧缓存继续上传。最终复核与 ready 发布在同一短临界区完成。禁用/解绑前已接受的 ready 录音保留原 owner。
-- Web 重启逐条对账 devices 与投影。deny/缺失保持拒绝，直到配置操作明确完成；跨存储更新中断时只允许暂时不可用，禁止自动把未完成撤销重新激活。人工重试从 deny 开始，补齐确认；无需新增撤销或投影任务表。
-- 不持文件锁等待数据库写事务；所有投影更新使用临时文件、fsync 和原子替换。校验材料由部署私有目录管理，文件 0600，不进入公开 API、日志或版本仓库。
-
+投影写入遵循第6.2节原子写规则，禁止持state锁等待SQL。校验材料0600，不进入API或日志；已经接受的录音保持原owner。
 
 ### 4.4 原件收件、续传与容量模块
 
-**职责**：接收原始Opus并保留可恢复进度，完整校验后发布Clip内部来源记录。
+已验证设备、片段声明及字节流 → progress、不可变raw和ready来源文件。
 
-**输入与输出**：已验证设备、片段声明及字节流 → progress、不可变raw和ready来源文件。
-
-**处理流程与边界**：先持久化容量预留，再确认接收字节。用户/Clip隔离根内的`incoming/<recording_id>/<upload_id>/progress.json`保存身份、source_key、已确认偏移和预留；续传重新验证当前授权。同一source和hash幂等，不同内容报冲突。结束时核对实际size/hash，在同一短锁临界区复核授权，发布并fsync raw、ready后才确认成功；孤立raw不能代表收件完成。
+先持久化容量预留，再确认接收字节。用户/Clip隔离根内的`incoming/<recording_id>/<upload_id>/progress.json`保存身份、source_key、已确认偏移和预留；续传重新验证当前授权。同一source和hash幂等，不同内容报冲突。结束时核对实际size/hash，在同一短锁临界区复核授权，发布并fsync raw、ready后才确认成功；孤立raw不能代表收件完成。
 
 ready schema_version=1，包含source_id、device_id/device_uid、owner、binding_id、binding_epoch、credential_version、session、segment、profile、size/hash、recording_id、录音时间及time_source、服务端received_at/verified_at。source_key由已验证绑定身份、代次、会话和段号无歧义生成；路径只由服务端生成。owner在来源和recording中冻结，后续设备换绑不改写旧录音。
 
@@ -152,19 +136,17 @@ ready schema_version=1，包含source_id、device_id/device_uid、owner、bindin
 
 ### 4.5 recording聚合与结束判定模块
 
-**职责**：将同一次设备录音的片段和完成声明聚合为一条recording，确定能否生成完整结果。
+已接受ready、不可变session-event → recording片段列表、最终段号和完整性状态。
 
-**输入与输出**：已接受ready、不可变session-event → recording片段列表、最终段号和完整性状态。
-
-**处理流程与边界**：聚合键为binding_id＋binding_epoch＋source_session，segment_no从1开始。同来源重放幂等，同段号不同内容报source_identity_conflict；不按文件名或mtime猜测owner、顺序及完成状态。Clip在启动和后台循环中对账来源，不由Web导入。
+聚合键为binding_id＋binding_epoch＋source_session，segment_no从1开始。同来源重放幂等，同段号不同内容报source_identity_conflict；不按文件名或mtime猜测owner、顺序及完成状态。Clip在启动和后台循环中对账来源，不由Web导入。
 
 完整录音需要受认证的会话级结束声明（session_end），明确最终段号N。参考实现现有v3 OPEN只携带device/session/segment/size/digest/token，COMPLETE仅确认单份文件收到，不能当作整条录音结束。完整成品的协议前置条件是固件/接入支持同一已验证绑定和会话的session_end元数据；这是待实现的协议能力，不能宣称旧v3已支持。未提供该元数据的设备仍可收件和预处理，但recording保持未发布，不通过Web超时或最后一段长度猜测结束。
 
-设备的结束声明写入用户/Clip隔离根内的`session-events/<recording_id>/<event_id>.json`，字段包括owner、绑定/代次、source_session、final_segment_no、claim_hash和verified_at；单事件≤64KiB。相同声明幂等，冲突保留首份并写有界冲突标记；最终段号必须在允许范围内。device-reports可覆盖，不能承载唯一录完证据。
+设备的结束声明写入用户/Clip隔离根内的`session-events/<recording_id>/<event_id>.json`，字段包括owner、绑定/代次、source_session、final_segment_no、claim_hash和verified_at；单事件≤64KiB。相同声明幂等，冲突保留首份并写有界冲突标记；最终段号须符合第4.6.1节段号范围。device-reports可覆盖，不能承载唯一录完证据。
 
 若结束声明随raw上报，ready同时保留已验证声明。ready持久化后、独立事件发布前中断时，Clip直接重放内嵌声明到recording，不要求设备重传。解绑后的已接受证据仍有效，但不能接受新的撤销后上报。
 
-只有明确结束声明指定N、1..N全部来源就绪且无冲突时，integrity为confirmed_complete。有声明但缺片为gap，没有声明为unknown；静默超时不能当录完。缺片可等待补齐，但不得跳号、补静音或把部分结果发布成完整录音；结束后新上报的>N段号视为冲突，不偷偷扩展原recording。已经发布的成品保持只读，后续冲突只拒绝并告警，不回写或撤下原成品。
+只有明确结束声明指定N、1..N全部来源就绪且无冲突时，integrity为confirmed_complete。完整性按已收唯一段号的数量及范围判断，不按N预分配数组。有声明但缺片为gap，没有声明为unknown；静默超时不能当录完。缺片可等待补齐，但不得跳号、补静音或把部分结果发布成完整录音；结束后新上报的>N段号视为冲突，不偷偷扩展原recording。已经发布的成品保持只读，后续冲突只拒绝并告警，不回写或撤下原成品。
 
 已收到的片段可提前解码和识别，结果只保存在Clip内部。整条录音的成品发布还要求1..N全部解码、转写成功，全部WAV和文字可验证。静音识别成功为有效结果；模型失败不能以空文本冒充成功。
 
@@ -174,11 +156,9 @@ ready schema_version=1，包含source_id、device_id/device_uid、owner、bindin
 
 ### 4.6 录音、片段与job文件仓储模块
 
-**职责**：保存内部recording、job、逐段转写和执行提交标识，不建立录音或任务数据库表。
+已验证来源及阶段结果 → 原子JSON和不可变产物引用。
 
-**输入与输出**：已验证来源及阶段结果 → 原子JSON和不可变产物引用。
-
-**处理流程与边界**：Clip为唯一写入方。录音是内部处理结果的提交点；job保存运行状态和预算。Web不读取recording/job/逐段转写，公开查询只读第4.11节的正式成品目录。
+Clip为唯一写入方。录音是内部处理结果的提交点；job保存运行状态和预算。Web不读取recording/job/逐段转写，公开查询只读第4.11节的正式成品目录。
 
 ```text
 <SPEAKER_BUSINESS_DB_PATH>                       # Web专用数据库文件
@@ -217,7 +197,7 @@ ready schema_version=1，包含source_id、device_id/device_uid、owner、bindin
 
 生产recording_id为以下有序数组的规范JSON（UTF-8、无额外空白、epoch为整数）的SHA-256小写十六进制：`[owner, device_id, binding_id, epoch, source_session]`。同会话重传/重启得到同一个ID，不需要路径映射表；换用户、Clip或绑定代次得到不同ID。文档中的`rec-example`和`rec-demo-20261102-001`仅是便于阅读的示意ID。
 
-三个ID只使用小写字母、数字、下划线和连字符，限定为`[a-z0-9][a-z0-9_-]{0,127}`；段号必须为正整数。部署迁移先核验历史ID，不允许把不兼容ID静默截断、转小写或清洗成另一个ID。输入按框架解码后的值校验，拒绝斜杠、反斜杠、点、百分号、空白及二次解码；客户端不能提交目录、文件名或完整磁盘路径。
+三个ID只使用小写字母、数字、下划线和连字符，限定为`[a-z0-9][a-z0-9_-]{0,127}`；段号范围1..999999999，与现有v3协议一致。部署迁移先核验历史ID，不允许把不兼容ID静默截断、转小写或清洗成另一个ID。输入按框架解码后的值校验，拒绝斜杠、反斜杠、点、百分号、空白及二次解码；客户端不能提交目录、文件名或完整磁盘路径。
 
 绝对根目录由部署配置提供，后端只固定根目录以下的ID层级；`/var/lib/speaker/audio/users`不是代码常量，也不要求目录一定叫audio或users。后台使用以下规则，不维护“ID→文件地址”映射表：
 
@@ -302,11 +282,9 @@ stage为decode/asr/assemble/export/publish/repair；录音级阶段segment_no=nu
 
 ![单个片段的处理顺序](docs/assets/diagrams/09b-clip-processing.svg)
 
-**职责**：在Clip进程内按依赖执行处理链，失败只重试相应阶段。
+ready来源、内部recording/job → 分段结果及可发布成品。
 
-**输入与输出**：ready来源、内部recording/job → 分段结果及可发布成品。
-
-**处理流程与边界**：一个后台循环负责扫描、领取和提交；耗时解码、推理、PCM拼接和hash在锁外执行，DTLS保持独立响应。顺序为每段decode→asr；录音收齐后assemble和export；完整三件套校验通过后publish。不由Web请求触发处理。
+一个后台循环负责扫描、领取和提交；耗时解码、推理、PCM拼接和hash在锁外执行，DTLS保持独立响应。顺序为每段decode→asr；录音收齐后assemble和export；完整三件套校验通过后publish。不由Web请求触发处理。
 
 领取在state排他锁内检查依赖、due时间、attempt<4，生成attempt_id，先增加次数并写running再释放锁。分段decode/asr/repair提交仅核对本段attempt_id、generation、输入hash和冻结配置，不因其他新片段改变录音content_revision而丢弃有效结果；录音级assemble/export/publish才额外核对完整content_revision和最终段号。旧执行不得覆盖新状态。每阶段最多4次，退避30秒、2分钟、10分钟；结构/hash冲突直接failed，暂时故障retry_wait。人工重试明确新代次和预算，轮询不重置次数。
 
@@ -323,11 +301,9 @@ WAV缺失可由repair job使用冻结配置从raw重建并核对预期hash，保
 
 ### 4.8 Opus解码与本机文件模块
 
-**职责**：把每个已接受原始片段解码为同一profile的PCM WAV，供转写和整条合并。
+完整raw及冻结profile → 分段WAV、sample_count、size/hash。
 
-**输入与输出**：完整raw及冻结profile → 分段WAV、sample_count、size/hash。
-
-**处理流程与边界**：raw格式为`[uint16 little-endian长度][Opus包]`，16kHz、mono、20ms，每包320样本，payload 1–2000字节；不是Ogg容器。逐包校验边界，使用独立decoder，不拼raw、不补帧或猜测缺失样本。其他profile拒绝。
+raw格式为`[uint16 little-endian长度][Opus包]`，16kHz、mono、20ms，每包320样本，payload 1–2000字节；不是Ogg容器。逐包校验边界，使用独立decoder，不拼raw、不补帧或猜测缺失样本。其他profile拒绝。
 
 每份raw生成一个16kHz单声道PCM16 WAV，标准段300秒、末段保留实际长度。边读边写，单段PCM最多9,600,000字节，实际时长由sample_count计算，不用段号乘五分钟。受控隔离解码器只见输入和临时输出，不见数据库、授权或其他状态，无网络；默认600秒超时，取消时终止并等待后代退出。
 
@@ -337,11 +313,9 @@ WAV缺失可由repair job使用冻结配置从raw重建并核对预期hash，保
 
 ### 4.9 内置转写与逐句断句模块
 
-**职责**：在Clip内运行模型，完成中文为主夹少量英语的转写、时间戳和匿名说话人标记。
+经过验证的分段WAV、冻结模型配置 → 不可变逐段文字和句子列表。
 
-**输入与输出**：经过验证的分段WAV、冻结模型配置 → 不可变逐段文字和句子列表。
-
-**处理流程与边界**：模型采用Paraformer-zh＋FSMN-VAD＋CT-Punc＋CAM++候选组合；manifest固定权重hash、运行库版本及参数。离线安装、禁自动下载和动态模型路径；不暴露ASR HTTP或Unix socket接口。调度模块通过进程内接口提交已验证WAV。
+模型采用Paraformer-zh＋FSMN-VAD＋CT-Punc＋CAM++候选组合；manifest固定权重hash、运行库版本及参数。离线安装、禁自动下载和动态模型路径；不暴露ASR HTTP或Unix socket接口。调度模块通过进程内接口提交已验证WAV。
 
 默认单推理槽、最多8个待处理输入、计算线程4；排队和执行共用600秒deadline。不能安全中断的在途推理占用原槽直至结束，超时结果丢弃，不另开无限替代任务。可捕获模型错误只暂停识别；原生库崩溃/OOM可能中断整个Clip，由托管器重启后对账。
 
@@ -355,11 +329,9 @@ A/B/C仅表示匿名说话人，不做姓名识别。首版沿用片段内聚类
 
 ![整条录音合并与成品交接](docs/assets/diagrams/09c-clip-publication.svg)
 
-**职责**：从完整recording的成功片段生成一个连续WAV和同时间轴的完整VTT、MD。
+confirmed_complete、冻结的1..N段WAV及转写 → 完整三件套、时长和hash。
 
-**输入与输出**：confirmed_complete、冻结的1..N段WAV及转写 → 完整三件套、时长和hash。
-
-**处理流程与边界**：固定本次content_revision、最终段号、各段hash和配置版本；重新核对1..N齐全且decode/asr均成功。任一缺片、失败、坏文件或版本变化都不发布完整结果；已有成功分段结果保留，补齐后再合并。
+固定本次content_revision、最终段号、各段hash和配置版本；重新核对1..N齐全且decode/asr均成功。任一缺片、失败、坏文件或版本变化都不发布完整结果；已有成功分段结果保留，补齐后再合并。
 
 WAV按segment_no顺序流式读取各段的PCM data，验证一致的采样率/位宽/声道，写入一个新的RIFF/WAV头及连续PCM数据。不能直接串接含文件头的WAV字节，也不拼接Opus包再解码。总sample_count等于各段之和；12小时PCM约1.38GB，低于标准RIFF数据上限，越界明确拒绝，不截断。合并不额外重采样、补静音或重复模型识别。
 
@@ -371,11 +343,9 @@ VTT/MD单文件≤64MiB，成品录音信息≤1MiB；生成时检查体积和�
 
 ### 4.11 成品发布模块
 
-**职责**：将完整WAV、VTT、MD及录音信息放入同一个recording目录，交给Web只读使用。
+已校验的三件套及录音信息 → `A/recordings/<recording_id>/`内的四个文件。
 
-**输入与输出**：已校验的三件套及录音信息 → `A/recordings/<recording_id>/`内的四个文件。
-
-**处理流程与边界**：先在同一用户/Clip隔离根的recordings父目录下的隐藏临时目录`.tmp-<recording_id>-<attempt_id>/`生成完整WAV、VTT、MD和`recording.json`，校验hash、总样本、字幕时间和身份。临时目录也位于`A/recordings/`，不另开全局共享暂存目录。全部文件及临时目录fsync完成后，在短state锁内复核输入和执行代次，再将整个目录原子重命名为`A/recordings/<recording_id>/`并fsync父目录。Web忽略所有隐藏临时目录，只读取正式recording目录；目录出现时四个文件已经完整，不会读到半成品。
+先在同一用户/Clip隔离根的recordings父目录下的隐藏临时目录`.tmp-<recording_id>-<attempt_id>/`生成完整WAV、VTT、MD和`recording.json`，校验hash、总样本、字幕时间和身份。临时目录也位于`A/recordings/`，不另开全局共享暂存目录。全部文件及临时目录fsync完成后，在短state锁内复核输入和执行代次，再将整个目录原子重命名为`A/recordings/<recording_id>/`并fsync父目录。Web忽略所有隐藏临时目录，只读取正式recording目录；目录出现时四个文件已经完整，不会读到半成品。
 
 一个recording只有一个正式目录，不设置版本子目录或发布指针。正式目录发布后只读；重复执行先核对同一recording的身份、冻结输入和文件hash，一致时幂等完成，不一致则报冲突，不逐个覆盖成品文件。现有目录的全文件hash核对在锁外进行，短锁内只复核身份、输入摘要和执行代次；禁止持state锁重读整条音频。
 
@@ -474,11 +444,9 @@ transcript.md：
 
 ### 4.12 设备报告与健康模块
 
-**职责**：报告设备遥测、接入可用性及处理队列状态。
+已验证报告和进程计量 → device-reports与status/clip.json。
 
-**输入与输出**：已验证报告和进程计量 → device-reports与status/clip.json。
-
-**处理流程与边界**：设备遥测可覆盖，不承担唯一录完证据。健康区分dtls_ready、processing_ready、asr_ready、队列积压及发布错误，OP据此观察；不增加公网管理接口，不让Web通过健康状态领取job。
+设备遥测可覆盖，不承担唯一录完证据。健康区分dtls_ready、processing_ready、asr_ready、队列积压及发布错误，OP据此观察；不增加公网管理接口，不让Web通过健康状态领取job。
 
 <a id="web-modules"></a>
 
@@ -488,49 +456,24 @@ transcript.md：
 
 ### 5.1 启动与生命周期模块
 
-**职责**：组装HTTP、两表数据库、登录会话、授权发布和只读成品目录。
+Web配置、accounts/devices及已发布成品 → 用户设备API、成品播放和下载。
 
-**输入与输出**：Web配置、accounts/devices及已发布成品 → 用户设备API、成品播放和下载。
-
-**处理流程与边界**：取得web.instance.lock，核验数据库版本并对账设备授权后开放本机HTTP。Clip或模型未在线不影响Web启动；没有成品时列表为空，不读取job来拼处理进度。Web无音频后台调度，不创建解码/ASR执行器。关闭时等待HTTP读取结束、关闭数据库和会话，再释放角色锁。
+取得web.instance.lock，核验数据库版本并对账设备授权后开放本机HTTP。Clip或模型未在线不影响Web启动；没有成品时列表为空，不读取job来拼处理进度。Web无音频后台调度，不创建解码/ASR执行器。关闭时等待HTTP读取结束、关闭数据库和会话，再释放角色锁。
 
 <a id="oauth"></a>
 <a id="users-api"></a>
 
 ### 5.2 登录、会话与用户模块
 
-**职责**：验证Google身份，建立本站会话并管理本人资料。
+OIDC回调、Cookie和本人资料请求 → 用户视图、会话及CSRF结果。
 
-**输入与输出**：OIDC回调、Cookie和本人资料请求 → 用户视图、会话及CSRF结果。
+账号持久化到accounts，临时登录态和本站会话只在Web内存。每请求核验账号状态；设备和录音模块取得服务端确定的owner，不接受客户端替换。
 
-**处理流程与边界**：账号持久化到accounts，临时登录态和本站会话只在Web内存。每请求核验账号状态；设备和录音模块取得服务端确定的owner，不接受客户端替换。
-
-```jsonc
-{
-  // TEXT；主键；必填。本地用户 ID，历史 ID 沿用；录音文件通过 owner 引用。
-  "user_id": "demo-user",
-  // TEXT；唯一。验证通过的 Google 身份标识；待核验的历史用户可空。
-  "google_sub": "google-sub-example",
-  // TEXT；必填；唯一；大小写不敏感。用户邮箱；账号同步时检查身份冲突。
-  "email": "user@example.com",
-  // TEXT；必填；默认空字符串；≤100 字符。用户名称，可为空字符串。
-  "display_name": "示例用户",
-  // TEXT；必填；默认 active。active / disabled；请求鉴权检查账号状态。
-  "status": "active",
-  // INTEGER；必填；默认 1；>0。认证版本；变更后使旧会话失效。
-  "auth_version": 1,
-  // INTEGER；可空。最近登录时间。
-  "last_login_at": 1793318400000,
-  // INTEGER；必填。用户建立时间。
-  "created_at": 1793318400000,
-  // INTEGER；必填。用户资料更新时间。
-  "updated_at": 1793318400000
-}
-```
+accounts保存Google身份、邮箱、显示名、账号状态和会话代次，完整字段见[SQL](#sql)。
 
 新用户ID使用uuid4().hex；符合第4.6.1节ID规则的历史user_id原样保留，不符合则返回migration_invalid_storage_id，由离线迁移明确处理，不能静默改写。相同 sub 复用用户；邮箱与其他 sub 冲突时返回 account_identity_conflict，保留原归属。
 
-设备别名保存到 devices.display_name，配置确认保存到 devices.confirmed_revision，硬件 UID 直接为 devices.device_uid；不再另建绑定、UID、配置或来源表。录音、片段和 job 文件的[字段说明](#tables)在录音文件及调度模块；只有 accounts 和 devices 使用[本页 SQL](#sql)。
+设备别名、配置确认和硬件UID分别保存在devices.display_name、confirmed_revision、device_uid；录音及job字段见[文件仓储](#tables)。
 
 #### 5.2.1 用户接口
 用户首次通过 Google 登录时由 Server 自动建立 accounts 记录，HTTP 接口使用 `/users/me` 表示当前会话用户。两项接口均返回 `Cache-Control: private, no-store`；会话失效返回 401，账号禁用返回 403 account_disabled。
@@ -539,11 +482,8 @@ GET `/users/me` 和 PATCH `/users/me` 的成功响应使用相同结构：
 
 ```jsonc
 {
-  // string；accounts.user_id；只读，由会话确定。
   "user_id": "demo-user",
-  // string；accounts.email，由登录身份同步；只读。
   "email": "user@example.com",
-  // string；本站显示名称，允许空字符串，最多 100 字符。
   "display_name": "示例用户"
 }
 ```
@@ -552,7 +492,6 @@ PATCH `/users/me` 请求：
 
 ```jsonc
 {
-  // string；必填，最多 100 字符；空字符串用于清空显示名称。
   "display_name": "我的名字"
 }
 ```
@@ -577,96 +516,62 @@ GET `/auth/session` 成功响应：
 
 ```jsonc
 {
-  // object；从 accounts 读取的本站用户。
   "user": {
-    // string；accounts.user_id。
     "user_id": "demo-user",
-    // string；accounts.email。
     "email": "user@example.com",
-    // string；accounts.display_name，允许空字符串。
     "display_name": "示例用户"
   },
-  // string；当前会话的 CSRF token，写请求放入 X-CSRF-Token。
   "csrf_token": "example-csrf-token"
 }
 ```
 
-本站会话仅在 Server 内存保存，以下字段不返回客户端：
-
-```jsonc
-{
-  // string；随机会话 token 的摘要，Cookie 仅持有原 token。
-  "token_hash": "example-token-hash",
-  // string；对应 accounts.user_id。
-  "user_id": "demo-user",
-  // integer；登录时 accounts.auth_version，请求时须与账号当前值一致。
-  "auth_version": 1,
-  // string；与客户端写请求比对的 CSRF token。
-  "csrf_token": "example-csrf-token",
-  // integer；最近活动时间，用于 24 小时闲置到期。
-  "last_seen_at": 1793318400000,
-  // integer；首次创建时间 + 7 天，活动不会延长此时间。
-  "absolute_expires_at": 1793923200000
-}
-```
+会话内存保存token摘要、user_id、auth_version、CSRF及闲置/绝对到期时间；Cookie只持有随机token，请求时核对当前账号状态和auth_version。
 
 账号禁用返回 403 account_disabled，身份映射冲突返回 409 account_identity_conflict；回调错误返回 400 login_invalid_or_expired，Google 不可用返回 503 login_unavailable。登录响应和会话接口设置 no-store，日志使用脱敏格式。
 
 服务器配置 GOOGLE_CLIENT_ID、GOOGLE_CLIENT_SECRET_FILE、PUBLIC_WEB_ORIGIN，secret从私有文件读取。Google Console 回调登记为 `PUBLIC_WEB_ORIGIN/api/boa/v1/auth/google/callback`，与请求保持完全一致。协议使用 [Google OIDC](https://developers.google.com/identity/openid-connect/openid-connect)。
 
-
 <a id="ble"></a>
 
 ### 5.3 设备管理与授权发布模块
 
-**职责**：管理devices中的当前归属、配置、别名和撤销状态。
+已登录用户、设备UID及BLE读回确认 → 设备对象和受控上传配置。
 
-**输入与输出**：已登录用户、设备UID及BLE读回确认 → 设备对象和受控上传配置。
+设备操作按第4.3节配置mutex及deny-first顺序执行；激活完成才发布active，解绑保持deny。历史录音owner不随换绑改变。
 
-**处理流程与边界**：完整设备操作由配置mutex串行化，遵守deny-first：先拒绝旧授权，再提交设备行，最后发布新active。Clip通过4.3模块消费授权文件；历史录音owner不随换绑改变。
-
-POST `/devices/activate` 请求，200 响应使用下一节的身份与 configuration 字段：
+POST `/devices/activate`：device_uid为1–255字符的硬件UID字符串，须匹配受控登记；200响应见下一节：
 
 ```jsonc
 {
-  // string；从 Clip 读到的硬件 UID；Server 查询受控登记及本人归属。
   "device_uid": "0011223344556677"
 }
 ```
 
-POST `/devices/{id}/binding/confirm` 请求：
+POST `/devices/{id}/binding/confirm`：提交BLE读回的device_uid、binding_id、revision及saved=true：
 
 ```jsonc
 {
-  // string；读回的硬件 UID。
   "device_uid": "0011223344556677",
-  // string；BLE 读回的绑定 ID，须与当前用户设备一致。
   "binding_id": "demo-binding",
-  // integer；读回的上传配置版本。
   "revision": 1,
-  // boolean；固定 true，表示配置已写入并读回确认。
   "saved": true
 }
 ```
 
-确认成功响应：
+binding_id必须与当前设备一致、revision为正整数且等于下发值、saved固定true；确认成功响应：
 
 ```jsonc
 {
-  // string；确认完成的绑定 ID。
   "binding_id": "demo-binding",
-  // integer；确认完成的配置版本。
   "revision": 1,
-  // string；固定 provisioned。
   "state": "provisioned"
 }
 ```
 
-PATCH `/devices/{id}` 请求；200 返回同一 display_name 和路径对应的 device_id：
+PATCH `/devices/{id}`：display_name为1–100字符的字符串；200返回更新后的display_name和device_id：
 
 ```jsonc
 {
-  // string；本人当前设备的别名，1–100 字符。
   "display_name": "我的 Clip"
 }
 ```
@@ -675,95 +580,51 @@ DELETE `/devices/{id}/binding` 无 body，成功响应：
 
 ```jsonc
 {
-  // string；固定 revoked，设备上传凭证已撤销。
   "state": "revoked",
-  // boolean；是否仍待设备侧清理确认，保存在 devices。
   "device_cleanup_pending": true
 }
 ```
 
 #### 5.3.1 设备与上传配置
 
-GET `/devices` 返回 `{items:[设备对象]}`；POST `/devices/activate` 返回相同身份字段及 configuration。device_id、binding_id、device_uid 均来自同一 devices 行；binding_id 是设备表中的字段，不是独立表。
+GET `/devices`返回`{items:[设备对象]}`。device_id、binding_id和device_uid来自同一devices行；列表不返回configuration或凭证。
 
 ```jsonc
 {
-  // string；devices.id；API 路径 {id} 使用此值。
   "device_id": "demo-device",
-  // string；devices.device_uid；设备硬件 UID。
   "device_uid": "0011223344556677",
-  // string；devices.binding_id；本次绑定 ID。
   "binding_id": "demo-binding",
-  // integer >0；绑定代次。
   "epoch": 1,
-  // string；devices.display_name，未设置时使用既有设备名称/ID。
   "display_name": "我的 Clip",
-  // integer；devices.revision，上传配置版本。
   "revision": 1,
-  // 已验证固件信息；无可信来源时 null。
   "firmware": null,
-  // 已验证设备能力；无可信来源时 null。
   "capabilities": null,
-  // 遥测；value 缺少有效来源时为 null，sampled_at/source 同时为 null。
   "telemetry": {
-    // value 为 boolean|null；在线状态。
-    "online": {
-      // boolean|null；在线状态。
-      "value": null,
-      // integer|null；遥测采样时间，UTC Unix 毫秒。
-      "sampled_at": null,
-      // string|null；可信数据来源标识，缺失时为 null。
-      "source": null
-    },
-    // value 为 integer 0–100|null；电量百分比。
-    "battery": {
-      // integer 0–100|null；电量百分比。
-      "value": null,
-      // integer|null；遥测采样时间，UTC Unix 毫秒。
-      "sampled_at": null,
-      // string|null；可信数据来源标识，缺失时为 null。
-      "source": null
-    },
-    // value 为非负 integer|null；待上传片段数。
-    "pending": {
-      // 非负 integer|null；待上传片段数。
-      "value": null,
-      // integer|null；遥测采样时间，UTC Unix 毫秒。
-      "sampled_at": null,
-      // string|null；可信数据来源标识，缺失时为 null。
-      "source": null
-    }
-  },
-  // 仅激活响应返回；列表不返回配置/凭证，响应 no-store。
-  "configuration": {
-    // string；与外层 device_id 相同。
-    "device_id": "demo-device",
-    // string；与外层 device_uid 相同。
-    "device_uid": "0011223344556677",
-    // string；configuration.owner_id = accounts.user_id，由 Server 确定。
-    "owner_id": "demo-user",
-    // string；与外层 binding_id 相同。
-    "binding_id": "demo-binding",
-    // integer；与外层绑定代次相同。
-    "epoch": 1,
-    // integer；与外层配置版本相同。
-    "revision": 1,
-    // string；来自Web专用SPEAKER_UPLOAD_ENDPOINT的设备DTLS地址，host:port。
-    "endpoint": "upload.example.com:9528",
-    // string；设备上传凭证，仅经受控 BLE 配置写入设备。
-    "device_token": "example-device-token"
+    "online": {"value":null,"sampled_at":null,"source":null},
+    "battery": {"value":null,"sampled_at":null,"source":null},
+    "pending": {"value":null,"sampled_at":null,"source":null}
   }
 }
 ```
 
-列表外层结构：
+telemetry.value分别为boolean、0–100整数、非负整数；无可信值时三个字段均为null，sampled_at为UTC毫秒，source为可信来源标识。固件/能力无可信值也返回null。
+
+POST `/devices/activate`成功响应在同一设备对象中增加configuration，响应no-store；其内容为：
 
 ```jsonc
 {
-  // array；GET /devices 的设备对象数组；示例为空列表。
-  "items": []
+  "device_id": "demo-device",
+  "device_uid": "0011223344556677",
+  "owner_id": "demo-user",
+  "binding_id": "demo-binding",
+  "epoch": 1,
+  "revision": 1,
+  "endpoint": "upload.example.com:9528",
+  "device_token": "example-device-token"
 }
 ```
+
+身份、代次及版本须与外层对象和登录用户一致；endpoint取SPEAKER_UPLOAD_ENDPOINT，token仅供受控BLE写入，不进入列表、URL、日志或持久前端缓存。
 
 #### 5.3.2 BLE与请求规则
 - 绑定：验证登记与 owner；本人重复激活复用绑定，未登记到当前用户的 device_uid 返回 409 enrollment_required
@@ -775,33 +636,15 @@ GET `/devices` 返回 `{items:[设备对象]}`；POST `/devices/activate` 返回
 - 请求管理：切换用户/数据时取消旧请求，退出清理音频和定时器；录音暂不可用时提示并重试读取
 - 轮询：录音可见 5 秒、设备可见 15 秒；隐藏后 30 秒，恢复可见立即刷新
 
-Clip Wi-Fi 扫描结果由 Web 的 BLE 适配层读取：
-
-```jsonc
-[
-  {
-    // string；Clip 扫描到的网络 SSID，Web 从此列表选择。
-    "ssid": "Example-WiFi",
-    // integer；信号强度 dBm。
-    "rssi": -55,
-    // string；设备返回的安全类型，当前基线 WPA2。
-    "security": "WPA2"
-  }
-]
-```
-
 旧数据导入在离线维护窗口执行：先核验ID规则及owner/邮箱映射，缺项返回migration_owner_mapping_required；用户设备归并到accounts/devices，录音、任务及原件按对应owner/device_id目录落盘并校验。迁移不增加运行时旧表、旧路径或兼容接口，普通启动不自动迁移或创建空状态。
-
 
 <a id="media-api"></a>
 
 ### 5.4 成品目录与ID查询模块
 
-**职责**：在当前登录用户作用域中发现已发布录音，仅返回定位所需的ID。
+当前会话及筛选条件 → device_id和recording_id列表；不返回服务器磁盘路径、下载URL或路径映射字段。
 
-**输入与输出**：当前会话及筛选条件 → device_id和recording_id列表；不返回服务器磁盘路径、下载URL或路径映射字段。
-
-**处理流程与边界**：先取会话用户`owner`，只扫描`SPEAKER_USER_DATA_ROOT/<owner>/clips/`内各Clip的recordings正式目录，忽略隐藏临时目录。读取成品recording.json，验证owner与会话一致、recording_id与目录一致、时间/时长合法，并检查三个固定成品文件存在。禁止先扫描所有用户再过滤。单条成品目录损坏时跳过该条并告警，不中断其他正常录音的列表；直接读取该录音按下节返回503。
+先取会话用户`owner`，只扫描`SPEAKER_USER_DATA_ROOT/<owner>/clips/`内各Clip的recordings正式目录，忽略隐藏临时目录。读取成品recording.json，验证owner与会话一致、recording_id与目录一致、时间/时长合法，并检查三个固定成品文件存在。禁止先扫描所有用户再过滤。单条成品目录损坏时跳过该条并告警，不中断其他正常录音的列表；直接读取该录音按下节返回503。
 
 GET `/recordings`成功响应示例：
 
@@ -825,11 +668,9 @@ from/to为UTC毫秒的录音开始时间范围，按左闭右开筛选；limit�
 
 ### 5.5 按ID读取录音信息、播放与下载模块
 
-**职责**：根据当前用户和两个ID计算成品位置，鉴权后直接读取四个固定文件。
+当前会话、device_id、recording_id和固定文件类型 → 该用户/Clip下的录音信息或预生成媒体文件流。
 
-**输入与输出**：当前会话、device_id、recording_id和固定文件类型 → 该用户/Clip下的录音信息或预生成媒体文件流。
-
-**处理流程与边界**：`owner`只取当前会话，不接受查询串、JSON或URL指定另一个用户。后台用第4.6.1节规则定位`A/recordings/<recording_id>/`，校验成品JSON的owner与会话一致。读取历史成品不以devices当前owner作为权限依据，设备换绑不能转移旧文件或阻断原用户自己的历史读取。
+`owner`只取当前会话，不接受查询串、JSON或URL指定另一个用户。后台用第4.6.1节规则定位`A/recordings/<recording_id>/`，校验成品JSON的owner与会话一致。读取历史成品不以devices当前owner作为权限依据，设备换绑不能转移旧文件或阻断原用户自己的历史读取。
 
 文件类型仅允许`recording.json`、`recording.wav`、`transcript.vtt`和`transcript.md`，不能接受任意filename/path参数。路由为：
 
@@ -869,11 +710,9 @@ WAV支持bytes=start-end、start-和-suffix，裁剪end到文件长度；非法/
 
 ### 5.6 用户与设备数据库模块
 
-**职责**：集中管理唯一SQLite的连接与两张表。
+用户/设备用例的受控参数 → 账户/设备行和明确事务结果。
 
-**输入与输出**：用户/设备用例的受控参数 → 账户/设备行和明确事务结果。
-
-**处理流程与边界**：只接受参数化SQL；业务层不能保存录音/job到表。普通启动核验版本，不自动新建空库；初始化和迁移使用显式维护入口。
+只接受参数化SQL；业务层不能保存录音/job到表。普通启动核验版本，不自动新建空库；初始化和迁移使用显式维护入口。
 
 只有 Web Server 连接数据库。每个连接设置 foreign_keys=ON、synchronous=FULL、busy_timeout=5000；录音/job/收件文件不参加 SQLite 事务。设备身份、当前归属及配置放在同一个 devices 行中，不保留 users、bindings、device_uids、binding_profiles、sources 等旧表。
 
@@ -925,7 +764,6 @@ COMMIT;
 
 firmware/capabilities/telemetry 来自已验证的 Clip 上报，Web 可将最新值缓存到 devices 的 JSON 字段；缺少值保持 null，不单设遥测表。verification_material_ref 引用私有凭证校验材料，不保存可公开读取的明文设备 token。devices 行保存当前归属；历史录音的 owner 固定在收件与录音 JSON，不随设备重新绑定改写。
 
-
 <a id="shared-modules"></a>
 
 ## 6. 公共契约与一致性
@@ -942,7 +780,7 @@ firmware/capabilities/telemetry 来自已验证的 Clip 上报，Web 可将最�
 | device-reports | Clip | Web设备遥测及OP |
 | status/clip.json、status/web.json | 各自进程 | OP观察 |
 
-音频、文字及JSON都是同一本机文件系统中的文件，不额外设“音频存储服务”。raw→分段WAV→整条WAV是处理链，既不双写同一结果，也不复制到另一磁盘。Web无录音写权限、无job写权限，也无内部ASR客户端。
+raw→分段WAV→完整成品属于处理链；所有权按上表约束，Web无录音/job写权限。
 
 ### 6.2 文件锁与提交
 
@@ -953,8 +791,6 @@ firmware/capabilities/telemetry 来自已验证的 Clip 上报，Web 可将最�
 ### 6.3 数据契约与版本
 
 授权、来源、内部recording和job维护schema_version，SQLite用user_version；未知必填版本拒绝处理。成品recording.json固定为上述四个业务字段，不另外保存格式版本或处理状态。所有时间统一UTC毫秒，音频内部偏移优先使用整数样本数。文件引用均为受控根下相对路径，不接收任意绝对路径、URL或模型位置。
-
-接口分工：AuthorizationReader验证身份；RecordingRepository/JobRepository在Clip保存内部状态；Decoder/Transcriber/RecordingAssembler/ResultPublisher在Clip处理并发布；PublishedResultReader在Web读取成品录音信息；MediaReader仅打开已授权的成品。模块间通过明确数据契约协作，不传递底层网络/数据库连接。
 
 <a id="web-api"></a>
 
@@ -1055,7 +891,7 @@ SPEAKER_RECORDING_MAX_SECONDS=43200
 SPEAKER_ASSEMBLE_TIMEOUT_SECONDS=1800
 ```
 
-SPEAKER_UPLOAD_ENDPOINT是设备可到达的公开DTLS主机及端口，由Web发布配置；SPEAKER_CLIP_HOST/PORT是Clip本机监听地址，两者不能混为同一参数。OP使用NAT或端口映射时可不同；公开地址不能为0.0.0.0，禁止请求方临时覆盖。Web监听地址仅允许本机回环，PUBLIC_WEB_ORIGIN必须为实际对外HTTPS origin，不含路径；Google回调由它追加固定API路径。
+SPEAKER_UPLOAD_ENDPOINT是设备可到达的公开DTLS主机及端口，由Web发布配置；SPEAKER_CLIP_HOST和SPEAKER_CLIP_PORT是Clip本机监听地址，两者不能混为同一参数。OP使用NAT或端口映射时可不同；公开地址不能为0.0.0.0，禁止请求方临时覆盖。Web监听地址仅允许本机回环，PUBLIC_WEB_ORIGIN必须为实际对外HTTPS origin，不含路径；Google回调由它追加固定API路径。
 
 首版SPEAKER_ASR_MAX_CONCURRENT只允许1；SPEAKER_RECORDING_MAX_SECONDS范围1..43200，默认12小时。其余线程、队列、超时和额度参数须为正整数，SPEAKER_ASR_ENABLED为布尔值，端口范围1..65535。协议/profile及固定文件名不是可覆盖配置。
 
@@ -1072,191 +908,76 @@ Web提供`/api/boa/v1/health`，只报告自身及成品目录读取状态；不
 
 ## 8. 安全与完整性
 
-### 8.1 身份与授权
+| 边界 | 必须满足的规则 | 详细设计 |
+| --- | --- | --- |
+| 设备接入 | 验证凭证、owner、绑定代次；握手、续传和最终接受时复核撤销 | [身份验证](#clip-verification) |
+| 用户与Clip隔离 | owner只取当前会话；按ID进入本人目录，每次GET/HEAD/Range重新鉴权 | [路径规则](#data-model)、[成品API](#media-api) |
+| 文件与提交 | 受控根、ID白名单、普通文件/O_NOFOLLOW；四个文件校验并fsync后原子发布目录 | [存储](#storage)、[提交](#publication) |
+| 不可信音频 | 解码器隔离、禁网，限制CPU/内存/输出；取消后等待后代退出 | [解码](#decode) |
+| 模型与文本 | 离线权重、禁动态代码和音频出站；校验时间/长度，页面用textContent，VTT/MD由Clip转义 | [转写](#transcript) |
+| 秘密与日志 | Google秘密仅Web、DTLS私钥及模型仅Clip、HTTPS私钥由OP管理；日志排除凭证及录音正文 | [运行边界](#deployment-guide) |
 
-Web验证Google身份和当前账号状态，设备配置使用deny-first文件/SQL流程。Clip验证设备身份、owner、绑定及epoch，在握手、续传和原件最终接受前复核授权；不能用旧连接绕过撤销。不查询数据库或要求来源表，已接受录音的owner固定，设备换绑不转移旧结果。
-
-成品列表、GET、HEAD、Range、录音信息、字幕和附件每次核验会话、用户/Clip目录作用域及成品owner。前端状态、URL中的recording_id、设备当前归属都不能替代成品授权。设备凭证只在受保护配置页短暂用于BLE，不写入localStorage、URL、日志或成品。
-
-### 8.2 用户、Clip与路径隔离
-
-录音路径统一按会话用户/已验证owner、device_id、recording_id及固定类型计算，不保存或接受客户端磁盘路径。不同用户和不同Clip分别进入自己的目录；同一会话范围内也须验证ID白名单和录音归属。可推导路径不能代替鉴权，通过根目录句柄逐级打开，拒绝根外路径、符号链接、非普通文件和任意URL。检查和读取使用同一文件句柄。JSON严格限制体积并按各自契约校验；成品录音信息只接受约定的四个字段，不猜owner。
-
-短时文件锁只解决并发，不替代fsync、原子发布或SQLite事务。大文件在锁外校验和生成，提交时核对执行代次和输入版本。Web不写录音/job、不生成导出；Clip不连接数据库。完整三件套和录音信息全部持久化后才原子发布整个目录，避免浏览器读到只有音频或只有字幕的版本。
-
-### 8.3 不可信音频与模型输出
-
-解码器通过参数数组和受控文件句柄启动，禁shell；隔离runner隐藏数据库、state、凭证，禁网并限制CPU/内存/输出，无法建立隔离则拒绝处理。超时/取消终止并等待后代，旧执行不得有成品提交权限。
-
-模型在Clip内从离线manifest加载，禁动态代码、自动下载和音频出站。原始音频、模型返回文字及时间戳都须验证；转写成功不保证语义准确，不产生真实姓名。模型输出纯文本，网页用textContent；VTT/MD由Clip生成时转义，Web按已生成文件读取，MD作为附件返回。
-
-### 8.4 资源与故障
-
-DTLS有界连接/握手缓存，默认全局32个上传、每设备1个。片段raw≤8MiB、WAV≤300秒、完整录音≤12小时；实际总样本和预留控制合并体积。逐句、逐段及整条文本有明确上限，空间不足、缺片或识别失败不静默截断成品。大WAV流式合并/读取，不一次加载整个录音。
-
-原生模型库与Clip共用故障域，OOM或崩溃会影响收件和处理；持久状态用于重启续传/对账，已发布成品仍可由Web读取。文件损坏保持告警，应用不自动创建空状态覆盖现场。
-
-### 8.5 秘密、日志与OP边界
-
-Google秘密仅Web读取，DTLS私钥及模型仅Clip读取，HTTPS私钥由OP的Nginx管理；设备校验材料按角色授权。秘密不放入ready、job、成品录音信息、源码、命令行或journal。日志排除Cookie、token、Wi-Fi密码、原始录音及转写正文。
+原生模型库与Clip共用故障域，OOM/崩溃会中断收件和处理；按持久状态续传/对账，Web仍可读取已有成品。缺片、坏文件和超限必须报错，不静默补齐、截断或覆盖为空。
 
 ![文件与服务访问边界](docs/assets/diagrams/07-storage-security.svg)
 
-OP负责整机部署、Nginx、存储保障、监控与备份。第9章的设备固件初始化恢复材料是浏览器本地设备维护约束，与服务端整机备份无关。
+OP负责部署、资源、监控和整机备份。下一章的本机恢复包仅用于设备固件初始化。
 
 <a id="web-serial-candidate"></a>
 
 ## 9. 附录：Web Serial固件初始化候选设计
 
+本附录独立于录音服务，仍待硬件和浏览器验收，不代表已实现或允许自动擦写。
 
-原专题日期：2026-10-30。状态：候选、待硬件与浏览器验证；与Server必做范围分别验收。下文保留已有明确约束和恢复规则，合并不意味着已批准擦写设备或已实现初始化功能。
+### 9.1 范围与组件
 
-### 9.1 目标与已确认约束
+用户打开HTTPS网页，通过USB初始化受支持的旧版Clip，无需安装本地工具。网页负责串口交互，Worker运行固定版本的LittleFS WASM、迁移及hash校验；准备包、恢复包和任务记录仅保存在用户电脑，后端不接收原始配置、密钥或迁移镜像。配网、绑定、录音上传另行验收。
 
-用户打开 HTTPS 网页，通过 USB 将受支持的旧版 Clip 迁移到目标固件，无需安装 Python、桌面助手、浏览器扩展或 SDK。用户确认：备份仅保存在本机，开始擦写外置 Flash 前必须保存恢复文件。
+首版仅接纳实机验证过的Chrome/macOS、固件布局、签名链和overwrite-only USB Recovery组合。未知设备、Bootloader/网络核升级及SD数据不在范围；Recovery损坏可能需要SWD，网页不承诺修复。
 
-初始化包含固件和外置存储迁移；配网、账户绑定、实际录音上传作为后续独立步骤。失败恢复不依赖账户登录和在线业务 API。SD 卡录音不在迁移范围，也不声称本方案备份了 SD 卡。
+页面不加载第三方脚本或分析采集，CSP和Serial权限限本站及必要WASM；制品签名由可信前端固定的信任锚验证，不能信任下载包自带的公钥。进行中的任务不切换前端/Worker版本。
 
-首版建议只正式支持经实机验收的桌面 Chrome/macOS 组合，运行时检测 Web Serial、文件选择与写入 API、WASM 和必要存储能力。Windows/其他 Chromium 组合完成驱动与断线验收后再加入。此为设计选择，并非用户限定。不能承诺零交互：系统串口授权、文件保存授权、必要时按键进入 Recovery 均由用户完成。
+### 9.2 准备、备份与写入
 
-不支持未知原厂应用、未知布局、未知签名链、Bootloader/网络核升级、任意设备全量出厂烧录。Bootloader/USB Recovery 已损坏的设备可能需要 SWD，网页不能承诺修复。
+1. **准备包**：取得USB及本机任务目录授权，下载并验证维护、目标、已知原布局回退镜像、patch及清单，保存任务ID、兼容条件和恢复材料，读回确认。此步骤早于维护应用上传，保证只覆盖应用时也有回退镜像。
+2. **维护模式**：停止录音、BLE/Wi-Fi和LittleFS挂载，读取UID/几何。原始区域为`[0x130000, 0x800000)`，共7,143,424字节；Bootloader、网络核和SD不改动。
+3. **双读与迁移**：全区独立读两次，每块核对长度/CRC，两份字节和hash一致；只读挂载旧数据，目标布局/容量取自签名清单；WASM与既有工具须按相同输入验证语义一致，迁移后核对文件、目录、用户属性及重新挂载结果。失败不格式化、不擦外置Flash。
+4. **最终恢复包**：一次性保存`clip-recovery-<任务ID>.cliprestore`，含格式/兼容版本、UID/几何、原始字节O、目标字节T及摘要、制品与签名清单、双读/迁移证据；关闭文件并读回核验，包不再覆盖。再次确认设备原始数据仍等于O后才允许ARM/擦除。
+5. **外置写入**：按擦除块写T并完整回读。T确认完整后才装目标应用；恢复O确认完整后才装旧应用。维护应用在外置改写期间始终留在主槽，复位不能自动回退旧正常应用。
 
-### 9.2 现有实现与方案比较
+准备包不能替代维护模式下的原始备份。浏览器缓存、IndexedDB和OPFS只辅助恢复，不是唯一副本；保存恢复包也不等于原生fsync或抵御整机磁盘损坏。默认不额外设密码，恢复包含敏感数据，提示本机妥善保存；网页不能保证目录非云同步或强制POSIX权限。
 
-本附录是独立的设备初始化候选方案；协议、制品和硬件支持范围以受信发布清单及实机验收为准，不与Server的应用入口或录音存储混用。
+### 9.3 身份、状态与恢复
 
-- `tools/flash_maintenance/build_macos.py`：Mac 离线交付打包；不作为网页运行时。
-- `upgrade.py`：USB SMP 刷应用、状态记录、双读备份、迁移、完整回读、恢复。
-- `flash_tool.py` 与 `applications/flash_maintenance/src/main.c`：维护固件串口 INFO/READ/ARM/ERASE/WRITE 协议。
-- `migrate.py`：只读打开旧 LittleFS，重建缩小布局，校验文件、目录、用户属性及重新挂载结果。
+Web Serial不提供可依赖的原生USB序列号，不能用VID/PID代替UID。Bootloader身份查询未验证前，只允许连接一台设备并由用户确认，进入维护模式后必须核对UID和几何；不匹配停止。若要求应用上传前也自动确认UID，该能力须先经硬件验收。
 
-候选路线：
+串口独占与Web Locks限制同机并发。每次副作用前，先持久化IndexedDB意图并在用户任务目录追加不可变状态快照，关闭后读回；持久化失败就不再发擦写命令，已发命令结果按不确定处理。任务日志不能代替Flash回读，也不能证明某次写入从未开始。
 
-| 路线 | 取舍 | 结论 |
-| --- | --- | --- |
-| 浏览器 USB + 浏览器 WASM 迁移 + 本机恢复包 | 需要移植串口、LittleFS 与恢复协调器；备份不离开本机，写入不依赖网络 | 推荐；符合已确认约束 |
-| 浏览器 USB + 服务器计算迁移 | 可以复用 Python，但必须上传原始配置和蓝牙密钥 | 不符合仅本机要求 |
-| 网页调用本地助手 | 可复用现有 Python，但需要安装工具 | 不符合免安装要求 |
+重新打开时导入同一恢复包，核验签名、UID/几何及当前模式；若目标应用仍正常，先只读检查，不先刷成维护模式。需要读取外置区域时再进入维护模式，以当前整区C判定：
 
-因此后续设计采用第一条路线。用户已选仅本机保存；WASM、首版平台和文件格式细节为本方案建议，仍可审阅修改。
-
-### 9.3 组件与职责
-
-1. HTTPS 站点提供固定版本前端、WASM、受信发布清单、维护/目标/回退签名镜像和固定 Wi-Fi patch。后端不接收备份、迁移镜像、配置或蓝牙密钥。
-2. 浏览器串口层实现 SMP（CBOR、分帧、CRC、镜像查询/上传/重启）和维护协议。二进制数据按精确长度读取，不能对全部串口数据做文本行解析；每条连接仅允许一个在途操作。
-3. Worker 内运行 LittleFS WASM 和哈希、迁移检查。固定实现版本及磁盘几何，与现有 Python 流程做相同输入的语义对照；不要求不同 LittleFS 实现输出逐字节相同，但同一恢复任务必须保存并复用确定的目标字节。
-4. 本机文件保存不可变恢复材料，IndexedDB 保存任务索引与小型事务记录，OPFS 保存工作副本。浏览器缓存和持久存储仅用于便利恢复。
-5. 协调器根据设备实际内容决定下一步；日志记录的是操作意图与观测证据，不能替代设备回读。
-
-使用独立初始化站点源，或至少保障同源代码全部可信；不加载第三方分析、远程脚本或会读取页面内容的错误采集。CSP 限定资源来源、允许固定 WASM 所需策略，设置 Serial Permissions Policy。签名私钥不进入站点。
-
-### 9.4 制品信任与离线准备
-
-首次 USB 写入（安装维护应用）之前完成以下准备：
-
-- 校验布局、原应用白名单、网络核/Bootloader 兼容声明、镜像边界、SHA-256 和 MCUboot 签名。
-- 公钥/发布信任锚由可信前端或受信签名清单固定，不能因为下载包自己携带一把公钥就信任它。
-- 下载并验证维护、目标、已知原布局回退镜像、patch、对应清单、固定 Worker/WASM；所有关键路径资源预先缓存。
-- 用户保存并读回验证一个准备包，至少包含上述恢复制品、任务 ID、兼容条件及格式版本。安装维护应用会覆盖原应用，准备包确保此时已有已知回退镜像。
-- 如果用户拒绝文件保存权限、磁盘不足、缓存/读回失败，则不开始安装维护应用。
-
-服务器中断时，已打开页面仍可执行完整写入与恢复。关闭浏览器后离线重开依赖已验收的 Service Worker 缓存；缓存已被清除时须联网打开兼容恢复页面并导入本机恢复包，不能承诺此情形仍能离线启动。恢复入口不要求业务登录，保留历史恢复格式及所需兼容版本。Service Worker 不在进行中的任务里切换前端版本。
-
-### 9.5 备份与恢复包
-
-原始备份区域为 `[0x130000, 0x800000)`，共 7,143,424 字节，约 6.81 MiB。这不是整机备份；它覆盖本次迁移的 LittleFS/patch 区域。Bootloader、网络核与 SD 数据保持原状。
-
-备份必须来自不挂载 LittleFS、不启用录音/蓝牙/Wi-Fi的维护应用：
-
-1. 读取维护协议硬件 UID、协议版本和 Flash 几何。
-2. 全区独立读取两次，每次逐块检查长度和 CRC，最终逐字节/哈希一致。两次读取是验证同一来源，不是两份独立物理备份。
-3. 旧镜像只读挂载；绝不在挂载失败后自动格式化。备份未通过时不擦写外置 Flash。
-4. 在 WASM 中生成 107 块 LittleFS 和尾部 patch；重新挂载后核对所有文件、目录、内容和用户属性。容量不足或任何条目差异时停止，允许从准备包安装旧应用。
-5. 保存自包含 `clip-recovery-<任务ID>.cliprestore`，保留准备包；此最终恢复包创建一次，之后不覆盖。
-6. 等待文件写入流 `close()`，再从文件句柄重新获取文件、完整解析、重新计算每个成员的 SHA-256。普通下载已触发或“用户点了保存”不构成成功证据。
-7. 只有最终恢复包的原始字节和目标字节均读回验证，且当前设备与原始备份重新核对一致，才允许 ARM/擦除。
-
-最终恢复包包含：格式与最小兼容引擎版本、任务 ID、硬件 UID、布局/几何、原始整区字节及摘要、迁移目标整区字节及摘要、迁移清单、双读校验证据、维护/回退/目标签名镜像、patch、受信发布清单与逐项摘要。不得只保存“从服务器重新下载”的 URL。清单中用户属性可能含敏感数据，也仅本机保存。
-
-建议使用简单、限大小的容器格式；解析时禁止路径穿越、重复成员和超大展开。摘要验证完整性，不能把用户导入文件的自述信息当作设备身份或制品真实性证明。
-
-默认恢复包不设置额外密码，避免唯一口令遗失造成无法恢复；作为敏感本机文件提示保管，建议选非云同步目录。网页不能可靠识别用户选中的目录是否实际被 iCloud/其他软件同步，也不能像原生程序一样保证 POSIX 0600 权限。后续可加可选口令加密，但不作为首版恢复的隐藏依赖。
-
-写入完成并重新读回只代表浏览器可验证的保存状态，不能等同于原生 fsync 或保证电脑硬盘断电不丢数据。浏览器工作副本与恢复文件在同一硬盘上，也不能抵御整机磁盘损坏。
-
-### 9.6 设备身份与 USB 模式切换
-
-- VID `0x2886`；应用 PID `0x0069`，Recovery PID `0x8069`。模式改变后旧串口对象可能失效，页面进入等待重连，必要时显示授权按钮，不能自动替用户确认系统权限。
-- 旧应用 USB 默认可能关闭。首版提供按键进入 Recovery 的入口；正常串口可用时才尝试 1200 baud 触发。
-- Web Serial 的标准 `getInfo()` 不提供原生 pyserial 使用的 USB 序列号字段。不能用 VID/PID、端口对象或型号当作唯一设备身份。
-- 维护协议 INFO 已提供硬件 UID；备份、外置擦写、恢复都必须匹配 UID 与几何。多个标签页使用 Web Locks 锁定任务/设备，并由串口独占阻止同机其他程序冲突；不宣称能跨浏览器或跨电脑统一加锁。
-- Recovery 的 UID 能力需在首个硬件验证中确认。若旧 Bootloader 无法读取 UID，首版只能要求只连接一台 Clip、每次重新授权时由用户确认物理设备，维护应用启动后再读 UID；此时无法对维护/应用镜像上传前提供与原生 USB 序列号同等级的自动核验。
-- 外置存储写入前必须 UID 匹配；恢复中 UID 不符直接停止。若产品要求连应用核也绝不可能刷错设备，则需先解决 Bootloader 身份查询，作为上线阻断条件；不能用软件推断冒充已解决。
-
-### 9.7 状态与写入约束
-
-状态至少包括：`prepared`、`maintenance_installing`、`maintenance_ready`、`backup_verified`、`migration_verified`、`recovery_file_verified`、`apply_started`、`external_verified`、`target_installing`、`boot_verified`、`restore_started`、`original_verified`、`rollback_installing`、`restored`。
-
-每个有副作用操作之前，先将意图持久化到 IndexedDB，等待事务完成，并在用户授权的任务目录追加新的状态快照文件，关闭并读回；不要反复覆盖唯一恢复包或唯一状态文件。各快照有递增序号、任务与制品摘要。恢复时检查所有有效记录，但不因为日志写着成功就跳过 Flash 检查；损坏或缺失记录一律保守处理。
-
-先冻结完整恢复包，再进行外置写入；即使后续状态记录丢失，仍有原始与目标两套字节可以判断。任务目录授权在准备阶段取得，避免每块写入弹出保存对话框。若持久化任何必要记录失败，暂停发送新的擦除命令；已发命令结果按不确定处理。
-
-首版沿用现有维护固件，不要求新增设备端持久事务区，也不更新 Bootloader。写外置 Flash 仅限既有受保护范围；以 64 KiB 为擦除块、16 KiB 为传输块，每块写后校验，结束再完整回读。绝不调用 Bootloader 的擦除 LittleFS/SD 自定义命令。
-
-启动不变量：只接纳已验证的 overwrite-only、无自动回退的既有 Bootloader 组合，USB Recovery 上传直接写应用主槽。安装维护应用后先核对主槽镜像摘要；在外置改写及恢复 O 期间，主槽始终保持维护应用，复位也不能切回旧正常应用。T 完整核对之后才能安装目标应用；O 完整核对之后才能安装旧应用。USB 直写路径不借用 BLE 的 test/confirm 或备用槽恢复语义。应用上传断电后，Bootloader 必须保持可手工进入 Recovery，不能从外置备用槽恢复不匹配应用；这一行为是实机上线门槛。任何会自动回退的 Bootloader 组合首版拒绝，不能仅靠网页安装顺序补救。
-
-目标应用还必须在检测到不支持/损坏布局时拒绝正常业务和自动格式化；核验现有源码，不具备时需在目标固件中实现并单独验收。不能靠“目标应用大概能够挂载”作为保护。
-
-浏览器崩溃、休眠和断电均按可能发生设计。Wake Lock 与离开页面提示只能降低中断概率，不能成为正确性的前提。取消时停止派发后续操作；已发送的块若结果未知必须重新读取，不能立即引导正常启动。
-
-### 9.8 重新打开页面后的恢复判定
-
-用户打开固定恢复入口，授权 USB 与原任务目录；缺少浏览器记录时导入最终恢复包。先验证容器、制品签名，识别当前模式并记录已有应用身份：如果目标应用仍正常运行，优先只读核实状态，不先覆盖成维护应用。如果需要读取外置整区，再进入维护模式核对 UID/几何。恢复模式不依赖账户会话、当天发布版本或最新版固件。
-
-设原始字节为 O、迁移目标为 T、当前读回为 C：
-
-| 证据 | 允许的下一步 |
+| 当前数据 | 处理 |
 | --- | --- |
-| C = O | 外置区域未迁移或已恢复；可从同一恢复包重新执行迁移，或安装已知旧布局回退应用 |
-| C = T | 外置迁移已完整；核对应用镜像后继续目标应用安装/启动验证，不再次迁移 |
-| C 既不是 O 也不是 T | 禁止自动续写或自动恢复；可能是部分写入，也可能是正常使用后配置已变化。用户明确选择回退到初始化前快照后，才恢复 O 并安装回退应用 |
-| UID/几何不符，或文件不完整 | 不进行擦写，提示连接原设备或找到有效恢复包 |
+| C=O | 尚未改写或已恢复，可复用同一包迁移或安装回退应用 |
+| C=T | 外置已完成，继续安装并验证同一目标应用 |
+| C既非O也非T | 可能是中断，也可能是正常使用后的变化；不自动续写或回退。用户明确选择历史回退后，逐块恢复O并回读，再安装旧应用 |
+| UID/几何不符或恢复包无效 | 禁止擦写，保留现场 |
 
-部分写入时不自动继续从某个进度百分比开始，也不把当前内容当作新的备份。C 既不是 O 也不是 T 本身不能证明迁移中断；快照在擦写前冻结，也不能证明任务后来完成。独立保存完成收据（任务 ID、O/T 摘要、制品摘要、整区回读及启动验证结果），不修改原恢复包；有收据时默认只读核实。收据缺失时不能承诺自动区分正常使用与中断，明确显示“状态不确定”，保留现场，用户选择历史回退时说明会覆盖后来的配置/外置数据。恢复 O 时逐个比较擦除块；不同块重新擦除、完整重写与回读。恢复再次中断后仍使用同一个 O 重复此过程，因此恢复本身可重入。恢复验证完整之前不安装或启动旧正常应用。
+恢复中断仍使用同一O重复块校验、擦除和重写，不能从现场创建新的“原始备份”。维护模式下无有效恢复材料时禁止猜测性迁移；只有当前连续会话确认从未写外置数据，或现场与既有双读原始摘要一致时，才允许重新只读备份。可挂载、缺少写入日志均不足以证明未改写。
 
-如果检测到维护应用而没有有效原始恢复材料，禁止创建新的“首次迁移”任务来覆盖现场。只有尚未中断的当前会话确知从未发出外置写入命令，或已存在经双读确认的原始摘要且当前整区与之相符，才允许重新只读备份。准备包或“没有找到 apply_started 日志”本身不能证明从未写入；有任何不确定就停止，不把可挂载当作“从未被部分改写”的证明。原始备份已丢失且发生外置擦写时，不能承诺无损恢复。
+完成后另存含O/T摘要、制品、整区回读及启动结果的收据，不修改恢复包。无收据时不能自动区分正常使用与中断；历史回退会覆盖后续外置配置，必须明示。原始恢复材料丢失且已擦写时，不承诺无损恢复。
 
-### 9.9 失败处理矩阵
+### 9.4 失败与完成边界
 
-| 失败位置 | 处理与恢复路径 |
+| 失败 | 处理 |
 | --- | --- |
-| 预下载、校验、授权、准备包保存 | 不写设备；修正后重试 |
-| 维护应用上传中 | 按键回 Recovery，从准备包重新安装维护应用或已知回退应用；不假定断电后 SMP 进度仍存在 |
-| 双读备份或迁移计算 | 不擦外置区域；可重新备份/重算，或在确认 O 未被改写后安装旧应用 |
-| 最终恢复包保存/读回 | 不擦外置区域；解决磁盘/权限问题后重新保存 |
-| 擦除、传输、块校验中 | 保留维护状态；重连完整读取；确认中断且用户选择恢复后逐块恢复 O |
-| 传输中断后维护串口无响应 | 现有维护固件可能已停止解析；按键/1200 baud 回 Recovery，重装维护应用，再核对 UID 并恢复 |
-| 外置区域已完整、目标应用上传中 | 核对 C = T，回 Recovery 重传同一个目标应用；不重建备份 |
-| 目标应用不启动/启动验证失败 | 回 Recovery，安装维护应用，先确认 UID，再恢复 O，完整回读后安装回退应用 |
-| 恢复 O 中再次断电 | 回维护模式，从同一个 O 再次逐块恢复；不创建新原始备份 |
-| 浏览器数据被清理/换电脑 | 打开兼容恢复网页，导入本机恢复包与可用完成收据；重新授权并核验设备。没有恢复包时禁止猜测性重建，不能凭 C 不匹配就自动回退 |
-| 业务登录过期/服务器离线 | 正在执行的任务不受影响；已缓存的恢复页面及本机材料可用时恢复继续 |
+| 准备包、双读、迁移计算或恢复包保存失败 | 不擦外置区域；解决原因后重试 |
+| 应用上传中断或维护串口失效 | 回USB Recovery，重装同一已验证镜像，再核对UID和外置数据 |
+| 外置擦写/恢复中断 | 保持维护应用，重连完整读取；按上表判定并复用同一恢复包 |
+| 目标应用不启动 | 回维护模式确认UID，恢复并验证O，再装回退应用 |
+| 浏览器数据清理或换电脑 | 打开兼容恢复页面、导入本机包、重新授权；没有有效材料则停止 |
 
-准备包保存时间早于维护应用上传；原始数据恢复包只能在维护应用启动后生成。因此存在一个“只覆盖应用、尚未备份数据”的短窗口，其恢复依赖准备包的回退镜像和已知原布局，不得写成“任何 USB 写入前已备份全部数据”。
+已打开页面可在服务器离线或业务会话过期后继续操作。离线重开依赖已验收的Service Worker缓存；缓存被清理时需联网打开兼容页面，再导入本机包，不能承诺仍可离线启动。恢复入口不要求业务登录。
 
-### 9.10 启动与初始化完成的定义
+完成需要外置数据=T、目标镜像验证通过且设备实际启动，Wi-Fi/录音/上传/BLE再独立验证。成功刷写不等于业务验收，已完成任务默认只读复核，不因后来配置变化而自动回退。
 
-分开显示三个结果：
-
-1. 迁移完成：外置整区与 T 完全一致，目标镜像上传后 MCUboot 镜像摘要匹配。
-2. 固件启动已验证：重启后得到目标构建标识和相关能力响应；单独 AT+VERSION 的 `ok=true` 不足以证明目标版本。目标应用需提供可核对的构建标识/镜像身份，或采用已验证的 SMP 运行镜像证据；具体能力在实机前置验证确认。暂时无法核实就保持“待启动核实”。
-3. 设备可正常使用：后续配网/绑定、真实录音和上传收件校验完成，才标记各自成功。
-
-不能把成功刷写当成录音、Wi-Fi、上传或 BLE OTA 全部验收。完成后的任务默认只查看/复核，不因为正常使用后的 Flash 已变化而自动恢复。用户日后主动回退会还原初始化前配置，须显式说明；不承诺保留之后新产生的设置。
-
-### 9.11 浏览器依据
-
-- [Chrome Web Serial](https://developer.chrome.com/docs/capabilities/serial)：用户授权、USB VID/PID、连接/断开、串口传输。
-- [SerialPort.getInfo](https://developer.mozilla.org/en-US/docs/Web/API/SerialPort/getInfo)：标准返回信息不包含 USB 序列号。
-- [Chrome File System Access](https://developer.chrome.com/docs/capabilities/web-apis/file-system-access)：授权文件访问，写入流关闭后提交；本方案额外要求重读验证。
-- [MDN 存储配额与清理](https://developer.mozilla.org/en-US/docs/Web/API/Storage_API/Storage_quotas_and_eviction_criteria)：持久存储不能抵御用户主动删除，因此浏览器存储不作为唯一恢复来源。
+依据：[Chrome Web Serial](https://developer.chrome.com/docs/capabilities/serial)、[MDN Web Serial](https://developer.mozilla.org/en-US/docs/Web/API/Web_Serial_API)、[MDN文件保存](https://developer.mozilla.org/en-US/docs/Web/API/Window/showSaveFilePicker)、[浏览器存储配额](https://developer.mozilla.org/en-US/docs/Web/API/Storage_API/Storage_quotas_and_eviction_criteria)。
