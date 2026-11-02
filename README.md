@@ -89,9 +89,14 @@ ${SPEAKER_DATA_ROOT}/
 
 owner来自已验证授权，Web读取时来自登录会话。不同用户、不同Clip分别隔离；设备换绑不搬迁旧文件，也不改变旧录音权限。
 
-owner、recording_id采用`[a-z0-9][a-z0-9_-]{0,127}`，device_id同样字符但最多32位；段号1..999999999。禁止任意路径及符号链接。生产recording_id为紧凑UTF-8 JSON数组`[owner,device_id,binding_id,epoch,source_session]`的SHA-256小写十六进制，epoch为整数；本文短ID仅作示意。
+ID示例：
 
-processing只保存Server自身的处理进度：state.json记录归属、已收文件及hash、最终段号和处理结果；job记录解码、转写、合并任务的状态和重试信息，供重启后续跑。它们不记录Clip设备内部状态，也不提供给Web。
+```text
+owner        = demo-user
+device_id    = demo-device
+recording_id = rec-demo-20261102-001
+segment_no   = 1
+```
 
 ### 4.7 调度与重试
 
