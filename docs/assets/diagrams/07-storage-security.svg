@@ -1,64 +1,54 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="1010" viewBox="0 0 1280 1010">
-<title>文件访问与数据保护</title>
-<rect width="1280" height="1010" fill="white"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="970" viewBox="0 0 1280 970">
+<title>两个服务的文件访问边界</title>
+<rect width="1280" height="970" fill="white"/>
 <g font-family="PingFang SC,Microsoft YaHei,Noto Sans CJK SC,Arial,sans-serif">
-<text x="40" y="55" font-size="30" font-weight="600" fill="#17283f">文件访问与数据保护</text>
-<text x="40" y="88" font-size="17" font-weight="400" fill="#607088">Web 校验 owner / revision；Clip 校验接入身份；元数据文件独立于音频双盘。</text>
+<text x="40" y="55" font-size="30" font-weight="600" fill="#17283f">两个服务的文件访问边界</text>
+<text x="40" y="88" font-size="17" font-weight="400" fill="#607088">同一本机文件系统；按目录和接口控制所有权，不设置磁盘副本。</text>
 <line x1="40" y1="112" x2="1240" y2="112" stroke="#d8e0ea" stroke-width="1.5"/>
-<rect x="40" y="150" width="380" height="245" rx="8" fill="white" stroke="#d8e0ea"/>
-<rect x="40" y="150" width="5" height="245" rx="0" fill="#245cca" stroke="#245cca"/>
-<text x="62" y="184" font-size="21" font-weight="600" fill="#17283f">Web Server · 授权读取</text>
-<text x="62" y="220" font-size="18" font-weight="400" fill="#607088">本站会话、账号状态与 CSRF</text>
-<text x="62" y="248" font-size="18" font-weight="400" fill="#607088">仅返回当前 owner 的录音</text>
-<text x="62" y="276" font-size="18" font-weight="400" fill="#607088">每次 GET / HEAD / Range 鉴权</text>
-<text x="62" y="304" font-size="18" font-weight="400" fill="#607088">共享锁内读取录音和 job</text>
-<text x="62" y="332" font-size="18" font-weight="400" fill="#607088">锁外执行媒体 I/O 与导出</text>
-<rect x="450" y="150" width="380" height="245" rx="8" fill="white" stroke="#d8e0ea"/>
-<rect x="450" y="150" width="5" height="245" rx="0" fill="#087f74" stroke="#087f74"/>
-<text x="472" y="184" font-size="21" font-weight="600" fill="#17283f">Clip Server · 可信收件</text>
-<text x="472" y="220" font-size="18" font-weight="400" fill="#607088">只读授权文件及凭证校验材料</text>
-<text x="472" y="248" font-size="18" font-weight="400" fill="#607088">验证通过后信任 Clip 上报信息</text>
-<text x="472" y="276" font-size="18" font-weight="400" fill="#607088">owner 必须与已验证凭证一致</text>
-<text x="472" y="304" font-size="18" font-weight="400" fill="#607088">内置离线 ASR；不加载 Google 凭证</text>
-<text x="472" y="332" font-size="18" font-weight="400" fill="#607088">不连接任何数据库</text>
-<rect x="860" y="150" width="380" height="245" rx="8" fill="white" stroke="#d8e0ea"/>
-<rect x="860" y="150" width="5" height="245" rx="0" fill="#245cca" stroke="#245cca"/>
-<text x="882" y="184" font-size="21" font-weight="600" fill="#17283f">文件发布与受控处理</text>
-<text x="882" y="220" font-size="18" font-weight="400" fill="#607088">路径使用服务端生成 ID</text>
-<text x="882" y="248" font-size="18" font-weight="400" fill="#607088">openat / O_NOFOLLOW 检查</text>
-<text x="882" y="276" font-size="18" font-weight="400" fill="#607088">拒绝符号链接与根外路径</text>
-<text x="882" y="304" font-size="18" font-weight="400" fill="#607088">受限解码子进程与超时</text>
-<text x="882" y="332" font-size="18" font-weight="400" fill="#607088">ASR 仅用本机私有 socket</text>
-<rect x="40" y="440" width="380" height="300" rx="8" fill="white" stroke="#d8e0ea"/>
-<rect x="40" y="440" width="5" height="300" rx="0" fill="#087f74" stroke="#087f74"/>
-<text x="62" y="474" font-size="21" font-weight="600" fill="#17283f">独立元数据卷</text>
-<text x="62" y="510" font-size="18" font-weight="400" fill="#607088">单个 SQLite：accounts / devices</text>
-<text x="62" y="538" font-size="18" font-weight="400" fill="#607088">授权 / 收件 / 录音 / job 文件</text>
-<text x="62" y="566" font-size="18" font-weight="400" fill="#607088">固定角色锁与共享 state 锁</text>
-<text x="62" y="594" font-size="18" font-weight="400" fill="#607088">目录 0700，文件 0600</text>
-<text x="62" y="622" font-size="18" font-weight="400" fill="#607088">不部署到 NFS 或公开静态目录</text>
-<text x="62" y="650" font-size="18" font-weight="400" fill="#607088">损坏告警，禁止自动覆盖空状态</text>
-<rect x="450" y="440" width="380" height="300" rx="8" fill="white" stroke="#d8e0ea"/>
-<rect x="450" y="440" width="5" height="300" rx="0" fill="#087f74" stroke="#087f74"/>
-<text x="472" y="474" font-size="21" font-weight="600" fill="#17283f">两个独立音频盘</text>
-<text x="472" y="510" font-size="18" font-weight="400" fill="#607088">raw / 描述 / WAV 双份保存</text>
-<text x="472" y="538" font-size="18" font-weight="400" fill="#607088">先两份 fsync 再提交录音引用</text>
-<text x="472" y="566" font-size="18" font-weight="400" fill="#607088">一盘故障暂停接入发布及处理</text>
-<text x="472" y="594" font-size="18" font-weight="400" fill="#607088">离线只写替换盘，幸存盘只读</text>
-<text x="472" y="622" font-size="18" font-weight="400" fill="#607088">保留成功 ASR 和 job 执行预算</text>
-<text x="472" y="650" font-size="18" font-weight="400" fill="#607088">不因换盘回滚当前元数据</text>
-<rect x="860" y="440" width="380" height="300" rx="8" fill="white" stroke="#d8e0ea"/>
-<rect x="860" y="440" width="5" height="300" rx="0" fill="#087f74" stroke="#087f74"/>
-<text x="882" y="474" font-size="21" font-weight="600" fill="#17283f">独立加密版本备份</text>
-<text x="882" y="510" font-size="18" font-weight="400" fill="#607088">同时停两个服务及在途执行</text>
-<text x="882" y="538" font-size="18" font-weight="400" fill="#607088">关闭数据库，复制完整状态根</text>
-<text x="882" y="566" font-size="18" font-weight="400" fill="#607088">备份 raw / WAV / 配置与清单</text>
-<text x="882" y="594" font-size="18" font-weight="400" fill="#607088">核对数据库、JSON 关联和 hash</text>
-<text x="882" y="622" font-size="18" font-weight="400" fill="#607088">保留最近 7 份完整版本</text>
-<text x="882" y="650" font-size="18" font-weight="400" fill="#607088">恢复不重建账号或撤销授权</text>
-<rect x="40" y="785" width="1200" height="155" rx="8" fill="#f3f6fa" stroke="#d8e0ea"/>
-<text x="62" y="826" font-size="23" font-weight="600" fill="#17283f">文件锁不代替持久化，也不代替 SQLite 事务。</text>
-<text x="62" y="866" font-size="20" font-weight="400" fill="#17283f">音频盘故障不影响健康元数据卷中的既有文字；元数据卷故障从一致备份恢复。</text>
-<text x="62" y="906" font-size="19" font-weight="400" fill="#607088">两个服务各自单实例；无第三个常驻工作进程。日志不记录凭证和录音正文。</text>
+<rect x="40" y="150" width="380" height="280" rx="8" fill="white" stroke="#d8e0ea"/>
+<rect x="40" y="150" width="5" height="280" rx="0" fill="#087f74" stroke="#087f74"/>
+<text x="62" y="184" font-size="21" font-weight="600" fill="#17283f">Clip Server</text>
+<text x="62" y="220" font-size="18" font-weight="400" fill="#607088">只读设备授权和离线模型</text>
+<text x="62" y="248" font-size="18" font-weight="400" fill="#607088">写raw、片段WAV和逐段转写</text>
+<text x="62" y="276" font-size="18" font-weight="400" fill="#607088">写recording / job处理状态</text>
+<text x="62" y="304" font-size="18" font-weight="400" fill="#607088">合并完整WAV / VTT / MD</text>
+<text x="62" y="332" font-size="18" font-weight="400" fill="#607088">发布manifest和current</text>
+<text x="62" y="360" font-size="18" font-weight="400" fill="#607088">不连接用户与设备数据库</text>
+<rect x="450" y="150" width="380" height="280" rx="8" fill="white" stroke="#d8e0ea"/>
+<rect x="450" y="150" width="5" height="280" rx="0" fill="#245cca" stroke="#245cca"/>
+<text x="472" y="184" font-size="21" font-weight="600" fill="#17283f">Web Server</text>
+<text x="472" y="220" font-size="18" font-weight="400" fill="#607088">管理登录、用户和设备</text>
+<text x="472" y="248" font-size="18" font-weight="400" fill="#607088">写设备授权，采用deny-first</text>
+<text x="472" y="276" font-size="18" font-weight="400" fill="#607088">只读成品清单及完整三件套</text>
+<text x="472" y="304" font-size="18" font-weight="400" fill="#607088">GET / HEAD / Range每次鉴权</text>
+<text x="472" y="332" font-size="18" font-weight="400" fill="#607088">不访问原件、中间态或job</text>
+<text x="472" y="360" font-size="18" font-weight="400" fill="#607088">不生成字幕、MD或音频</text>
+<rect x="860" y="150" width="380" height="280" rx="8" fill="white" stroke="#d8e0ea"/>
+<rect x="860" y="150" width="5" height="280" rx="0" fill="#087f74" stroke="#087f74"/>
+<text x="882" y="184" font-size="21" font-weight="600" fill="#17283f">本机文件系统</text>
+<text x="882" y="220" font-size="18" font-weight="400" fill="#607088">授权、来源与状态都是文件</text>
+<text x="882" y="248" font-size="18" font-weight="400" fill="#607088">原件、中间和成品按目录划分</text>
+<text x="882" y="276" font-size="18" font-weight="400" fill="#607088">路径受控，拒绝符号链接</text>
+<text x="882" y="304" font-size="18" font-weight="400" fill="#607088">目录0700，文件0600</text>
+<text x="882" y="332" font-size="18" font-weight="400" fill="#607088">临时文件校验后原子发布</text>
+<text x="882" y="360" font-size="18" font-weight="400" fill="#607088">无双写、复制或备份任务</text>
+<rect x="40" y="475" width="570" height="260" rx="8" fill="white" stroke="#d8e0ea"/>
+<rect x="40" y="475" width="5" height="260" rx="0" fill="#087f74" stroke="#087f74"/>
+<text x="62" y="509" font-size="21" font-weight="600" fill="#17283f">完整性与资源</text>
+<text x="62" y="545" font-size="18" font-weight="400" fill="#607088">原始音频不可信，解码子进程隔离</text>
+<text x="62" y="573" font-size="18" font-weight="400" fill="#607088">模型离线加载，输入与输出有界</text>
+<text x="62" y="601" font-size="18" font-weight="400" fill="#607088">按样本合并，不跳号或补静音</text>
+<text x="62" y="629" font-size="18" font-weight="400" fill="#607088">三件套全部持久化后才发布</text>
+<text x="62" y="657" font-size="18" font-weight="400" fill="#607088">大文件流式处理，空间不足暂停</text>
+<rect x="650" y="475" width="590" height="260" rx="8" fill="white" stroke="#d8e0ea"/>
+<rect x="650" y="475" width="5" height="260" rx="0" fill="#245cca" stroke="#245cca"/>
+<text x="672" y="509" font-size="21" font-weight="600" fill="#17283f">OP管理部署</text>
+<text x="672" y="545" font-size="18" font-weight="400" fill="#607088">Nginx提供HTTPS，代理本机Web</text>
+<text x="672" y="573" font-size="18" font-weight="400" fill="#607088">OP管理托管器、资源、监控和证书</text>
+<text x="672" y="601" font-size="18" font-weight="400" fill="#607088">整体备份与恢复不由应用实现</text>
+<text x="672" y="629" font-size="18" font-weight="400" fill="#607088">Clip故障不妨碍读取已有完整成品</text>
+<text x="672" y="657" font-size="18" font-weight="400" fill="#607088">日志排除凭证和录音/识别正文</text>
+<text x="45" y="820" font-size="23" font-weight="400" fill="#17283f">文件锁不代替fsync、原子发布或SQLite事务。</text>
+<text x="45" y="868" font-size="20" font-weight="400" fill="#17283f">SQLite仅accounts / devices，由Web访问；录音、job和成品完全使用文件。</text>
 </g>
 </svg>

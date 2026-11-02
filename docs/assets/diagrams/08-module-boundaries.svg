@@ -1,64 +1,56 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="1290" viewBox="0 0 1280 1290">
-<title>Web Server 与 Clip Server 模块边界</title>
-<rect width="1280" height="1290" fill="white"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="1220" viewBox="0 0 1280 1220">
+<title>Clip处理与Web读取的模块边界</title>
+<rect width="1280" height="1220" fill="white"/>
 <g font-family="PingFang SC,Microsoft YaHei,Noto Sans CJK SC,Arial,sans-serif">
-<text x="40" y="55" font-size="30" font-weight="600" fill="#17283f">Web Server 与 Clip Server 模块边界</text>
-<text x="40" y="88" font-size="17" font-weight="400" fill="#607088">两个独立入口，各自分层；共享契约和文件工具，不共享数据库访问或进程内状态。</text>
+<text x="40" y="55" font-size="30" font-weight="600" fill="#17283f">Clip处理与Web读取的模块边界</text>
+<text x="40" y="88" font-size="17" font-weight="400" fill="#607088">两个应用进程；Clip发布完整录音，Web读取成品；公共文件能力不持业务资源。</text>
 <line x1="40" y1="112" x2="1240" y2="112" stroke="#d8e0ea" stroke-width="1.5"/>
-<rect x="40" y="150" width="1200" height="145" rx="8" fill="white" stroke="#d8e0ea"/>
-<rect x="40" y="150" width="5" height="145" rx="0" fill="#087f74" stroke="#087f74"/>
-<text x="62" y="184" font-size="21" font-weight="600" fill="#17283f">共享 contracts / platform</text>
-<text x="62" y="220" font-size="18" font-weight="400" fill="#607088">DTO、文件 schema、错误码；配置、受控路径、flock、原子写和脱敏计量</text>
-<text x="62" y="248" font-size="18" font-weight="400" fill="#607088">不导入 FastAPI / DTLS / SQLite / ASR SDK；不持全局连接，不启动任何监听</text>
-<rect x="40" y="335" width="570" height="650" rx="8" fill="#f3f6fa" stroke="#d8e0ea"/>
-<text x="62" y="377" font-size="25" font-weight="600" fill="#087f74">Clip Server · 独立进程</text>
-<rect x="60" y="410" width="530" height="145" rx="8" fill="white" stroke="#d8e0ea"/>
-<rect x="60" y="410" width="5" height="145" rx="0" fill="#087f74" stroke="#087f74"/>
-<text x="82" y="444" font-size="21" font-weight="600" fill="#17283f">transport / protocol</text>
-<text x="82" y="480" font-size="18" font-weight="400" fill="#607088">DTLS连接、帧解析、消息状态机</text>
-<text x="82" y="508" font-size="18" font-weight="400" fill="#607088">输入有界；不把socket交给业务模块</text>
-<rect x="60" y="575" width="530" height="145" rx="8" fill="white" stroke="#d8e0ea"/>
-<rect x="60" y="575" width="5" height="145" rx="0" fill="#087f74" stroke="#087f74"/>
-<text x="82" y="609" font-size="21" font-weight="600" fill="#17283f">application / ports</text>
-<text x="82" y="645" font-size="18" font-weight="400" fill="#607088">验证、开始/续传/完成收件用例</text>
-<text x="82" y="673" font-size="18" font-weight="400" fill="#607088">只依赖授权读取、收件、发布接口</text>
-<rect x="60" y="740" width="530" height="200" rx="8" fill="white" stroke="#d8e0ea"/>
-<rect x="60" y="740" width="5" height="200" rx="0" fill="#087f74" stroke="#087f74"/>
-<text x="82" y="774" font-size="21" font-weight="600" fill="#17283f">文件与授权 adapters</text>
-<text x="82" y="810" font-size="18" font-weight="400" fill="#607088">只读本地授权/凭证材料</text>
-<text x="82" y="838" font-size="18" font-weight="400" fill="#607088">写收件/来源/会话事件与设备报告</text>
-<text x="82" y="866" font-size="18" font-weight="400" fill="#607088">无SQLite、无Web app、无job仓储</text>
-<text x="82" y="894" font-size="18" font-weight="400" fill="#607088">内置模型与本机接口，独立推理线程</text>
-<rect x="640" y="335" width="600" height="650" rx="8" fill="#f3f6fa" stroke="#d8e0ea"/>
-<text x="662" y="377" font-size="25" font-weight="600" fill="#245cca">Web Server · 独立进程</text>
-<rect x="660" y="410" width="560" height="145" rx="8" fill="white" stroke="#d8e0ea"/>
-<rect x="660" y="410" width="5" height="145" rx="0" fill="#245cca" stroke="#245cca"/>
-<text x="682" y="444" font-size="21" font-weight="600" fill="#17283f">API / middleware</text>
-<text x="682" y="480" font-size="18" font-weight="400" fill="#607088">登录、用户设备、录音、媒体、health</text>
-<text x="682" y="508" font-size="18" font-weight="400" fill="#607088">会话、owner、CSRF、限流、错误映射</text>
-<rect x="660" y="575" width="560" height="145" rx="8" fill="white" stroke="#d8e0ea"/>
-<rect x="660" y="575" width="5" height="145" rx="0" fill="#245cca" stroke="#245cca"/>
-<text x="682" y="609" font-size="21" font-weight="600" fill="#17283f">application / domain / worker</text>
-<text x="682" y="645" font-size="18" font-weight="400" fill="#607088">设备配置、导入、job、识别、汇总用例</text>
-<text x="682" y="673" font-size="18" font-weight="400" fill="#607088">一个后台循环；router/worker不直接I/O</text>
-<rect x="660" y="740" width="560" height="200" rx="8" fill="white" stroke="#d8e0ea"/>
-<rect x="660" y="740" width="5" height="200" rx="0" fill="#245cca" stroke="#245cca"/>
-<text x="682" y="774" font-size="21" font-weight="600" fill="#17283f">仓储与执行 adapters</text>
-<text x="682" y="810" font-size="18" font-weight="400" fill="#607088">SQLite仅accounts/devices；录音/job文件</text>
-<text x="682" y="838" font-size="18" font-weight="400" fill="#607088">受限解码、Clip ASR客户端、VTT/MD</text>
-<text x="682" y="866" font-size="18" font-weight="400" fill="#607088">FastAPI lifespan集中启动、恢复和退出</text>
-<text x="682" y="894" font-size="18" font-weight="400" fill="#607088">bootstrap注入接口实现，禁止反向依赖</text>
-<rect x="40" y="1020" width="570" height="170" rx="8" fill="white" stroke="#d8e0ea"/>
-<rect x="40" y="1020" width="5" height="170" rx="0" fill="#087f74" stroke="#087f74"/>
-<text x="62" y="1054" font-size="21" font-weight="600" fill="#17283f">进程交接与所有权</text>
-<text x="62" y="1090" font-size="18" font-weight="400" fill="#607088">Clip发布ready/会话事件，Web重放导入</text>
-<text x="62" y="1118" font-size="18" font-weight="400" fill="#607088">Web发布授权文件，Clip只读验证</text>
-<text x="62" y="1146" font-size="18" font-weight="400" fill="#607088">固定state锁保护短提交；I/O在锁外</text>
-<rect x="640" y="1020" width="600" height="170" rx="8" fill="white" stroke="#d8e0ea"/>
-<rect x="640" y="1020" width="5" height="170" rx="0" fill="#245cca" stroke="#245cca"/>
-<text x="662" y="1054" font-size="21" font-weight="600" fill="#17283f">依赖方向</text>
-<text x="662" y="1090" font-size="18" font-weight="400" fill="#607088">入口 → 用例 → port / contracts</text>
-<text x="662" y="1118" font-size="18" font-weight="400" fill="#607088">adapter实现接口，由bootstrap装配</text>
-<text x="662" y="1146" font-size="18" font-weight="400" fill="#607088">Clip不引用Web或任何数据库模块</text>
+<rect x="40" y="150" width="1200" height="125" rx="8" fill="white" stroke="#d8e0ea"/>
+<rect x="40" y="150" width="5" height="125" rx="0" fill="#087f74" stroke="#087f74"/>
+<text x="62" y="184" font-size="21" font-weight="600" fill="#17283f">公共契约与文件能力</text>
+<text x="62" y="220" font-size="18" font-weight="400" fill="#607088">授权、job、成品清单的版本化格式；受控路径、文件锁、原子写及脱敏日志</text>
+<rect x="40" y="315" width="570" height="615" rx="8" fill="#f3f6fa" stroke="#d8e0ea"/>
+<text x="62" y="357" font-size="25" font-weight="600" fill="#087f74">Clip Server · 收件与处理</text>
+<rect x="60" y="390" width="530" height="140" rx="8" fill="white" stroke="#d8e0ea"/>
+<rect x="60" y="390" width="5" height="140" rx="0" fill="#087f74" stroke="#087f74"/>
+<text x="82" y="424" font-size="21" font-weight="600" fill="#17283f">设备接入与recording聚合</text>
+<text x="82" y="460" font-size="18" font-weight="400" fill="#607088">DTLS / 身份验证 / Opus续传</text>
+<text x="82" y="488" font-size="18" font-weight="400" fill="#607088">完整来源、结束声明与段号完整性</text>
+<rect x="60" y="550" width="530" height="160" rx="8" fill="white" stroke="#d8e0ea"/>
+<rect x="60" y="550" width="5" height="160" rx="0" fill="#087f74" stroke="#087f74"/>
+<text x="82" y="584" font-size="21" font-weight="600" fill="#17283f">音频处理与任务调度</text>
+<text x="82" y="620" font-size="18" font-weight="400" fill="#607088">recording / job文件，一个后台循环</text>
+<text x="82" y="648" font-size="18" font-weight="400" fill="#607088">逐段解码和ASR，失败只重试相应阶段</text>
+<text x="82" y="676" font-size="18" font-weight="400" fill="#607088">收齐后合并完整WAV / VTT / MD</text>
+<rect x="60" y="730" width="530" height="160" rx="8" fill="white" stroke="#d8e0ea"/>
+<rect x="60" y="730" width="5" height="160" rx="0" fill="#087f74" stroke="#087f74"/>
+<text x="82" y="764" font-size="21" font-weight="600" fill="#17283f">成品发布</text>
+<text x="82" y="800" font-size="18" font-weight="400" fill="#607088">三件套与manifest全部校验 / fsync</text>
+<text x="82" y="828" font-size="18" font-weight="400" fill="#607088">原子current作为交接提交点</text>
+<text x="82" y="856" font-size="18" font-weight="400" fill="#607088">不连接任何数据库</text>
+<rect x="640" y="315" width="600" height="615" rx="8" fill="#f3f6fa" stroke="#d8e0ea"/>
+<text x="662" y="357" font-size="25" font-weight="600" fill="#245cca">Web Server · 用户设备与成品</text>
+<rect x="660" y="390" width="560" height="140" rx="8" fill="white" stroke="#d8e0ea"/>
+<rect x="660" y="390" width="5" height="140" rx="0" fill="#245cca" stroke="#245cca"/>
+<text x="682" y="424" font-size="21" font-weight="600" fill="#17283f">用户、设备与授权</text>
+<text x="682" y="460" font-size="18" font-weight="400" fill="#607088">Google OIDC / 会话 / CSRF</text>
+<text x="682" y="488" font-size="18" font-weight="400" fill="#607088">accounts / devices及设备授权文件</text>
+<rect x="660" y="550" width="560" height="160" rx="8" fill="white" stroke="#d8e0ea"/>
+<rect x="660" y="550" width="5" height="160" rx="0" fill="#245cca" stroke="#245cca"/>
+<text x="682" y="584" font-size="21" font-weight="600" fill="#17283f">成品目录与读取</text>
+<text x="682" y="620" font-size="18" font-weight="400" fill="#607088">仅读取Clip已发布current / manifest</text>
+<text x="682" y="648" font-size="18" font-weight="400" fill="#607088">按owner及revision固定成品版本</text>
+<text x="682" y="676" font-size="18" font-weight="400" fill="#607088">不读原件、内部recording或job</text>
+<rect x="660" y="730" width="560" height="160" rx="8" fill="white" stroke="#d8e0ea"/>
+<rect x="660" y="730" width="5" height="160" rx="0" fill="#245cca" stroke="#245cca"/>
+<text x="682" y="764" font-size="21" font-weight="600" fill="#17283f">完整录音播放器与下载</text>
+<text x="682" y="800" font-size="18" font-weight="400" fill="#607088">读取现成WAV、VTT和Markdown</text>
+<text x="682" y="828" font-size="18" font-weight="400" fill="#607088">完整WAV播放、字幕与附件下载</text>
+<text x="682" y="856" font-size="18" font-weight="400" fill="#607088">不解码、不转写、不合并、不生成文件</text>
+<rect x="40" y="970" width="1200" height="155" rx="8" fill="white" stroke="#d8e0ea"/>
+<rect x="40" y="970" width="5" height="155" rx="0" fill="#087f74" stroke="#087f74"/>
+<text x="62" y="1004" font-size="21" font-weight="600" fill="#17283f">同一本机文件系统</text>
+<text x="62" y="1040" font-size="18" font-weight="400" fill="#607088">Web写设备授权 → Clip只读；Clip写完整成品 → Web只读</text>
+<text x="62" y="1068" font-size="18" font-weight="400" fill="#607088">原件、中间状态和成品按目录区分；无双写、副本或额外音频存储服务</text>
 </g>
 </svg>

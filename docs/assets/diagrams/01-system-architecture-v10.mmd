@@ -1,0 +1,35 @@
+C4Container
+    title ReSpeaker Clip — 系统架构图
+    Person(user, "用户 / 浏览器", "登录、配置设备、播放与下载")
+    System_Ext(device, "ReSpeaker Clip", "原始 Opus 与录完声明")
+    System_Ext(nginx, "Nginx（OP管理）", "HTTPS入口与反向代理")
+    System_Ext(google, "Google OIDC", "外部身份服务")
+    System_Boundary(speaker, "Speaker Server") {
+        Container(clip, "Clip Server", "设备接入 / 音频处理", "Opus → 分段WAV → 转写\n按recording合并完整WAV / VTT / MD\n发布成品；不连接数据库")
+        Container(web, "Web Server", "用户设备 / 成品读取", "管理用户设备及授权文件\n只读完整录音、播放与下载\n不解码、不转写、不合并")
+        ContainerDb(files, "本机文件系统", "同一文件系统，按目录划分", "授权文件、原始Opus、recording / job及中间结果\n完整WAV / VTT / MD、成品清单及发布指针\nClip负责处理和发布；Web只读成品、写设备授权")
+        ContainerDb(database, "用户与设备数据库", "SQLite", "accounts / devices 两张表\n仅 Web Server 访问")
+    }
+    Rel(user, nginx, "使用网页和 API", "HTTPS / TCP 443")
+    Rel(nginx, web, "反向代理", "HTTP / 127.0.0.1:9529")
+    Rel(device, clip, "上传 Opus 与录完声明", "DTLS / UDP 9528")
+    Rel(web, google, "交换并验证登录身份", "OIDC / HTTPS")
+    BiRel(clip, files, "读取授权；写原件、中间状态和完整成品", "本机文件 I/O + flock")
+    BiRel(web, files, "只读成品；写设备授权", "本机文件 I/O + flock")
+    Rel(web, database, "查询和更新用户与设备", "SQL / SQLite")
+    %% @position user 970 100 470 180
+    %% @position device 130 110 470 150
+    %% @position nginx 970 330 470 140
+    %% @position google 1510 660 260 140
+    %% @position clip 130 660 470 240
+    %% @position web 970 660 470 240
+    %% @position files 130 1160 860 240
+    %% @position database 1080 1240 370 175
+    %% @boundary 40 540 1430 1010
+    %% @route user nginx 1205,280 1205,330 | 1510 285 400
+    %% @route nginx web 1205,470 1205,660 | 1205 575 370
+    %% @route device clip 365,260 365,660 | 365 470 400
+    %% @route web google 1340,660 1340,550 1640,550 1640,660 | 1535 500 450
+    %% @route clip files 365,900 365,1160 | 420 1035 600
+    %% @route web files 1080,900 1080,1000 930,1000 930,1160 | 1025 1070 380
+    %% @route web database 1340,900 1340,1240 | 1395 1170 330

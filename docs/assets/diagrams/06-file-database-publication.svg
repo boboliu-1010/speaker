@@ -1,68 +1,66 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="1090" viewBox="0 0 1280 1090">
-<title>录音文件与 job 文件提交</title>
-<rect width="1280" height="1090" fill="white"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="1080" viewBox="0 0 1280 1080">
+<title>完整录音的成品发布</title>
+<rect width="1280" height="1080" fill="white"/>
 <g font-family="PingFang SC,Microsoft YaHei,Noto Sans CJK SC,Arial,sans-serif">
-<text x="40" y="55" font-size="30" font-weight="600" fill="#17283f">录音文件与 job 文件提交</text>
-<text x="40" y="88" font-size="17" font-weight="400" fill="#607088">文件锁解决并发；原子替换解决半写 JSON；提交顺序和对账解决多文件中断。</text>
+<text x="40" y="55" font-size="30" font-weight="600" fill="#17283f">完整录音的成品发布</text>
+<text x="40" y="88" font-size="17" font-weight="400" fill="#607088">Clip先完成三件套，再发布一个current指针；Web只读取同一revision。</text>
 <line x1="40" y1="112" x2="1240" y2="112" stroke="#d8e0ea" stroke-width="1.5"/>
-<rect x="40" y="150" width="570" height="215" rx="8" fill="white" stroke="#d8e0ea"/>
-<rect x="40" y="150" width="5" height="215" rx="0" fill="#245cca" stroke="#245cca"/>
-<text x="62" y="184" font-size="21" font-weight="600" fill="#17283f">recording.json · 可见结果提交点</text>
-<text x="62" y="220" font-size="18" font-weight="400" fill="#607088">owner、可信来源、片段信息与 WAV 引用</text>
-<text x="62" y="248" font-size="18" font-weight="400" fill="#607088">不可变识别原文 JSON 的路径 / size / hash</text>
-<text x="62" y="276" font-size="18" font-weight="400" fill="#607088">content_revision / result_revision / result_json</text>
-<text x="62" y="304" font-size="18" font-weight="400" fill="#607088">last_*_commit 保存 job_id 与 attempt_id</text>
-<rect x="650" y="150" width="590" height="215" rx="8" fill="white" stroke="#d8e0ea"/>
-<rect x="650" y="150" width="5" height="215" rx="0" fill="#087f74" stroke="#087f74"/>
-<text x="672" y="184" font-size="21" font-weight="600" fill="#17283f">jobs/id.json · 可重建调度记录</text>
-<text x="672" y="220" font-size="18" font-weight="400" fill="#607088">阶段、代次、状态、attempt 与 run_after</text>
-<text x="672" y="248" font-size="18" font-weight="400" fill="#607088">attempt_id / 输入 hash / 错误码</text>
-<text x="672" y="276" font-size="18" font-weight="400" fill="#607088">decode、asr、merge、repair 各自定位</text>
-<text x="672" y="304" font-size="18" font-weight="400" fill="#607088">不保存真实凭证，不新增 job 表</text>
-<rect x="40" y="410" width="280" height="220" rx="8" fill="white" stroke="#d8e0ea"/>
+<rect x="40" y="150" width="570" height="210" rx="8" fill="white" stroke="#d8e0ea"/>
+<rect x="40" y="150" width="5" height="210" rx="0" fill="#087f74" stroke="#087f74"/>
+<text x="62" y="184" font-size="21" font-weight="600" fill="#17283f">内部处理提交</text>
+<text x="62" y="220" font-size="18" font-weight="400" fill="#607088">recording和job都由Clip写文件</text>
+<text x="62" y="248" font-size="18" font-weight="400" fill="#607088">片段任务校验本段输入hash与配置</text>
+<text x="62" y="276" font-size="18" font-weight="400" fill="#607088">录音任务核对完整输入版本和段号</text>
+<text x="62" y="304" font-size="18" font-weight="400" fill="#607088">持久attempt / generation拒绝旧执行</text>
+<rect x="650" y="150" width="590" height="210" rx="8" fill="white" stroke="#d8e0ea"/>
+<rect x="650" y="150" width="5" height="210" rx="0" fill="#087f74" stroke="#087f74"/>
+<text x="672" y="184" font-size="21" font-weight="600" fill="#17283f">成品版本目录</text>
+<text x="672" y="220" font-size="18" font-weight="400" fill="#607088">recording.wav：完整连续音频</text>
+<text x="672" y="248" font-size="18" font-weight="400" fill="#607088">transcript.vtt：全局时间字幕</text>
+<text x="672" y="276" font-size="18" font-weight="400" fill="#607088">transcript.md：完整逐句文本</text>
+<text x="672" y="304" font-size="18" font-weight="400" fill="#607088">manifest：owner / revision / size / hash</text>
+<rect x="40" y="410" width="279" height="220" rx="8" fill="white" stroke="#d8e0ea"/>
 <rect x="40" y="410" width="5" height="220" rx="0" fill="#245cca" stroke="#245cca"/>
-<text x="62" y="444" font-size="21" font-weight="600" fill="#17283f">1 · 锁内领取</text>
-<text x="62" y="480" font-size="18" font-weight="400" fill="#607088">复核输入与预算</text>
-<text x="62" y="508" font-size="18" font-weight="400" fill="#607088">次数加一并写 running</text>
-<text x="62" y="536" font-size="18" font-weight="400" fill="#607088">生成唯一 attempt_id</text>
-<text x="62" y="564" font-size="18" font-weight="400" fill="#607088">释放 state 锁</text>
-<rect x="347" y="410" width="280" height="220" rx="8" fill="white" stroke="#d8e0ea"/>
+<text x="62" y="444" font-size="21" font-weight="600" fill="#17283f">1 · 生成</text>
+<text x="62" y="480" font-size="18" font-weight="400" fill="#607088">锁外读取成功片段</text>
+<text x="62" y="508" font-size="18" font-weight="400" fill="#607088">流式合并PCM</text>
+<text x="62" y="536" font-size="18" font-weight="400" fill="#607088">统一字幕时间轴</text>
+<text x="62" y="564" font-size="18" font-weight="400" fill="#607088">生成完整三件套</text>
+<rect x="347" y="410" width="279" height="220" rx="8" fill="white" stroke="#d8e0ea"/>
 <rect x="347" y="410" width="5" height="220" rx="0" fill="#245cca" stroke="#245cca"/>
-<text x="369" y="444" font-size="21" font-weight="600" fill="#17283f">2 · 锁外执行</text>
-<text x="369" y="480" font-size="18" font-weight="400" fill="#607088">解码或调用 ASR</text>
-<text x="369" y="508" font-size="18" font-weight="400" fill="#607088">双盘 WAV 校验发布</text>
-<text x="369" y="536" font-size="18" font-weight="400" fill="#607088">原文 JSON 持久化</text>
-<text x="369" y="564" font-size="18" font-weight="400" fill="#607088">不阻塞 Web 事件循环</text>
-<rect x="654" y="410" width="280" height="220" rx="8" fill="white" stroke="#d8e0ea"/>
+<text x="369" y="444" font-size="21" font-weight="600" fill="#17283f">2 · 持久化</text>
+<text x="369" y="480" font-size="18" font-weight="400" fill="#607088">校验样本与hash</text>
+<text x="369" y="508" font-size="18" font-weight="400" fill="#607088">fsync所有文件</text>
+<text x="369" y="536" font-size="18" font-weight="400" fill="#607088">发布不可变目录</text>
+<text x="369" y="564" font-size="18" font-weight="400" fill="#607088">写成品manifest</text>
+<rect x="654" y="410" width="279" height="220" rx="8" fill="white" stroke="#d8e0ea"/>
 <rect x="654" y="410" width="5" height="220" rx="0" fill="#245cca" stroke="#245cca"/>
-<text x="676" y="444" font-size="21" font-weight="600" fill="#17283f">3 · 锁内提交</text>
-<text x="676" y="480" font-size="18" font-weight="400" fill="#607088">再次核对 attempt_id</text>
-<text x="676" y="508" font-size="18" font-weight="400" fill="#607088">原子替换录音 JSON</text>
-<text x="676" y="536" font-size="18" font-weight="400" fill="#607088">再把 job 标 ready</text>
-<text x="676" y="564" font-size="18" font-weight="400" fill="#607088">补齐下一阶段 job</text>
+<text x="676" y="444" font-size="21" font-weight="600" fill="#17283f">3 · 原子发布</text>
+<text x="676" y="480" font-size="18" font-weight="400" fill="#607088">短锁复核输入版本</text>
+<text x="676" y="508" font-size="18" font-weight="400" fill="#607088">核对attempt代次</text>
+<text x="676" y="536" font-size="18" font-weight="400" fill="#607088">原子替换current</text>
+<text x="676" y="564" font-size="18" font-weight="400" fill="#607088">fsync指针父目录</text>
 <rect x="961" y="410" width="279" height="220" rx="8" fill="white" stroke="#d8e0ea"/>
 <rect x="961" y="410" width="5" height="220" rx="0" fill="#245cca" stroke="#245cca"/>
-<text x="983" y="444" font-size="21" font-weight="600" fill="#17283f">4 · 读取与导出</text>
-<text x="983" y="480" font-size="18" font-weight="400" fill="#607088">共享锁捕获一致视图</text>
-<text x="983" y="508" font-size="18" font-weight="400" fill="#607088">释放锁后读取音频</text>
-<text x="983" y="536" font-size="18" font-weight="400" fill="#607088">从快照生成 VTT / MD</text>
-<text x="983" y="564" font-size="18" font-weight="400" fill="#607088">不暴露磁盘路径</text>
+<text x="983" y="444" font-size="21" font-weight="600" fill="#17283f">4 · Web读取</text>
+<text x="983" y="480" font-size="18" font-weight="400" fill="#607088">鉴权并固定revision</text>
+<text x="983" y="508" font-size="18" font-weight="400" fill="#607088">只读完整成品清单</text>
+<text x="983" y="536" font-size="18" font-weight="400" fill="#607088">从同版本文件读取</text>
+<text x="983" y="564" font-size="18" font-weight="400" fill="#607088">不解码或重新导出</text>
 <rect x="40" y="675" width="570" height="220" rx="8" fill="white" stroke="#d8e0ea"/>
 <rect x="40" y="675" width="5" height="220" rx="0" fill="#087f74" stroke="#087f74"/>
-<text x="62" y="709" font-size="21" font-weight="600" fill="#17283f">结果已保存，job 尚未完成</text>
-<text x="62" y="745" font-size="18" font-weight="400" fill="#607088">启动核对录音中的执行提交标识</text>
-<text x="62" y="773" font-size="18" font-weight="400" fill="#607088">匹配时补标 job ready，不重复 ASR</text>
-<text x="62" y="801" font-size="18" font-weight="400" fill="#607088">若无提交结果，保留次数退避重试</text>
-<text x="62" y="829" font-size="18" font-weight="400" fill="#607088">Clip 内推理不保证恰好调用一次</text>
+<text x="62" y="709" font-size="21" font-weight="600" fill="#17283f">提交中断后的对账</text>
+<text x="62" y="745" font-size="18" font-weight="400" fill="#607088">current之前：Web看不到临时结果</text>
+<text x="62" y="773" font-size="18" font-weight="400" fill="#607088">current之后：成品可读，补齐内部job</text>
+<text x="62" y="801" font-size="18" font-weight="400" fill="#607088">校验发布标识，不重复ASR</text>
+<text x="62" y="829" font-size="18" font-weight="400" fill="#607088">未知或坏状态告警，不覆盖为空</text>
 <rect x="650" y="675" width="590" height="220" rx="8" fill="white" stroke="#d8e0ea"/>
-<rect x="650" y="675" width="5" height="220" rx="0" fill="#087f74" stroke="#087f74"/>
-<text x="672" y="709" font-size="21" font-weight="600" fill="#17283f">快照与修复</text>
-<text x="672" y="745" font-size="18" font-weight="400" fill="#607088">锁外构建，锁内复核 content_revision</text>
-<text x="672" y="773" font-size="18" font-weight="400" fill="#607088">版本变化则重新汇总，不重识别</text>
-<text x="672" y="801" font-size="18" font-weight="400" fill="#607088">repair 独立预算，保留成功文字</text>
-<text x="672" y="829" font-size="18" font-weight="400" fill="#607088">状态根损坏不能当空数据覆盖</text>
-<rect x="40" y="935" width="1200" height="100" rx="8" fill="#f3f6fa" stroke="#d8e0ea"/>
-<text x="62" y="974" font-size="22" font-weight="400" fill="#17283f">固定锁 inode 不删除、不替换；不能直接锁将被 rename 的 JSON。</text>
-<text x="62" y="1010" font-size="19" font-weight="400" fill="#607088">JSON 写入：同目录临时文件 → fsync → os.replace → fsync 目录；无录音 / 片段 / job 表。</text>
+<rect x="650" y="675" width="5" height="220" rx="0" fill="#245cca" stroke="#245cca"/>
+<text x="672" y="709" font-size="21" font-weight="600" fill="#17283f">完整性与版本</text>
+<text x="672" y="745" font-size="18" font-weight="400" fill="#607088">无结束声明或缺片：不发布</text>
+<text x="672" y="773" font-size="18" font-weight="400" fill="#607088">全部片段解码和转写成功才合并</text>
+<text x="672" y="801" font-size="18" font-weight="400" fill="#607088">总样本等于所有片段样本之和</text>
+<text x="672" y="829" font-size="18" font-weight="400" fill="#607088">新版本完整生成后才切换指针</text>
+<text x="45" y="970" font-size="22" font-weight="400" fill="#17283f">固定文件锁保护短提交；音频处理、模型推理与hash校验均在锁外。</text>
 </g>
 </svg>
