@@ -13,7 +13,7 @@ Server / Web 负责用户和设备管理、录音处理、播放与导出。原�
 - **Web**：通过同源 HTTPS 调用用户、设备和录音接口，通过 BLE 配置设备。
 - **Server**：使用 Python / FastAPI 单进程部署。一个后台工作者持有独占锁，顺序处理解码、识别和恢复；解码在受资源限制的子进程中执行。多 Uvicorn worker 和多机共享数据目录暂不支持。
 - **外部服务**：Google 验证登录身份，Server 管理本站会话。ASR 接收每段 WAV，返回文字、时间戳和说话人标识；未配置 ASR 时仍可解码和播放音频。
-- **存储**：设备与上传 SQLite（registry）保存绑定、凭证和来源记录；业务 SQLite 保存用户、录音、片段及处理结果。两个库分别提交事务，在线数据库位于主盘。raw 原件和片段 WAV 在主盘、副本盘各保存一份；副本盘另存 SQLite 一致性检查点。VTT 和 Markdown 从 JSON 快照生成。登录临时状态和会话只保存在内存。
+- **存储**：设备与上传 SQLite（registry）保存绑定、凭证和来源记录；业务 SQLite 保存用户、录音、片段及处理结果。两个库分别提交事务，独立于两块录音数据盘存放。raw 原件和片段 WAV 在主盘、副本盘各保存一份；数据盘损坏不回滚数据库。VTT 和 Markdown 从 JSON 快照生成。登录临时状态和会话只保存在内存。
 
 Web 服务端口为 9529，对外使用 HTTPS。Google 回调地址须与部署配置一致。当前为设计稿，尚未完成实现和实机验收。
 
@@ -27,7 +27,7 @@ Web 服务端口为 9529，对外使用 HTTPS。Google 回调地址须与部署�
 - 音频解码：将每份原件独立、流式解码为一个 WAV。[音频存储与解码](docs/audio-processing.md#storage)
 - 转写与汇总：逐片段识别并保存结果，换算全局时间后生成录音快照；VTT 和 Markdown 在下载时生成。[转写设计](docs/audio-processing.md#transcript)
 - 录音与媒体接口：按用户查询录音和快照，校验权限后读取音频、文字及导出内容，音频支持 Range。[Web API](#web-api)、[媒体 API](docs/audio-processing.md#media-api)
-- 存储与备份：管理两个 SQLite 库、双盘文件副本、数据库检查点和版本备份，保证文件与索引的提交顺序。[数据模型](#data-model)、[存储安全](docs/audio-processing.md#security)
+- 存储与备份：管理两个 SQLite 库、双盘文件副本和独立版本备份，保证文件与索引的提交顺序。[数据模型](#data-model)、[存储安全](docs/audio-processing.md#security)
 
 <a id="data-model"></a>
 
@@ -566,23 +566,21 @@ Server 使用以下环境变量。启动程序尚未实现，ExecStart 命令待
 
 ### 7.1 数据库与文件地址
 
-配置文件为 `/etc/speaker/server.env`，由启动项加载。主盘和副本盘必须是独立磁盘或独立存储卷；同一磁盘的两个目录不能提供坏盘保护。DB 地址填写主盘 SQLite 文件的绝对路径，音频和备份填写目录绝对路径。
+配置文件为 `/etc/speaker/server.env`，由启动项加载。主盘和副本盘必须是独立磁盘或独立存储卷；同一磁盘的两个目录不能提供坏盘保护。两个 SQLite 文件放在独立的数据库存储上，不位于这两块数据盘内；数据库、音频和备份路径分别配置。
 
 ```dotenv
 # 两个独立磁盘的挂载目录，启动时须确认均已挂载。
 SPEAKER_PRIMARY_ROOT=/mnt/speaker-primary
 SPEAKER_REPLICA_ROOT=/mnt/speaker-replica
-# 在线数据库仅在主盘打开；副本通过 SQLite backup API 生成。
-SPEAKER_REGISTRY_DB_PATH=/mnt/speaker-primary/db/registry.sqlite3
+# 数据库独立存放；/var/lib/speaker/db 须位于两块数据盘之外的存储上。
+SPEAKER_REGISTRY_DB_PATH=/var/lib/speaker/db/registry.sqlite3
 # 业务 SQLite：账号、录音、原始片段、片段处理状态及转写 JSON。
-SPEAKER_BUSINESS_DB_PATH=/mnt/speaker-primary/db/business.sqlite3
+SPEAKER_BUSINESS_DB_PATH=/var/lib/speaker/db/business.sqlite3
 # 私有音频目录：raw 原件、每段 WAV 和处理临时文件；字幕不落盘。
 SPEAKER_STORAGE_ROOT=/mnt/speaker-primary/audio
 # 副本中的相对目录相同，例如 /mnt/speaker-replica/audio/derived/...。
-# 数据库检查点位于副本盘 checkpoints/；启动先生成一份，此后只按此周期检查更新。
-SPEAKER_DB_REPLICA_INTERVAL_SECONDS=60
-# 每日保留完整版本备份，避免误修改直接影响所有恢复点。
-SPEAKER_BACKUP_ROOT=/mnt/speaker-replica/backups
+# 每日完整版本备份，建议位于独立备份介质；不能放在在线数据库或音频目录内。
+SPEAKER_BACKUP_ROOT=/mnt/speaker-backup/backups
 
 # 设备每段最多 5 分钟，Server 直接识别整段；超时按 ASR 服务性能调整。
 SPEAKER_ASR_TIMEOUT_SECONDS=600
@@ -596,9 +594,9 @@ GOOGLE_CLIENT_SECRET=replace-with-google-client-secret
 ```
 
 - `SPEAKER_REGISTRY_DB_PATH` 与 `SPEAKER_BUSINESS_DB_PATH` 指向两个不同的文件；`registry.sources` 是 registry 库中的表引用，不是文件名。
-- 数据库和音频目录必须位于 SPEAKER_PRIMARY_ROOT 下，副本按相对路径写入 SPEAKER_REPLICA_ROOT。数据库副本写入 checkpoints/，不会作为另一组在线数据库同时打开。数据库连接使用第 6 节的 PRAGMA。
-- 主盘和副本盘的真实路径须不同且不互相嵌套，数据库与音频路径均在主盘内。两个挂载点可读写、启用加密，数据库目录允许创建 WAL/SHM；检查挂载标识并在部署时核实独立故障域。不能在挂载缺失时创建普通目录继续写入。
-- SPEAKER_DB_REPLICA_INTERVAL_SECONDS 为正整数，默认 60；只有一个定时检查点任务，没有逐事务触发。SPEAKER_BACKUP_ROOT 默认位于副本盘 backups/，也可指定第三处存储，但不能放在主盘、音频目录或 checkpoints/ 内。
+- 音频目录必须位于 SPEAKER_PRIMARY_ROOT 下，副本按相对路径写入 SPEAKER_REPLICA_ROOT；例如两盘分别使用 audio/derived/。数据库路径独立于两个数据根目录，其存储故障域也须独立，不能仅靠不同路径判断。数据库连接使用第 6 节的 PRAGMA。
+- 主盘和副本盘的真实路径须不同且不互相嵌套。检查挂载标识、加密、容量和权限；数据库目录允许创建 WAL/SHM。不能在挂载缺失时创建普通目录继续写入。
+- SPEAKER_BACKUP_ROOT 保存每日版本备份，不能与在线数据库或两个数据根目录重叠；备份介质和密钥须可用。双盘文件副本不承担数据库备份。
 - 数据目录权限为 0700，数据库及 WAL/SHM、音频和配置文件权限为 0600。配置文件由服务端受控保存，真实凭证不提交到仓库。
 
 ### 7.2 启动项加载配置
@@ -612,16 +610,16 @@ EnvironmentFile=/etc/speaker/server.env
 
 将以上配置加入 Server 的 systemd 服务单元，ExecStart 填写实际启动命令。EnvironmentFile 路径不加 `-` 前缀，文件缺失时启动失败。所有数据路径从环境变量读取，与启动目录无关。
 
-修改配置或启动项后，重启对应 Server 服务；修改 systemd 单元时先执行 `systemctl daemon-reload`。磁盘或数据库地址变更须先停写，按[双盘恢复流程](docs/audio-processing.md#disk-recovery)校验并迁移两个库和关联文件，再修改路径；仅修改环境变量不会复制或修复数据。
+修改配置或启动项后，重启对应 Server 服务；修改 systemd 单元时先执行 `systemctl daemon-reload`。数据盘地址变更须先停写，按[双盘恢复流程](docs/audio-processing.md#disk-recovery)校验并迁移文件后修改路径。数据库地址变更单独停写、备份并迁移两个库及其日志；仅修改环境变量不会复制或修复数据。
 
 ### 7.3 启动检查
 
-- 正常服务检查主盘/副本盘挂载、独立性、加密、容量和权限，两个在线数据库不能指向同一文件。任一盘不可写时拒绝正常启动；运行中副本盘失效只保留主盘读取，主盘失效则停服务。全局故障暂停调度，不消耗未开始片段的重试次数。
-- 首次部署由维护人员按第 6 节明确初始化空库；已有库检查版本并迁移。发现历史数据或检查点而主盘数据库缺失时进入人工恢复，不能自动新建空库。
+- 正常服务检查主盘/副本盘挂载、独立性、加密、容量和权限，两个在线数据库不能指向同一文件。任一盘不可写时拒绝正常启动；运行中任一数据盘失效均暂停录音导入、解码和识别；数据库查询与已有文字结果仍可读取，主盘失效时音频暂不可用，不自动切盘。全局故障暂停调度，不消耗未开始片段的重试次数。
+- 首次部署由维护人员按第 6 节明确初始化空库；已有库检查版本并迁移。已有部署的数据库缺失时报错，按独立数据库备份恢复，不能自动新建空库。数据盘故障不触发数据库恢复。
 - 校验备份目录、加密密钥与用户额度配置；要求与[音频存储及恢复设计](docs/audio-processing.md#security)一致，未满足时拒绝启动。
 - 配置 ASR 时确认服务支持 300 秒、16 kHz 单声道 PCM16 WAV（PCM 为 9,600,000 字节，另加文件头）；能力不足时拒绝启用该配置，不自动细分片段。首次识别前固定配置，失败重试沿用原模型。
 - 在业务 DB 同目录对 speaker.worker.lock 取得排他 flock 并持有至后台退出；第二实例启动失败。只运行一个应用进程和一个工作者，不使用多 worker 或热重载重叠实例。
-- 持锁后恢复遗留 running（保留次数），完成来源/WAV 对账和首份成功检查点，再做孤儿清理。清理保护当前索引、快照及所有保留检查点的文件引用；验证失败时停止清理。此后才开放 HTTP API、导入和后台处理，运行期间不做孤儿删除。
+- 持锁后恢复遗留 running（保留次数），完成两盘来源/WAV 对账后再做孤儿清理。清理保护当前索引和快照引用；对账失败时停止清理，备份目录不参与扫描。此后才开放 HTTP API、导入和后台处理，运行期间不做孤儿删除。
 - 原件导入与后台循环分离，子进程或网络调用不能阻塞 Web 事件循环。
 
-离线坏盘恢复允许只读幸存盘、写入替换盘，期间停掉 Server 和来源写入组件，不开放 HTTP 或执行 ASR。目标盘恢复并校验后补齐两份文件，再进入上述正常启动流程；由该流程生成新成功检查点后开放服务。主盘未回滚而只更换副本盘时，无需撤销现有授权；从旧检查点恢复主盘时重新核验账号和凭证。完整步骤见[坏盘恢复](docs/audio-processing.md#disk-recovery)。
+离线坏盘恢复只读幸存盘、写入替换盘，期间停掉 Server 和来源写入组件。目标盘恢复、两份文件校验通过后进入正常启动流程。无论更换主盘还是副本盘，都沿用原数据库、用户授权和已提交的识别结果，不恢复旧数据库或重置账号。完整步骤见[坏盘恢复](docs/audio-processing.md#disk-recovery)。

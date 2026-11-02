@@ -43,7 +43,7 @@
 <rect x="840" y="334" width="400" height="140" rx="8" fill="white" stroke="#d8e0ea"/>
 <rect x="840" y="334" width="5" height="140" rx="0" fill="#245cca" stroke="#245cca"/>
 <text x="862" y="368" font-size="21" font-weight="600" fill="#17283f">2 · 校验并保存两盘</text>
-<text x="862" y="404" font-size="18" font-weight="400" fill="#607088">校验文件、归属与账户恢复信息</text>
+<text x="862" y="404" font-size="18" font-weight="400" fill="#607088">校验文件、大小、hash 与来源归属</text>
 <text x="862" y="432" font-size="18" font-weight="400" fill="#607088">raw 与来源描述分别写入两盘</text>
 <text x="862" y="460" font-size="18" font-weight="400" fill="#607088">两盘 fsync、hash 通过才继续导入</text>
 <rect x="840" y="500" width="400" height="178" rx="8" fill="white" stroke="#d8e0ea"/>

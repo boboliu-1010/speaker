@@ -87,7 +87,7 @@
 <text x="62" y="1165" font-size="18" font-weight="400" fill="#607088">accounts：保存本站用户身份</text>
 <text x="62" y="1193" font-size="18" font-weight="400" fill="#607088">recordings：内容/结果版本与 JSON 快照</text>
 <text x="62" y="1221" font-size="18" font-weight="400" fill="#607088">recording_segments：片段与识别结果</text>
-<text x="62" y="1249" font-size="18" font-weight="400" fill="#607088">在线数据库在主盘，副盘保存检查点</text>
+<text x="62" y="1249" font-size="18" font-weight="400" fill="#607088">数据库存储独立于两块录音数据盘</text>
 <rect x="450" y="1095" width="380" height="255" rx="8" fill="white" stroke="#d8e0ea"/>
 <rect x="450" y="1095" width="5" height="255" rx="0" fill="#087f74" stroke="#087f74"/>
 <text x="472" y="1129" font-size="21" font-weight="600" fill="#17283f">设备与上传 SQLite · registry</text>
@@ -100,7 +100,7 @@
 <text x="882" y="1129" font-size="21" font-weight="600" fill="#17283f">双盘文件存储</text>
 <text x="882" y="1165" font-size="18" font-weight="400" fill="#607088">SPEAKER_PRIMARY_ROOT：主盘</text>
 <text x="882" y="1193" font-size="18" font-weight="400" fill="#607088">SPEAKER_REPLICA_ROOT：副本盘</text>
-<text x="882" y="1221" font-size="18" font-weight="400" fill="#607088">SPEAKER_BACKUP_ROOT：每日版本备份</text>
-<text x="882" y="1249" font-size="18" font-weight="400" fill="#607088">两盘独立，数据库只在主盘在线</text>
+<text x="882" y="1221" font-size="18" font-weight="400" fill="#607088">SPEAKER_BACKUP_ROOT：版本备份</text>
+<text x="882" y="1249" font-size="18" font-weight="400" fill="#607088">双盘仅存文件，数据库独立存放</text>
 </g>
 </svg>

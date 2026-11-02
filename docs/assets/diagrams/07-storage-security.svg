@@ -31,15 +31,15 @@
 <text x="882" y="332" font-size="18" font-weight="400" fill="#607088">写索引前核对 WAV 大小与摘要</text>
 <rect x="40" y="450" width="380" height="360" rx="8" fill="white" stroke="#d8e0ea"/>
 <rect x="40" y="450" width="5" height="360" rx="0" fill="#087f74" stroke="#087f74"/>
-<text x="62" y="484" font-size="21" font-weight="600" fill="#17283f">主盘 · 在线数据</text>
+<text x="62" y="484" font-size="21" font-weight="600" fill="#17283f">主盘 · 录音文件</text>
 <text x="62" y="520" font-size="18" font-weight="400" fill="#607088">raw / 来源描述 / WAV 各有副盘副本</text>
-<text x="62" y="548" font-size="18" font-weight="400" fill="#607088">两个 SQLite 库仅在主盘在线运行</text>
+<text x="62" y="548" font-size="18" font-weight="400" fill="#607088">两个 SQLite 库独立于两块数据盘</text>
 <text x="62" y="576" font-size="18" font-weight="400" fill="#607088">文件两盘校验成功后提交业务索引</text>
-<text x="62" y="604" font-size="18" font-weight="400" fill="#607088">检查点只有一个定时生成任务</text>
+<text x="62" y="604" font-size="18" font-weight="400" fill="#607088">主盘坏时从副本盘恢复文件</text>
 <text x="62" y="632" font-size="18" font-weight="400" fill="#607088">由专用服务账号访问加密数据卷</text>
 <text x="62" y="660" font-size="18" font-weight="400" fill="#607088">目录权限 0700，文件权限 0600</text>
 <text x="62" y="688" font-size="18" font-weight="400" fill="#607088">文件位于 Web 静态目录之外</text>
-<text x="62" y="716" font-size="18" font-weight="400" fill="#607088">任一盘不可写时暂停新增持久写入</text>
+<text x="62" y="716" font-size="18" font-weight="400" fill="#607088">任一盘故障暂停录音写入与处理</text>
 <rect x="450" y="450" width="380" height="360" rx="8" fill="white" stroke="#d8e0ea"/>
 <rect x="450" y="450" width="5" height="360" rx="0" fill="#087f74" stroke="#087f74"/>
 <text x="472" y="484" font-size="21" font-weight="600" fill="#17283f">受控 ASR · 处理音频并返回原文</text>
@@ -53,19 +53,19 @@
 <text x="472" y="716" font-size="18" font-weight="400" fill="#607088">供应方留存按已核实的约定执行</text>
 <rect x="860" y="450" width="380" height="360" rx="8" fill="white" stroke="#d8e0ea"/>
 <rect x="860" y="450" width="5" height="360" rx="0" fill="#087f74" stroke="#087f74"/>
-<text x="882" y="484" font-size="21" font-weight="600" fill="#17283f">副本盘 · 文件与恢复点</text>
+<text x="882" y="484" font-size="21" font-weight="600" fill="#17283f">副本盘 · 第二份录音文件</text>
 <text x="882" y="520" font-size="18" font-weight="400" fill="#607088">raw / 来源描述 / WAV 保持第二份</text>
-<text x="882" y="548" font-size="18" font-weight="400" fill="#607088">SQLite backup API 生成数据库检查点</text>
-<text x="882" y="576" font-size="18" font-weight="400" fill="#607088">启动先生成，此后每 60 秒检查</text>
-<text x="882" y="604" font-size="18" font-weight="400" fill="#607088">新成功点发布后才淘汰旧检查点</text>
-<text x="882" y="632" font-size="18" font-weight="400" fill="#607088">保留最近两份验证成功检查点</text>
-<text x="882" y="660" font-size="18" font-weight="400" fill="#607088">每日完整版本备份保留最近 7 份</text>
-<text x="882" y="688" font-size="18" font-weight="400" fill="#607088">默认 backups/ 同盘，仅保护单盘故障</text>
-<text x="882" y="716" font-size="18" font-weight="400" fill="#607088">双盘损坏须另有第三处或离线备份</text>
+<text x="882" y="548" font-size="18" font-weight="400" fill="#607088">副本盘坏时从主盘恢复文件</text>
+<text x="882" y="576" font-size="18" font-weight="400" fill="#607088">数据库索引与 hash 用于对账</text>
+<text x="882" y="604" font-size="18" font-weight="400" fill="#607088">换盘不回滚数据库或重置账号</text>
+<text x="882" y="632" font-size="18" font-weight="400" fill="#607088">成功识别结果和执行次数保留</text>
+<text x="882" y="660" font-size="18" font-weight="400" fill="#607088">两份文件校验通过后恢复处理</text>
+<text x="882" y="688" font-size="18" font-weight="400" fill="#607088">每日完整备份独立保留最近 7 份</text>
+<text x="882" y="716" font-size="18" font-weight="400" fill="#607088">双盘文件全丢时从完整备份恢复</text>
 <rect x="40" y="850" width="1200" height="175" rx="8" fill="#f3f6fa" stroke="#d8e0ea"/>
 <text x="62" y="887" font-size="23" font-weight="600" fill="#17283f">访问控制、存储与恢复</text>
 <text x="62" y="926" font-size="19" font-weight="400" fill="#17283f">访问控制：阻止其他用户读取录音。加密存储：保护离线数据卷与备份中的内容。</text>
-<text x="62" y="961" font-size="19" font-weight="400" fill="#17283f">文件双盘写入用于单盘恢复；SQLite 检查点有时间差，最近处理状态可能需要重做。</text>
+<text x="62" y="961" font-size="19" font-weight="400" fill="#17283f">文件双盘写入用于单盘恢复；数据库独立存放，换数据盘不丢失已提交的识别文字。</text>
 <text x="62" y="996" font-size="18" font-weight="400" fill="#607088">日志只保留定位信息和错误码，认证凭证与录音正文不写入日志。</text>
 </g>
 </svg>
