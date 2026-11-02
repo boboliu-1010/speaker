@@ -11,7 +11,7 @@
 | Clip Server | 接收Opus，内置ASR，生成完整WAV/VTT/MD | 录音及job用文件，不连接数据库 |
 | Web Server | 登录、设备管理、成品播放与下载 | 管理accounts/devices及授权文件，读取成品 |
 
-两个服务独立运行；Nginx、进程托管和整体备份由OP管理。
+两个服务独立运行；Nginx、进程托管和整体备份由OP管理。SQLite表结构见[数据库文档](docs/sqlite-schema.md)。
 
 ## 2. Clip Server 模块
 
