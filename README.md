@@ -89,41 +89,17 @@ ${SPEAKER_DATA_ROOT}/
 
 owner来自已验证授权，Web读取时来自登录会话。不同用户、不同Clip分别隔离；设备换绑不搬迁旧文件，也不改变旧录音权限。
 
-### 4.7 调度与重试
+### 4.7 音频处理与成品
 
-![片段处理模块调用关系](docs/assets/diagrams/09b-clip-processing.svg)
+![转码、ASR与完整成品流程](docs/assets/diagrams/09b-clip-processing.svg)
 
-一个后台循环执行任务，耗时工作放在锁外。job先记running和执行标识，再执行；提交时校验输入、配置和执行标识，拒绝旧结果。分段任务只核对本段输入，录音级任务还需核对整条输入版本。
+- **转码**：将已收完整的Opus片段逐包解码为16kHz、单声道PCM16 WAV，保留实际样本数。原件是长度前缀Opus包序列，不是Ogg。
+- **ASR**：内置Paraformer-zh + FSMN-VAD + CT-Punc + CAM++候选组合，离线处理中文为主、少量英语。按句末标点断句，每行一句，保留时间戳和匿名说话人A/B/C；标签仅在片段内有效，跨段标作“片段1·A”等。效果需真实录音验收。
+- **合并与发布**：录音收齐且各段处理成功后，按段号拼接PCM并重写WAV头；字幕按实际样本数累加偏移，生成完整VTT和MD。四个成品文件在recordings父目录的隐藏临时目录中写齐、校验并fsync后，原子发布整个录音目录，Web只读取成品。
 
-每阶段最多4次，失败后按30秒、2分钟、10分钟退避；缺片、模型未就绪等依赖等待不消耗次数。重启沿用持久次数及已提交结果，不重复识别成功片段。
+后台单任务执行，job保存进度；失败最多尝试4次，重启复用已成功的结果。缺片或ASR失败不发布，静音保留真实时长。
 
-### 4.8 Opus解码
-
-原始文件为`[uint16小端长度][Opus包]`序列，并非Ogg。按16kHz、单声道、20ms协议逐包解码为PCM16 WAV，记录实际样本数。解码器用受限子进程执行，禁止网络，限制时间与输出大小。
-
-### 4.9 内置ASR与断句
-
-候选组合：**Paraformer-zh + FSMN-VAD + CT-Punc + CAM++**，离线固定权重，面向中文为主、少量英语。默认一个推理任务、4计算线程；模型未就绪时保留原件，等待识别。
-
-按句末标点断句，每行一句，保留时间戳；匿名说话人用A/B/C。首版说话人标签仅在片段内有效，成品标作“片段1·A”，不把不同片段的A当作同一个人。中英混合及多人效果仍需真实样本验收。
-
-### 4.10 完整录音合并
-
-![整条录音合并模块调用关系](docs/assets/diagrams/09c-clip-publication.svg)
-
-按段号拼接各段PCM数据，重写WAV头；不能直接拼接WAV文件字节。字幕偏移按前段实际样本数累计，生成整条录音的VTT和MD，每句一行。静音保留时长；识别失败不能当成空文本成功。
-
-### 4.11 成品发布与示例
-
-同一recording目录下先写隐藏临时目录，四文件全部校验、fsync后，在短锁内复核输入并原子重命名整个目录。Web只看正式目录；发布后只读，重试核对后一致则复用，不逐文件覆盖。重启核对已发布目录与内部提交记录，补齐job状态。
-
-录音根目录由`SPEAKER_DATA_ROOT`配置。第1段原件的地址按以下规则计算：
-
-```text
-${SPEAKER_DATA_ROOT}/users/demo-user/clips/demo-device/raw/rec-demo-20261102-001/1.opus
-```
-
-同一录音的最终目录：
+成品目录示例，根目录由配置决定：
 
 ```text
 ${SPEAKER_DATA_ROOT}/users/demo-user/clips/demo-device/recordings/rec-demo-20261102-001/
@@ -133,7 +109,7 @@ ${SPEAKER_DATA_ROOT}/users/demo-user/clips/demo-device/recordings/rec-demo-20261
 └── recording.json
 ```
 
-`recording.json`只保留四个字段；开始时间是UTC毫秒，缺少设备时间时取首段接收时间，时长按完整WAV计算：
+recording.json只含录音ID、归属、开始时间（UTC毫秒）和完整时长（毫秒）；缺少设备时间时用首段接收时间：
 
 ```json
 {
@@ -144,7 +120,7 @@ ${SPEAKER_DATA_ROOT}/users/demo-user/clips/demo-device/recordings/rec-demo-20261
 }
 ```
 
-VTT格式示例（非真实识别结果）：
+VTT示例（仅展示格式）：
 
 ```vtt
 WEBVTT
@@ -158,7 +134,7 @@ WEBVTT
 <v s002_A>Next, we review the results.</v>
 ```
 
-MD对应每句一行：`[00:05:00.300] 片段2·A：Next, we review the results.`。段2字幕接续整条音频时间轴；局部A标签不代表跨段同一人。
+MD每句一行，例如：`[00:05:00.300] 片段2·A：Next, we review the results.`。
 
 ## 5. Web Server 模块
 
