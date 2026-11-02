@@ -1,7 +1,5 @@
 # ReSpeaker Clip · 架构与模块设计
 
-v14 · 2026-11-02 · 设计文档，服务尚未实现。
-
 ## 1. 整体架构
 
 ![整体架构](docs/assets/diagrams/01-system-overview.svg)
