@@ -51,7 +51,8 @@ Web串行执行设备授权变更：先写deny，再更新devices，最后发布
 ${SPEAKER_DATA_ROOT}/
 ├── db/business.sqlite3                         # Web专用
 ├── device-authorizations/<device_id>.json       # Web写，Clip读
-├── credentials/devices/                        # 私有设备凭证材料
+├── credentials/trust/                          # Web验证设备证书的信任根
+├── credentials/devices/                        # 私有上传凭证材料
 ├── locks/                                     # 两个角色锁及state.lock
 └── users/<owner>/clips/<device_id>/
     ├── incoming/<recording_id>/<upload_id>/
@@ -117,7 +118,9 @@ Google OIDC登录后建立或复用accounts用户，校验回调及账号状态�
 
 ### 3.2 设备管理
 
-用户首次登录后，由OP通过Web本机维护入口将核验过的设备UID登记到该用户，生成device_id并保存到devices；转交设备也由该入口变更归属。未登记到当前用户的设备不能激活。
+用户登录并通过蓝牙连接Clip，Web校验设备持有证明后自动创建devices及device_id，无需OP登记。未绑定设备可认领，已绑定本人则复用；已绑定他人返回409 device_already_bound，不允许覆盖。
+
+转交时原用户先解绑，Web撤销授权并清空owner；蓝牙清理完成后，新用户重新绑定，复用device_id但生成新binding_id、递增epoch和revision。历史录音仍归原用户。
 
 维护devices并按第2.3节发布授权，配置流程见第4.3节。凭证只在配置响应中返回，不进入列表、日志或前端持久缓存。
 
@@ -140,12 +143,25 @@ Google OIDC登录后建立或复用accounts用户，校验回调及账号状态�
 | GET /users/me | user_id、email、display_name |
 | PATCH /users/me | 仅修改display_name |
 | GET /devices | 本人设备列表，不含凭证 |
-| POST /devices/activate | 输入device_uid；返回设备信息及configuration |
+| POST /devices/binding/challenge | 输入device_uid；返回当前会话的一次性挑战 |
+| POST /devices/activate | 输入device_uid、challenge_id、proof；验证后自动建档或复用，返回configuration |
 | POST /devices/{id}/binding/confirm | 输入device_uid、binding_id、revision、saved=true；核对后确认配置 |
 | PATCH /devices/{id} | 仅修改display_name |
-| DELETE /devices/{id}/binding | 先撤销授权，返回revoked及device_cleanup_pending |
+| DELETE /devices/{id}/binding | 原用户撤销并清空owner；返回revoked、device_cleanup_pending及旧binding_id/revision供蓝牙清理 |
 | GET /recordings | 返回录音ID列表；支持device_id、from/to、limit、cursor |
 | GET /health | Web自身及成品目录可读状态，不返回秘密 |
+
+POST `/devices/binding/challenge` 返回示例：
+
+```json
+{
+  "challenge_id": "challenge-demo",
+  "nonce": "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff",
+  "expires_in": 300
+}
+```
+
+nonce为随机32字节的十六进制；挑战保存在Web内存，绑定当前登录会话及UID，5分钟有效、成功激活后一次消费，重启后重新申请。`proof`取AT+BINDPROOF返回的data；Web验证证书、签名及nonce，proof的UID须与挑战一致；在串行事务内核对当前归属再建档，不能只凭UID认领。无效证明返回403 device_proof_invalid；首次认领或解绑后重绑时proof仍为bound=true，返回409 device_cleanup_required，清理后用新挑战重试。
 
 激活时的configuration示例（凭证为占位值）：
 
@@ -203,10 +219,33 @@ Google OIDC登录后建立或复用accounts用户，校验回调及账号状态�
   "ok": true,
   "data": {
     "device_uid": "0011223344556677",
-    "binding_protocol_version": 1
+    "binding_protocol_version": 1,
+    "binding_proof_version": 1
   }
 }
 ```
+
+#### AT+BINDPROOF — 证明持有设备
+
+`AT+BINDPROOF=nonce`，经本地配对的BLE调用，返回设备签名的当前绑定快照：
+
+```json
+{
+  "ok": true,
+  "data": {
+    "device_uid": "0011223344556677",
+    "nonce": "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff",
+    "bound": false,
+    "binding_id": null,
+    "epoch": 0,
+    "revision": 0,
+    "signature": "base64url-signature",
+    "certificate_chain": ["base64-der-device-certificate", "base64-der-issuer-certificate"]
+  }
+}
+```
+
+签名覆盖紧凑UTF-8 JSON数组`["speaker-bind-v1",device_uid,nonce,bound,binding_id,epoch,revision]`。设备证书须绑定UID且链至Web信任根；每台设备使用独立私钥且仅保存在设备；签名和证书为示例占位值。首次绑定或转交要求bound=false；本人重复配置可返回当前绑定快照。
 
 #### AT+BINDING? — 读取绑定
 
@@ -364,7 +403,7 @@ Google OIDC登录后建立或复用accounts用户，校验回调及账号状态�
 
 ssid_hex为SSID的UTF-8字节十六进制，示例为Demo；Wi-Fi配置saved不代表已联网，NETCHECK成功也不代表上传端点一定可达。
 
-**绑定命令为v1目标契约，基础固件尚缺对应注册和能力标记。** 确认`binding_protocol_version=1`后才启用，否则提示升级。
+**绑定及持有证明均为目标固件能力。** 启用前需支持`binding_protocol_version=1`、`binding_proof_version=1`及设备证书签名；基础固件未具备这些能力时提示升级，不降级为仅凭UID绑定。设备身份凭证预置于设备，Web信任根随部署制品提供，无需OP逐台登记用户归属。
 
 Wi-Fi密码仅通过蓝牙写入，不发送Web。
 
@@ -372,4 +411,4 @@ Wi-Fi密码仅通过蓝牙写入，不发送Web。
 
 ![HTTP与蓝牙配置流程](docs/assets/diagrams/11-device-configuration.svg)
 
-操作前确保设备空闲；读回UID、binding_id、epoch、revision及saved与配置匹配后再确认，失败保留待配置状态。
+浏览器先读设备UID及能力，再执行下图。操作前确保设备空闲；读回UID、binding_id、epoch、revision及saved与configuration匹配后确认，失败保持provisioning。有效绑定的本人重试复用配置；解绑后重新认领才更换绑定及代次。

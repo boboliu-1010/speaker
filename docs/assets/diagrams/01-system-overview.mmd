@@ -1,6 +1,6 @@
 C4Container
     title ReSpeaker Clip — 系统架构图
-    Person(user, "用户 / 浏览器", "登录、配置设备、播放与下载")
+    Person(user, "用户 / 浏览器", "登录、自助绑定、播放与下载")
     System_Ext(device, "ReSpeaker Clip", "原始 Opus 与录完声明")
     System_Ext(nginx, "Nginx（OP管理）", "HTTPS入口与反向代理")
     System_Ext(google, "Google OIDC", "外部身份服务")
@@ -10,7 +10,7 @@ C4Container
         ContainerDb(files, "本机文件系统", "一个可配置根，按用户与Clip隔离", "SPEAKER_DATA_ROOT统一存储根\n按用户 / Clip / recording ID定位\n完整WAV / VTT / MD及录音信息\nClip负责处理和发布；Web只读成品、写设备授权")
         ContainerDb(database, "用户与设备数据库", "SQLite", "accounts / devices 两张表\n仅 Web Server 访问")
     }
-    Rel(user, device, "本地读取与配置", "BLE / AT")
+    Rel(user, device, "配对、证明持有与配置", "BLE / AT")
     Rel(user, nginx, "使用网页和 API", "HTTPS / TCP 443")
     Rel(nginx, web, "反向代理", "HTTP / 127.0.0.1:9529")
     BiRel(device, clip, "上传 Opus / 返回收件回执", "DTLS / UDP 9528")

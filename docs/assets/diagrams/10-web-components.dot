@@ -13,12 +13,12 @@ auth_api -> user [label="登录或资料请求"];
 user -> account [label="建立 / 查询 / 更新用户"];
 }
 subgraph cluster_1 { label="设备管理"; color="#d1dce8"; style=rounded; fontsize=19; margin=20;
-device_api [width=3.30, label="HTTP请求
-激活 / 配置确认 / 解绑"];
-device [width=3.60, label="设备管理 §3.2
-会话 / 归属 / 配置校验"];
+device_api [width=3.90, label="HTTP请求
+挑战 / 激活 / 配置 / 解绑"];
+device [width=4.10, label="设备管理 §3.2
+会话 / 持有证明 / 当前归属"];
 project [width=3.40, label="devices及授权文件
-更新设备 / 发布或撤销授权"];
+自动建档 / 发布或撤销授权"];
 device_api -> device [label="本人设备操作"];
 device -> project [label="按授权变更顺序提交"];
 }

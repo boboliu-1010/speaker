@@ -1,21 +1,28 @@
 digraph G {
-graph [rankdir=LR, bgcolor="white", pad="0.35", nodesep="0.4", ranksep="0.5", splines=line, fontname="PingFang SC", fontsize=23, labelloc=t, label="设备配置 · 绑定与解绑"];
+graph [rankdir=LR, bgcolor="white", pad="0.35", nodesep="0.4", ranksep="0.55", splines=line, fontname="PingFang SC", fontsize=23, labelloc=t, label="设备自助绑定、配置与转交"];
 node [shape=box, style="rounded,filled", fillcolor="#267bb9", color="#2366a0", fontcolor=white, fontname="PingFang SC", fontsize=17, margin="0.22,0.18"];
 edge [fontname="PingFang SC", fontsize=13, color="#53667c", fontcolor="#34465d", arrowsize=0.85];
-subgraph cluster_bind { label="绑定"; color="#d1dce8"; style=rounded; fontsize=19; margin=20;
-n0 [width=3.5, label="浏览器 → Clip设备\nBLE：读取UID及绑定能力"];
-n1 [width=3.6, label="浏览器 → Web Server\nHTTP：激活并获取绑定配置"];
-n2 [width=3.8, label="浏览器 → Clip设备\nBLE：写BINDCFG并读回核验"];
-n3 [width=3.6, label="浏览器 → Web Server\nHTTP：提交读回值确认完成"];
-n0 -> n1 [label="设备UID"];
-n1 -> n2 [label="configuration"];
-n2 -> n3 [label="身份 / 版本 / saved"];
+subgraph cluster_transfer { label="3 · 解绑后转交"; color="#d1dce8"; style=rounded; fontsize=19; margin=20;
+u0 [width=3.90, label="原用户 → Web Server\nHTTP：撤销授权 / owner=NULL"];
+u1 [width=3.80, label="浏览器 → Clip设备\nBLE：清理旧绑定\n离线则device_cleanup_pending"];
+u2 [width=3.80, label="新用户登录并连接Clip\n从步骤1重新验证、绑定\n旧录音仍归原用户"];
+u0 -> u1 [label="旧绑定ID / 版本"];
+u1 -> u2 [label="已解绑且设备bound=false"];
 }
-subgraph cluster_unbind { label="解绑"; color="#d1dce8"; style=rounded; fontsize=19; margin=20;
-u0 [width=3.6, label="浏览器 → Web Server\nHTTP：先撤销上传授权"];
-u1 [width=3.8, label="Web Server\nstate=revoked\ndevice_cleanup_pending=true"];
-u2 [width=3.8, label="浏览器 → Clip设备\nBLE清理绑定；离线则等待清理"];
-u0 -> u1 [label="服务端拒绝后续上传"];
-u1 -> u2 [label="不恢复上传权限"];
+subgraph cluster_config { label="2 · 写入配置并确认"; color="#d1dce8"; style=rounded; fontsize=19; margin=20;
+c0 [width=3.40, label="Web Server → 浏览器\nconfiguration / provisioning"];
+c1 [width=3.80, label="浏览器 → Clip设备\nBLE：写BINDCFG并读回核验"];
+c2 [width=3.80, label="浏览器 → Web Server\nHTTP：确认配置 / provisioned"];
+c0 -> c1 [label="服务器地址 / 绑定配置"];
+c1 -> c2 [label="UID / 绑定 / 版本 / saved"];
+}
+subgraph cluster_bind { label="1 · 验证持有并自动绑定"; color="#d1dce8"; style=rounded; fontsize=19; margin=20;
+b0 [width=3.40, label="浏览器 → Web Server\nHTTP：申请UID对应的挑战"];
+b1 [width=3.40, label="浏览器 → Clip设备\nBLE：BINDPROOF签名挑战"];
+b2 [width=3.40, label="浏览器 → Web Server\nHTTP：提交proof申请激活"];
+b3 [width=3.90, label="Web Server\n校验证书 / 签名 / 当前归属\n自动建档或复用本人绑定"];
+b0 -> b1 [label="nonce"];
+b1 -> b2 [label="设备持有证明"];
+b2 -> b3 [label="已绑定他人则拒绝"];
 }
 }
