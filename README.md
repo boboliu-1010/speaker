@@ -180,6 +180,8 @@ Google OIDC登录后按sub建立或复用accounts用户，创建本站内存会�
 
 ### 5.3 设备管理与授权
 
+首次使用：用户先登录建立账号；OP通过Web Server的本机维护入口，将核验过的设备UID登记到该用户，生成device_id并写入devices，初始状态为registered。随后浏览器按第6.3节完成激活和蓝牙配置。设备转交其他用户也由该入口明确变更归属，不允许仅凭UID自行认领。
+
 验证登记及当前用户归属，未登记到当前用户的UID返回409 enrollment_required；提供绑定配置、接收浏览器读回确认、改名及撤销。Web只提供HTTP接口，**蓝牙由浏览器直接调用设备**。配置中的凭证只在受控配置响应返回，不进入列表、日志或前端持久缓存。
 
 ### 5.4 成品目录查询
@@ -333,7 +335,9 @@ SPEAKER_ASR_MODEL_MANIFEST=/opt/speaker/models/manifest.json
 
 SPEAKER_UPLOAD_ENDPOINT是设备可达的公开DTLS地址，区别于Clip监听地址；Google回调固定为`PUBLIC_WEB_ORIGIN/api/boa/v1/auth/google/callback`。Web只信任配置的代理地址；HTTPS私钥由OP管理。
 
-数据根、状态根互不包含；数据库和凭证不放用户数据根或静态目录。目录0700、文件0600，按服务限制访问：Clip写处理数据和成品，Web写数据库和授权、只读成品。Clip不加载Google秘密或数据库配置。
+数据根、状态根互不包含；数据库和凭证不放用户数据根或静态目录。首版两个进程使用同一个非root专用系统账号`speaker`，目录0700、文件0600，因此可互读授权及成品，无需额外共享权限配置。
+
+读写职责由模块约束：Clip写处理数据和成品，Web写数据库和授权、只读成品；Clip不加载Google秘密或数据库配置。两进程属于同一系统账号信任域，此处不提供操作系统级的相互隔离。
 
 ## 8. 文件一致性与故障处理
 
