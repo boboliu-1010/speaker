@@ -76,7 +76,7 @@ p.save('04-raw-ingest-outbox')
 
 p = Plate('完整录音的成品发布', '一个recording一个目录，直接保存完整WAV、VTT、MD和录音信息。', 1080)
 p.card(40,150,570,210,'内部处理提交',['recording和job都由Clip写文件', '片段任务校验本段输入hash与配置', '录音任务核对完整输入版本和段号', '持久attempt / generation拒绝旧执行'],TEAL)
-p.card(650,150,590,210,'正式录音目录',['recording.wav：完整连续音频', 'transcript.vtt：全局时间字幕', 'transcript.md：完整逐句文本', 'recording.json：owner / 时长 / size / hash'],TEAL)
+p.card(650,150,590,210,'正式录音目录',['recording.wav：完整连续音频', 'transcript.vtt：全局时间字幕', 'transcript.md：完整逐句文本', 'recording.json：ID / owner / 时间 / 时长'],TEAL)
 for x,title,lines in [
  (40,'1 · 生成',['锁外读取成功片段', '流式合并PCM', '统一字幕时间轴', '生成完整三件套']),
  (347,'2 · 持久化',['校验样本与hash', 'fsync所有文件', '保存录音信息', 'fsync临时目录']),

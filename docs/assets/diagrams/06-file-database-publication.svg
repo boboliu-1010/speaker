@@ -18,7 +18,7 @@
 <text x="672" y="220" font-size="18" font-weight="400" fill="#607088">recording.wav：完整连续音频</text>
 <text x="672" y="248" font-size="18" font-weight="400" fill="#607088">transcript.vtt：全局时间字幕</text>
 <text x="672" y="276" font-size="18" font-weight="400" fill="#607088">transcript.md：完整逐句文本</text>
-<text x="672" y="304" font-size="18" font-weight="400" fill="#607088">recording.json：owner / 时长 / size / hash</text>
+<text x="672" y="304" font-size="18" font-weight="400" fill="#607088">recording.json：ID / owner / 时间 / 时长</text>
 <rect x="40" y="410" width="279" height="220" rx="8" fill="white" stroke="#d8e0ea"/>
 <rect x="40" y="410" width="5" height="220" rx="0" fill="#245cca" stroke="#245cca"/>
 <text x="62" y="444" font-size="21" font-weight="600" fill="#17283f">1 · 生成</text>

@@ -389,50 +389,32 @@ VTT/MD单文件≤64MiB，成品录音信息≤1MiB；生成时检查体积和�
         ├── recording.wav                       # 完整音频：10分42秒
         ├── transcript.vtt                      # 完整字幕：全局时间轴
         ├── transcript.md                       # 完整文字：每句一行
-        └── recording.json                      # owner、时长、完成状态、size/hash
+        └── recording.json                      # 录音ID、owner、开始时间、时长
 ```
 
 Web直接读取该目录的`recording.json`和三个成品文件；不读取上面的raw、segments、内部recording或job。内部状态和中间文件不因成品发布立即删除，保留与清理仍按第4.4、4.8节执行。
 
 #### 4.11.2 recording.json示例
 
-目录内的`recording.json`就是给Web读取的录音信息，保存归属、时长、完成状态和三个文件的size/hash；它与`state/recordings/<recording_id>/recording.json`内部处理状态不是同一文件。文件路径直接相对于当前recording目录。
+只保留录音标识、归属、开始时间和时长四个字段：
 
 ```jsonc
 {
-  "schema_version": 1,
   "recording_id": "rec-demo-20261102-001",
   "owner": "demo-user",
-  "state": "ready",
-  "integrity": "confirmed_complete",
-  "segment_count": 3,
-  "sample_rate": 16000,
-  "total_sample_count": 10272000,
-  "duration_ms": 642000,
-  "published_at": 1793584800000,
-  "files": {
-    "wav": {
-      "path": "recording.wav",
-      "size_bytes": 20544044,
-      "sha256": "<实际完整WAV的SHA-256>"
-    },
-    "vtt": {
-      "path": "transcript.vtt",
-      "size_bytes": 248,
-      "sha256": "3bc1838edff0120cfe653ad62d8fd3de08b517e5979dfb9d59d5717ad81235f4"
-    },
-    "md": {
-      "path": "transcript.md",
-      "size_bytes": 237,
-      "sha256": "5a5cbbf7e5296e7703d764b566b250c91fa34474762a8ac62b271930eb6f4d36"
-    }
-  }
+  "recorded_at": 1793584800000,
+  "duration_ms": 642000
 }
 ```
 
-这是文档示例，未附真实WAV或声称已完成ASR。WAV的sha256为占位值；VTT/MD的字节数及hash按下列UTF-8、无BOM、LF、末尾一个换行的示例正文计算。实际发布使用真实文件重新计算hash，不能使用占位值。
+- `recording_id`：录音ID，与目录名一致。
+- `owner`：归属用户ID，用于Web鉴权；由Clip接受原件时的身份确定。
+- `recorded_at`：录音开始时间，UTC毫秒；来源缺少开始时间时使用首片服务端接收时间。
+- `duration_ms`：完整录音时长，毫秒；示例为10分42秒，由合并后的实际样本数计算。
 
-最终WAV为16kHz、单声道PCM16：`(300 + 300 + 42) × 16000 = 10,272,000`个样本；标准44字节PCM WAV头时文件大小为`10,272,000 × 2 + 44 = 20,544,044`字节。
+三个成品文件名固定，不在JSON中重复保存路径。完成状态由整个目录原子发布保证；片段数量、采样参数、文件hash、模型和job状态留在Clip内部处理记录中。此文件只给Web读取必要信息，与`state/recordings/<recording_id>/recording.json`内部处理状态不同。
+
+下面的字幕和文字仅展示格式，未附真实WAV或声称已经完成ASR。
 
 #### 4.11.3 完整VTT与MD示例
 
@@ -799,18 +781,17 @@ Clip Wi-Fi 扫描结果由 Web 的 BLE 适配层读取：
 
 **职责**：按用户读取Clip已经发布的完整recording，不建立录音表或另一套处理状态。
 
-**输入与输出**：当前会话、查询条件及成品指针 → 本人完整录音列表与详情。
+**输入与输出**：当前会话、查询条件及正式录音目录 → 本人完整录音列表与详情。
 
-**处理流程与边界**：扫描`results/`下的正式recording目录，忽略以`.`开头的临时目录。读取目录内`recording.json`，校验schema、recording_id、owner、state=ready，以及完整WAV/VTT/MD的固定文件名和size/hash信息；拒绝根外路径、符号链接和非普通文件。缺少目录时返回404 recording_not_found，缺少信息或文件时返回503 result_unavailable并告警，不把半成品加入列表。
+**处理流程与边界**：扫描`results/`下的正式recording目录，忽略以`.`开头的临时目录。读取目录内`recording.json`，校验recording_id、owner、recorded_at、duration_ms的类型与范围、ID与目录一致，并检查固定文件名的完整WAV/VTT/MD存在且可读；拒绝根外路径、符号链接和非普通文件。缺少目录时返回404 recording_not_found，缺少信息或文件时返回503 result_unavailable并告警，不把半成品加入列表。
 
 Web按会话用户过滤录音信息中的owner，并核验账号有效；不根据设备当前owner改写历史录音，不扫描raw、内部recordings或jobs。列表可以用可丢弃的内存缓存加速，每次媒体请求仍须重新鉴权，不另建录音表、持久索引或处理任务。
 
 ```jsonc
 {
   "recording_id": "rec-example",
-  "state": "ready",
   "duration_ms": 642000,
-  "published_at": 1793584800000,
+  "recorded_at": 1793584800000,
   "files": {
     "wav": "/api/boa/v1/recordings/rec-example/audio.wav",
     "vtt": "/api/boa/v1/recordings/rec-example/transcript.vtt",
@@ -833,9 +814,9 @@ Web按会话用户过滤录音信息中的owner，并核验账号有效；不根
 - GET/HEAD `/recordings/{id}/transcript.vtt`：读取完整VTT，可作为播放器字幕或下载。
 - GET/HEAD `/recordings/{id}/transcript.md`：读取完整Markdown并作为附件下载。
 
-WAV支持bytes=start-end、start-和-suffix，裁剪end到文件长度；非法/越界416并返回`Content-Range: bytes */size`，多范围退回整文件200。HEAD忽略Range、空body。VTT/MD忽略Range，GET与HEAD使用同一文件大小和hash；不因HEAD触发处理。
+WAV支持bytes=start-end、start-和-suffix，裁剪end到文件长度；非法/越界416并返回`Content-Range: bytes */size`，多范围退回整文件200。HEAD忽略Range、空body。VTT/MD忽略Range，GET与HEAD使用同一已打开文件的实际大小；不因HEAD触发处理。
 
-受控打开同一文件句柄验证类型、size后流式读取；hash由Clip发布前全量校验，Web发现内容异常则停止读取。ETag使用文件SHA-256；响应设private,no-store和nosniff，附件名称由服务端生成。每owner最多4个并发媒体请求，超额429及Retry-After: 1。
+受控打开同一文件句柄验证类型和实际大小后流式读取；文件hash由Clip在发布前校验并留在内部记录，Web不从录音信息读取hash，也不在媒体请求中重新计算整份音频hash。Content-Length和Last-Modified取自已打开文件的stat；响应设private,no-store和nosniff，附件名称由服务端生成。每owner最多4个并发媒体请求，超额429及Retry-After: 1。
 
 前端直接播放该recording目录的完整WAV并加载完整VTT，文字用textContent显示；下载读取现成文件。Web不切换分段音频，不处理内部job，也不展示尚未发布的录音。
 
@@ -927,7 +908,7 @@ firmware/capabilities/telemetry 来自已验证的 Clip 上报，Web 可将最�
 
 ### 6.3 数据契约与版本
 
-授权/来源/recording/job及成品录音信息各自维护schema_version，SQLite用user_version；未知必填版本拒绝处理，不猜字段。所有时间统一UTC毫秒，音频内部偏移优先使用整数样本数。文件引用均为受控根下相对路径，不接收任意绝对路径、URL或模型位置。
+授权、来源、内部recording和job维护schema_version，SQLite用user_version；未知必填版本拒绝处理。成品recording.json固定为上述四个业务字段，不另外保存格式版本或处理状态。所有时间统一UTC毫秒，音频内部偏移优先使用整数样本数。文件引用均为受控根下相对路径，不接收任意绝对路径、URL或模型位置。
 
 接口分工：AuthorizationReader验证身份；RecordingRepository/JobRepository在Clip保存内部状态；Decoder/Transcriber/RecordingAssembler/ResultPublisher在Clip处理并发布；PublishedResultReader在Web读取成品录音信息；MediaReader仅打开已授权的成品。模块间通过明确数据契约协作，不传递底层网络/数据库连接。
 
@@ -1048,7 +1029,7 @@ Web验证Google身份和当前账号状态，设备配置使用deny-first文件/
 
 ### 8.2 文件路径与并发
 
-所有引用以服务端生成ID及受控相对路径表示，通过根目录句柄逐级打开，拒绝根外路径、符号链接、非普通文件和任意URL。检查和读取使用同一文件句柄。JSON及成品录音信息严格限制体积与格式版本；未知字段/版本按契约拒绝，不猜owner。
+所有引用以服务端生成ID及受控相对路径表示，通过根目录句柄逐级打开，拒绝根外路径、符号链接、非普通文件和任意URL。检查和读取使用同一文件句柄。JSON严格限制体积并按各自契约校验；成品录音信息只接受约定的四个字段，不猜owner。
 
 短时文件锁只解决并发，不替代fsync、原子发布或SQLite事务。大文件在锁外校验和生成，提交时核对执行代次和输入版本。Web不写录音/job、不生成导出；Clip不连接数据库。完整三件套和录音信息全部持久化后才原子发布整个目录，避免浏览器读到只有音频或只有字幕的版本。
 
