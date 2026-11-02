@@ -5,10 +5,10 @@ edge [fontname="PingFang SC", fontsize=13, color="#53667c", fontcolor="#34465d",
 n0 [width=3.40, label="完整性检查 §4.5\n结束声明 / 1..N全部成功"];
 n1 [width=3.02, label="完整WAV合并 §4.10\n顺序拼接PCM / 重写头"];
 n2 [width=3.32, label="完整VTT与MD §4.10\n累计样本偏移 / 逐句文本"];
-n3 [width=3.51, label="成品发布 §4.11\n三件套 / 清单 / current"];
+n3 [width=3.97, label="成品发布 §4.11\n三件套 / 录音信息 / 目录发布"];
 n4 [width=2.79, label="Web读取 §5.4–5.5\n播放 / 字幕 / 下载"];
 n0 -> n1 [label="冻结录音版本"];
 n1 -> n2 [label="完整音频时间轴"];
-n2 -> n3 [label="同版本完整三件套"];
+n2 -> n3 [label="完整三件套"];
 n3 -> n4 [label="只读已发布成品"];
 }

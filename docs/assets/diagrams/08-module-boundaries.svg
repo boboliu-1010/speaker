@@ -8,7 +8,7 @@
 <rect x="40" y="150" width="1200" height="125" rx="8" fill="white" stroke="#d8e0ea"/>
 <rect x="40" y="150" width="5" height="125" rx="0" fill="#087f74" stroke="#087f74"/>
 <text x="62" y="184" font-size="21" font-weight="600" fill="#17283f">公共契约与文件能力</text>
-<text x="62" y="220" font-size="18" font-weight="400" fill="#607088">授权、job、成品清单的版本化格式；受控路径、文件锁、原子写及脱敏日志</text>
+<text x="62" y="220" font-size="18" font-weight="400" fill="#607088">授权、job、录音信息的数据契约；受控路径、文件锁、原子写及脱敏日志</text>
 <rect x="40" y="315" width="570" height="615" rx="8" fill="#f3f6fa" stroke="#d8e0ea"/>
 <text x="62" y="357" font-size="25" font-weight="600" fill="#087f74">Clip Server · 收件与处理</text>
 <rect x="60" y="390" width="530" height="140" rx="8" fill="white" stroke="#d8e0ea"/>
@@ -25,8 +25,8 @@
 <rect x="60" y="730" width="530" height="160" rx="8" fill="white" stroke="#d8e0ea"/>
 <rect x="60" y="730" width="5" height="160" rx="0" fill="#087f74" stroke="#087f74"/>
 <text x="82" y="764" font-size="21" font-weight="600" fill="#17283f">成品发布</text>
-<text x="82" y="800" font-size="18" font-weight="400" fill="#607088">三件套与manifest全部校验 / fsync</text>
-<text x="82" y="828" font-size="18" font-weight="400" fill="#607088">原子current作为交接提交点</text>
+<text x="82" y="800" font-size="18" font-weight="400" fill="#607088">三件套与录音信息全部校验 / fsync</text>
+<text x="82" y="828" font-size="18" font-weight="400" fill="#607088">目录原子重命名作为交接提交点</text>
 <text x="82" y="856" font-size="18" font-weight="400" fill="#607088">不连接任何数据库</text>
 <rect x="640" y="315" width="600" height="615" rx="8" fill="#f3f6fa" stroke="#d8e0ea"/>
 <text x="662" y="357" font-size="25" font-weight="600" fill="#245cca">Web Server · 用户设备与成品</text>
@@ -38,8 +38,8 @@
 <rect x="660" y="550" width="560" height="160" rx="8" fill="white" stroke="#d8e0ea"/>
 <rect x="660" y="550" width="5" height="160" rx="0" fill="#245cca" stroke="#245cca"/>
 <text x="682" y="584" font-size="21" font-weight="600" fill="#17283f">成品目录与读取</text>
-<text x="682" y="620" font-size="18" font-weight="400" fill="#607088">仅读取Clip已发布current / manifest</text>
-<text x="682" y="648" font-size="18" font-weight="400" fill="#607088">按owner及revision固定成品版本</text>
+<text x="682" y="620" font-size="18" font-weight="400" fill="#607088">只读Clip已发布录音目录与信息</text>
+<text x="682" y="648" font-size="18" font-weight="400" fill="#607088">按owner核验成品目录归属</text>
 <text x="682" y="676" font-size="18" font-weight="400" fill="#607088">不读原件、内部recording或job</text>
 <rect x="660" y="730" width="560" height="160" rx="8" fill="white" stroke="#d8e0ea"/>
 <rect x="660" y="730" width="5" height="160" rx="0" fill="#245cca" stroke="#245cca"/>

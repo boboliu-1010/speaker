@@ -79,7 +79,7 @@
 <text x="560.0" y="1217" text-anchor="middle" font-size="25" font-weight="600" fill="white">本机文件系统</text>
 <text x="560.0" y="1246" text-anchor="middle" font-size="16" font-weight="400" fill="#edf4fb">同一文件系统，按目录划分</text>
 <text x="560.0" y="1281" text-anchor="middle" font-size="19" font-weight="400" fill="white">授权文件、原始Opus、recording / job及中间结果</text>
-<text x="560.0" y="1308" text-anchor="middle" font-size="19" font-weight="400" fill="white">完整WAV / VTT / MD、成品清单及发布指针</text>
+<text x="560.0" y="1308" text-anchor="middle" font-size="19" font-weight="400" fill="white">完整WAV / VTT / MD及录音信息</text>
 <text x="560.0" y="1335" text-anchor="middle" font-size="19" font-weight="400" fill="white">Clip负责处理和发布；Web只读成品、写设备授权</text>
 <path d="M1080 1256 C1080 1233,1450 1233,1450 1256 L1450 1399 C1450 1422,1080 1422,1080 1399 Z" fill="#1168bd" stroke="#0b4f90" stroke-width="2"/>
 <path d="M1080 1256 C1080 1279,1450 1279,1450 1256" fill="none" stroke="white" stroke-opacity=".7" stroke-width="1.5"/>

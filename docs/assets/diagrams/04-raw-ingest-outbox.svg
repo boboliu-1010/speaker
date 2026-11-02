@@ -3,7 +3,7 @@
 <rect width="1280" height="970" fill="white"/>
 <g font-family="PingFang SC,Microsoft YaHei,Noto Sans CJK SC,Arial,sans-serif">
 <text x="40" y="55" font-size="30" font-weight="600" fill="#17283f">Clip 处理完整录音，Web 读取成品</text>
-<text x="40" y="88" font-size="17" font-weight="400" fill="#607088">设备上传、中间状态和成品均在本机文件系统；只通过最终发布清单交接。</text>
+<text x="40" y="88" font-size="17" font-weight="400" fill="#607088">设备上传、中间状态和成品均在本机文件系统；通过正式录音目录交接。</text>
 <line x1="40" y1="112" x2="1240" y2="112" stroke="#d8e0ea" stroke-width="1.5"/>
 <rect x="40" y="150" width="570" height="210" rx="8" fill="white" stroke="#d8e0ea"/>
 <rect x="40" y="150" width="5" height="210" rx="0" fill="#087f74" stroke="#087f74"/>
@@ -29,14 +29,14 @@
 <rect x="650" y="405" width="590" height="210" rx="8" fill="white" stroke="#d8e0ea"/>
 <rect x="650" y="405" width="5" height="210" rx="0" fill="#245cca" stroke="#245cca"/>
 <text x="672" y="439" font-size="21" font-weight="600" fill="#17283f">4 · Web 只读完整三件套</text>
-<text x="672" y="475" font-size="18" font-weight="400" fill="#607088">读取已发布current及manifest</text>
-<text x="672" y="503" font-size="18" font-weight="400" fill="#607088">核验会话、owner和成品revision</text>
+<text x="672" y="475" font-size="18" font-weight="400" fill="#607088">读取正式目录及录音信息</text>
+<text x="672" y="503" font-size="18" font-weight="400" fill="#607088">核验会话、owner和成品完整性</text>
 <text x="672" y="531" font-size="18" font-weight="400" fill="#607088">完整WAV播放、VTT字幕和MD下载</text>
 <text x="672" y="559" font-size="18" font-weight="400" fill="#607088">不读取半成品，不现场生成文件</text>
 <rect x="40" y="660" width="1200" height="210" rx="8" fill="white" stroke="#d8e0ea"/>
 <rect x="40" y="660" width="5" height="210" rx="0" fill="#087f74" stroke="#087f74"/>
 <text x="62" y="694" font-size="21" font-weight="600" fill="#17283f">文件交接与独立运行</text>
-<text x="62" y="730" font-size="18" font-weight="400" fill="#607088">Clip写完整WAV / VTT / MD，全部校验并fsync后才原子发布current。</text>
+<text x="62" y="730" font-size="18" font-weight="400" fill="#607088">Clip写完整WAV / VTT / MD，全部校验并fsync后原子发布整个录音目录。</text>
 <text x="62" y="758" font-size="18" font-weight="400" fill="#607088">Web写设备授权，Clip只读验证；Clip不访问数据库，Web不处理录音job。</text>
 <text x="62" y="786" font-size="18" font-weight="400" fill="#607088">Web停止：Clip继续收件、处理和发布；Clip停止：Web仍可读取已发布成品。</text>
 <text x="62" y="814" font-size="18" font-weight="400" fill="#607088">同一本机文件系统按目录分工，没有音频存储服务、双写或副本复制。</text>

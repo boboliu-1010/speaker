@@ -3,7 +3,7 @@
 <rect width="1280" height="1080" fill="white"/>
 <g font-family="PingFang SC,Microsoft YaHei,Noto Sans CJK SC,Arial,sans-serif">
 <text x="40" y="55" font-size="30" font-weight="600" fill="#17283f">完整录音的成品发布</text>
-<text x="40" y="88" font-size="17" font-weight="400" fill="#607088">Clip先完成三件套，再发布一个current指针；Web只读取同一revision。</text>
+<text x="40" y="88" font-size="17" font-weight="400" fill="#607088">一个recording一个目录，直接保存完整WAV、VTT、MD和录音信息。</text>
 <line x1="40" y1="112" x2="1240" y2="112" stroke="#d8e0ea" stroke-width="1.5"/>
 <rect x="40" y="150" width="570" height="210" rx="8" fill="white" stroke="#d8e0ea"/>
 <rect x="40" y="150" width="5" height="210" rx="0" fill="#087f74" stroke="#087f74"/>
@@ -14,11 +14,11 @@
 <text x="62" y="304" font-size="18" font-weight="400" fill="#607088">持久attempt / generation拒绝旧执行</text>
 <rect x="650" y="150" width="590" height="210" rx="8" fill="white" stroke="#d8e0ea"/>
 <rect x="650" y="150" width="5" height="210" rx="0" fill="#087f74" stroke="#087f74"/>
-<text x="672" y="184" font-size="21" font-weight="600" fill="#17283f">成品版本目录</text>
+<text x="672" y="184" font-size="21" font-weight="600" fill="#17283f">正式录音目录</text>
 <text x="672" y="220" font-size="18" font-weight="400" fill="#607088">recording.wav：完整连续音频</text>
 <text x="672" y="248" font-size="18" font-weight="400" fill="#607088">transcript.vtt：全局时间字幕</text>
 <text x="672" y="276" font-size="18" font-weight="400" fill="#607088">transcript.md：完整逐句文本</text>
-<text x="672" y="304" font-size="18" font-weight="400" fill="#607088">manifest：owner / revision / size / hash</text>
+<text x="672" y="304" font-size="18" font-weight="400" fill="#607088">recording.json：owner / 时长 / size / hash</text>
 <rect x="40" y="410" width="279" height="220" rx="8" fill="white" stroke="#d8e0ea"/>
 <rect x="40" y="410" width="5" height="220" rx="0" fill="#245cca" stroke="#245cca"/>
 <text x="62" y="444" font-size="21" font-weight="600" fill="#17283f">1 · 生成</text>
@@ -31,36 +31,36 @@
 <text x="369" y="444" font-size="21" font-weight="600" fill="#17283f">2 · 持久化</text>
 <text x="369" y="480" font-size="18" font-weight="400" fill="#607088">校验样本与hash</text>
 <text x="369" y="508" font-size="18" font-weight="400" fill="#607088">fsync所有文件</text>
-<text x="369" y="536" font-size="18" font-weight="400" fill="#607088">发布不可变目录</text>
-<text x="369" y="564" font-size="18" font-weight="400" fill="#607088">写成品manifest</text>
+<text x="369" y="536" font-size="18" font-weight="400" fill="#607088">保存录音信息</text>
+<text x="369" y="564" font-size="18" font-weight="400" fill="#607088">fsync临时目录</text>
 <rect x="654" y="410" width="279" height="220" rx="8" fill="white" stroke="#d8e0ea"/>
 <rect x="654" y="410" width="5" height="220" rx="0" fill="#245cca" stroke="#245cca"/>
 <text x="676" y="444" font-size="21" font-weight="600" fill="#17283f">3 · 原子发布</text>
 <text x="676" y="480" font-size="18" font-weight="400" fill="#607088">短锁复核输入版本</text>
 <text x="676" y="508" font-size="18" font-weight="400" fill="#607088">核对attempt代次</text>
-<text x="676" y="536" font-size="18" font-weight="400" fill="#607088">原子替换current</text>
-<text x="676" y="564" font-size="18" font-weight="400" fill="#607088">fsync指针父目录</text>
+<text x="676" y="536" font-size="18" font-weight="400" fill="#607088">原子重命名整个目录</text>
+<text x="676" y="564" font-size="18" font-weight="400" fill="#607088">fsync录音父目录</text>
 <rect x="961" y="410" width="279" height="220" rx="8" fill="white" stroke="#d8e0ea"/>
 <rect x="961" y="410" width="5" height="220" rx="0" fill="#245cca" stroke="#245cca"/>
 <text x="983" y="444" font-size="21" font-weight="600" fill="#17283f">4 · Web读取</text>
-<text x="983" y="480" font-size="18" font-weight="400" fill="#607088">鉴权并固定revision</text>
-<text x="983" y="508" font-size="18" font-weight="400" fill="#607088">只读完整成品清单</text>
-<text x="983" y="536" font-size="18" font-weight="400" fill="#607088">从同版本文件读取</text>
+<text x="983" y="480" font-size="18" font-weight="400" fill="#607088">核对会话及owner</text>
+<text x="983" y="508" font-size="18" font-weight="400" fill="#607088">只读录音信息</text>
+<text x="983" y="536" font-size="18" font-weight="400" fill="#607088">从同一录音目录读取</text>
 <text x="983" y="564" font-size="18" font-weight="400" fill="#607088">不解码或重新导出</text>
 <rect x="40" y="675" width="570" height="220" rx="8" fill="white" stroke="#d8e0ea"/>
 <rect x="40" y="675" width="5" height="220" rx="0" fill="#087f74" stroke="#087f74"/>
 <text x="62" y="709" font-size="21" font-weight="600" fill="#17283f">提交中断后的对账</text>
-<text x="62" y="745" font-size="18" font-weight="400" fill="#607088">current之前：Web看不到临时结果</text>
-<text x="62" y="773" font-size="18" font-weight="400" fill="#607088">current之后：成品可读，补齐内部job</text>
+<text x="62" y="745" font-size="18" font-weight="400" fill="#607088">重命名前：Web忽略隐藏临时目录</text>
+<text x="62" y="773" font-size="18" font-weight="400" fill="#607088">重命名后：成品可读，补齐内部job</text>
 <text x="62" y="801" font-size="18" font-weight="400" fill="#607088">校验发布标识，不重复ASR</text>
 <text x="62" y="829" font-size="18" font-weight="400" fill="#607088">未知或坏状态告警，不覆盖为空</text>
 <rect x="650" y="675" width="590" height="220" rx="8" fill="white" stroke="#d8e0ea"/>
 <rect x="650" y="675" width="5" height="220" rx="0" fill="#245cca" stroke="#245cca"/>
-<text x="672" y="709" font-size="21" font-weight="600" fill="#17283f">完整性与版本</text>
+<text x="672" y="709" font-size="21" font-weight="600" fill="#17283f">完整性与发布</text>
 <text x="672" y="745" font-size="18" font-weight="400" fill="#607088">无结束声明或缺片：不发布</text>
 <text x="672" y="773" font-size="18" font-weight="400" fill="#607088">全部片段解码和转写成功才合并</text>
 <text x="672" y="801" font-size="18" font-weight="400" fill="#607088">总样本等于所有片段样本之和</text>
-<text x="672" y="829" font-size="18" font-weight="400" fill="#607088">新版本完整生成后才切换指针</text>
+<text x="672" y="829" font-size="18" font-weight="400" fill="#607088">正式目录已存在时核对并幂等返回</text>
 <text x="45" y="970" font-size="22" font-weight="400" fill="#17283f">固定文件锁保护短提交；音频处理、模型推理与hash校验均在锁外。</text>
 </g>
 </svg>

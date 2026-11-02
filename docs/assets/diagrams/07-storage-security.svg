@@ -12,14 +12,14 @@
 <text x="62" y="248" font-size="18" font-weight="400" fill="#607088">写raw、片段WAV和逐段转写</text>
 <text x="62" y="276" font-size="18" font-weight="400" fill="#607088">写recording / job处理状态</text>
 <text x="62" y="304" font-size="18" font-weight="400" fill="#607088">合并完整WAV / VTT / MD</text>
-<text x="62" y="332" font-size="18" font-weight="400" fill="#607088">发布manifest和current</text>
+<text x="62" y="332" font-size="18" font-weight="400" fill="#607088">发布四个文件的录音目录</text>
 <text x="62" y="360" font-size="18" font-weight="400" fill="#607088">不连接用户与设备数据库</text>
 <rect x="450" y="150" width="380" height="280" rx="8" fill="white" stroke="#d8e0ea"/>
 <rect x="450" y="150" width="5" height="280" rx="0" fill="#245cca" stroke="#245cca"/>
 <text x="472" y="184" font-size="21" font-weight="600" fill="#17283f">Web Server</text>
 <text x="472" y="220" font-size="18" font-weight="400" fill="#607088">管理登录、用户和设备</text>
 <text x="472" y="248" font-size="18" font-weight="400" fill="#607088">写设备授权，采用deny-first</text>
-<text x="472" y="276" font-size="18" font-weight="400" fill="#607088">只读成品清单及完整三件套</text>
+<text x="472" y="276" font-size="18" font-weight="400" fill="#607088">只读录音信息及完整三件套</text>
 <text x="472" y="304" font-size="18" font-weight="400" fill="#607088">GET / HEAD / Range每次鉴权</text>
 <text x="472" y="332" font-size="18" font-weight="400" fill="#607088">不访问原件、中间态或job</text>
 <text x="472" y="360" font-size="18" font-weight="400" fill="#607088">不生成字幕、MD或音频</text>

@@ -18,13 +18,13 @@ v10 · 2026-11-02 · 目标设计，尚未实现服务代码。
 
 ### 2.1 Clip Server
 
-监听DTLS/UDP 9528，读取Web发布的设备授权文件，验证身份后接收原始Opus。进程内一个后台循环管理recording/job文件，完成逐段解码和模型推理，再按recording合并完整WAV、VTT和MD，最后发布成品清单。Clip不负责Google登录、用户设备数据库或网页请求。
+监听DTLS/UDP 9528，读取Web发布的设备授权文件，验证身份后接收原始Opus。进程内一个后台循环管理recording/job文件，完成逐段解码和模型推理，再按recording合并完整WAV、VTT和MD，最后发布完整recording目录。Clip不负责Google登录、用户设备数据库或网页请求。
 
 Web停止时，Clip仍可凭已有有效授权收件、处理和发布成品。解码子进程仅在执行期间存在，模型在Clip内常驻，不另设ASR服务或常驻job进程。
 
 ### 2.2 Web Server
 
-监听`127.0.0.1:9529`，由OP的Nginx提供HTTPS入口。Web管理accounts/devices、登录会话和设备授权文件；从已发布成品清单读取本人录音，提供完整WAV播放、VTT字幕和WAV/VTT/MD下载。
+监听`127.0.0.1:9529`，由OP的Nginx提供HTTPS入口。Web管理accounts/devices、登录会话和设备授权文件；从正式成品目录的录音信息读取本人录音，提供完整WAV播放、VTT字幕和WAV/VTT/MD下载。
 
 Web不接触上传半成品，不领取音频job，不执行解码、转写、拼接或格式生成。Clip停止时，Web仍可读取已经发布的成品。
 
@@ -34,11 +34,11 @@ Web不接触上传半成品，不领取音频job，不执行解码、转写、�
 浏览器 → Nginx（HTTPS 443）→ Web Server → accounts / devices
 Web Server → 本机授权文件 → Clip Server验证设备
 设备 → Clip Server → Opus → 分段WAV → 分段转写
-Clip Server → 按recording合并 → 完整WAV + 完整VTT + 完整MD → 发布成品清单
-Web Server → 只读成品清单及文件 → 播放与下载
+Clip Server → 按recording合并 → 完整WAV + 完整VTT + 完整MD → 发布录音目录
+Web Server → 只读录音信息及文件 → 播放与下载
 ```
 
-两个服务通过本机文件交接授权和成品，不相互调用ASR接口。raw、录音状态、job和中间结果是Clip内部处理数据；Web只读取最终清单和其中引用的成品。两个角色各自单实例，不共享进程内连接或缓存。
+两个服务通过本机文件交接授权和成品，不相互调用ASR接口。raw、录音状态、job和中间结果是Clip内部处理数据；Web只读取正式recording目录的录音信息及完整成品。两个角色各自单实例，不共享进程内连接或缓存。
 
 <a id="architecture-guide"></a>
 
@@ -60,7 +60,7 @@ Web Server → 只读成品清单及文件 → 播放与下载
 | Opus解码 | 每个原始片段生成标准PCM WAV |
 | 内置转写与断句 | 中文为主夹少量英语，每句一行及匿名说话人 |
 | 整条录音合并 | 拼接PCM、统一字幕时间、生成完整VTT/MD |
-| 成品发布 | 一次发布同版本完整WAV/VTT/MD及清单 |
+| 成品发布 | 一次发布完整WAV/VTT/MD及录音信息 |
 | 设备报告与健康 | 遥测、队列和收件/处理状态 |
 
 ### 3.2 Web Server 模块
@@ -70,14 +70,14 @@ Web Server → 只读成品清单及文件 → 播放与下载
 | 启动与生命周期 | HTTP、数据库、会话和成品读取资源管理 |
 | 登录与用户 | Google OIDC、会话、CSRF和本人资料 |
 | 设备管理与授权发布 | 激活、BLE配置确认、解绑与本地授权文件发布 |
-| 成品目录与查询 | 只读最终清单，按owner列出完整录音 |
+| 成品目录与查询 | 读取正式目录的录音信息，按owner列出完整录音 |
 | 播放与下载 | 鉴权后读取已经生成的WAV、VTT和MD |
 | 用户与设备数据库 | 仅accounts/devices，显式初始化与迁移 |
 | Web页面 | 设备配置、完整录音播放器、字幕及下载 |
 
 ### 3.3 公共契约与边界
 
-公共契约定义授权文件、来源、job和成品清单的格式、版本与错误；基础能力提供配置、受控路径、文件锁和原子写入。公共模块不持有数据库连接、网络监听或模型资源。
+公共契约定义授权文件、来源、job和录音信息的格式、版本与错误；基础能力提供配置、受控路径、文件锁和原子写入。公共模块不持有数据库连接、网络监听或模型资源。
 
 Clip独占音频处理和成品写入；Web独占数据库和授权变更。请求入口不能绕过仓储直接修改业务状态。两个进程不导入对方的运行资源，跨进程只交换版本化文件。前端只使用API，不读取本地路径或设备凭证文件。
 
@@ -178,7 +178,7 @@ ready schema_version=1，包含source_id、device_id/device_uid、owner、bindin
 
 **输入与输出**：已验证来源及阶段结果 → 原子JSON和不可变产物引用。
 
-**处理流程与边界**：Clip为唯一写入方。录音是内部处理结果的提交点；job保存运行状态和预算。Web不读取recording/job/逐段转写，公开查询只看第4.11节的成品发布指针。
+**处理流程与边界**：Clip为唯一写入方。录音是内部处理结果的提交点；job保存运行状态和预算。Web不读取recording/job/逐段转写，公开查询只读第4.11节的正式成品目录。
 
 ```text
 /var/lib/speaker/
@@ -202,12 +202,10 @@ ready schema_version=1，包含source_id、device_id/device_uid、owner、bindin
     segments/                         # Clip分段WAV
     tmp/                              # Clip处理临时目录
     results/<recording_id>/
-      current.json                    # Clip发布指针，Web只读
-      revisions/<revision>/
-        recording.wav                 # 完整录音
-        transcript.vtt                # 完整字幕
-        transcript.md                 # 完整文本
-        manifest.json                 # 成品清单
+      recording.wav                   # 完整录音
+      transcript.vtt                  # 完整字幕
+      transcript.md                   # 完整文本
+      recording.json                  # 录音信息，Web只读
 ```
 
 上述都是同一本机文件系统中的目录，不要求独立卷，不设置复制/副本目录。
@@ -238,7 +236,7 @@ ready schema_version=1，包含source_id、device_id/device_uid、owner、bindin
       "last_asr_commit": {"job_id":"asr-seg-1","attempt_id":"attempt-a1"}
     }
   ],
-  "published_revision": null,
+  "published_at": null,
   "last_publish_commit": null
 }
 ```
@@ -285,7 +283,7 @@ stage为decode/asr/assemble/export/publish/repair；录音级阶段segment_id=nu
 
 阶段提交先发布/fsync不可变产物，再写recording的引用和执行提交标识，最后标job ready并补齐下一阶段。结果已提交而job仍running时，重启校验提交标识后补标ready；没有提交结果则保留次数退避重试。不凭临时文件存在猜测成功。
 
-成品发布指针是Web可见提交点：指针已发布而内部recording/job尚未标成功时，Clip校验相同revision/manifest/hash和发布执行标识，补齐内部状态，不重做识别或生成另一套文件。未发布指针的完整目录仍不对Web可见。
+正式recording目录的原子重命名是Web可见提交点。重命名前先在内部录音状态保存本次发布意图和冻结输入摘要；目录已出现而内部recording/job尚未标成功时，Clip核对该目录的录音信息、文件hash与内部发布意图，补齐状态，不重做识别或另存一套文件。残留临时目录不对Web可见；正式目录缺文件或内容不符则告警，不补猜为成功。
 
 WAV缺失可由repair job使用冻结配置从raw重建并核对预期hash，保留已提交文字；原件缺失或重建不同则停止相关阶段并告警。JSON损坏/未知版本不覆盖为空；保留现场交由OP或人工排查。上传续传和job对账是应用内断点处理，不是整机备份。
 
@@ -338,21 +336,23 @@ WAV按segment_no顺序流式读取各段的PCM data，验证一致的采样率/�
 
 VTT固定UTF-8、无BOM、LF和HH:MM:SS.mmm，转义&、<、>，匿名voice标记包含安全片段作用域；cue编号全局连续。MD使用固定模板，按同一全局句序输出每句一行，可带时间与匿名标签，转义原文HTML/Markdown控制字符。静音录音仍有完整WAV、合法空VTT和明确“未检测到语音”的MD；不是转写失败。
 
-VTT/MD单文件≤64MiB，清单≤1MiB；生成时检查体积和总句数，不静默截断。整条WAV超过HTTP文字导出限额仍正常支持流式播放/下载，不能套用64MiB上限。三者共享recording_id和revision，不能使用不同版本的音频与文字。
+VTT/MD单文件≤64MiB，成品录音信息≤1MiB；生成时检查体积和总句数，不静默截断。整条WAV超过HTTP文字导出限额仍正常支持流式播放/下载，不能套用64MiB上限。三个文件对应同一次冻结处理输入，不混用不同处理结果的音频和文字。
 
 ### 4.11 成品发布模块
 
-**职责**：将完整WAV、VTT和MD作为一个成品版本交给Web。
+**职责**：将完整WAV、VTT、MD及录音信息放入同一个recording目录，交给Web只读使用。
 
-**输入与输出**：已校验的三件套及内部执行凭据 → 不可变revision目录、manifest和原子current指针。
+**输入与输出**：已校验的三件套及录音信息 → `results/<recording_id>/`内的四个文件。
 
-**处理流程与边界**：先在同文件系统临时目录生成三件套，校验全文件hash、WAV格式/总样本及VTT时间范围；fsync文件和目录后发布不可变revision目录及manifest，再在短state锁内核对本次输入版本和执行代次，原子替换current.json并fsync父目录。重试复用同版本、同hash成品，不覆盖已发布文件。Web只能从current指针进入，不能扫描临时/revisions目录猜测可用文件。
+**处理流程与边界**：先在同一results父目录下的隐藏临时目录`.tmp-<recording_id>-<attempt_id>/`生成完整WAV、VTT、MD和`recording.json`，校验hash、总样本、字幕时间和身份。全部文件及临时目录fsync完成后，在短state锁内复核输入和执行代次，再将整个目录原子重命名为`results/<recording_id>/`并fsync父目录。Web忽略所有隐藏临时目录，只读取正式recording目录；目录出现时四个文件已经完整，不会读到半成品。
+
+一个recording只有一个正式目录，不设置版本子目录或发布指针。正式目录发布后只读；重复执行先核对同一recording的身份、冻结输入和文件hash，一致时幂等完成，不一致则报冲突，不逐个覆盖成品文件。
 
 ![完整录音成品交接](docs/assets/diagrams/04-raw-ingest-outbox.svg)
 
 #### 4.11.1 最终存放结构示例
 
-以`demo-user`的一条录音`rec-demo-20261102-001`为例：设备上传3段Opus，时长分别为300秒、300秒和42秒。Clip处理后合并为一条10分42秒的完整录音，发布revision=1。
+以`demo-user`的一条录音`rec-demo-20261102-001`为例：设备上传3段Opus，时长分别为300秒、300秒和42秒。Clip处理后合并为一条10分42秒的完整录音，发布为一个正式recording目录。
 
 ```text
 /var/lib/speaker/
@@ -386,46 +386,23 @@ VTT/MD单文件≤64MiB，清单≤1MiB；生成时检查体积和总句数，�
     │   └── seg-003.wav                          # 42秒
     ├── tmp/                                    # 处理临时文件，完成后清理
     └── results/rec-demo-20261102-001/            # Web唯一读取的录音目录
-        ├── current.json                        # 指向当前已发布revision
-        └── revisions/
-            └── 1/
-                ├── recording.wav               # 完整音频：10分42秒
-                ├── transcript.vtt              # 完整字幕：全局时间轴
-                ├── transcript.md               # 完整文字：每句一行
-                └── manifest.json               # 三件套身份、版本、size/hash
+        ├── recording.wav                       # 完整音频：10分42秒
+        ├── transcript.vtt                      # 完整字幕：全局时间轴
+        ├── transcript.md                       # 完整文字：每句一行
+        └── recording.json                      # owner、时长、完成状态、size/hash
 ```
 
-Web从`current.json`读取`manifest_ref`，再按manifest读取同版本的三个文件；不读取上面的raw、segments、recording或job。内部状态和中间文件不因成品发布立即删除，保留与清理仍按第4.4、4.8节执行。
+Web直接读取该目录的`recording.json`和三个成品文件；不读取上面的raw、segments、内部recording或job。内部状态和中间文件不因成品发布立即删除，保留与清理仍按第4.4、4.8节执行。
 
-#### 4.11.2 current.json与manifest.json示例
+#### 4.11.2 recording.json示例
 
-`current.json`中的`manifest_ref`相对于该recording的results目录；manifest中各artifact.path相对于所在revision目录，不是相对于进程工作目录。
-
-current.json：
+目录内的`recording.json`就是给Web读取的录音信息，保存归属、时长、完成状态和三个文件的size/hash；它与`state/recordings/<recording_id>/recording.json`内部处理状态不是同一文件。文件路径直接相对于当前recording目录。
 
 ```jsonc
 {
   "schema_version": 1,
   "recording_id": "rec-demo-20261102-001",
   "owner": "demo-user",
-  "revision": 1,
-  "manifest_ref": "revisions/1/manifest.json",
-  "manifest_sha256": "2fdcc82fbb3ce4266c16c1a5834b9324a4e279e90465386e908638e73ba95081",
-  "publish_commit": {
-    "job_id": "publish-rec-demo-20261102-001",
-    "attempt_id": "attempt-p1"
-  }
-}
-```
-
-manifest.json：
-
-```jsonc
-{
-  "schema_version": 1,
-  "recording_id": "rec-demo-20261102-001",
-  "owner": "demo-user",
-  "revision": 1,
   "state": "ready",
   "integrity": "confirmed_complete",
   "segment_count": 3,
@@ -433,7 +410,7 @@ manifest.json：
   "total_sample_count": 10272000,
   "duration_ms": 642000,
   "published_at": 1793584800000,
-  "artifacts": {
+  "files": {
     "wav": {
       "path": "recording.wav",
       "size_bytes": 20544044,
@@ -453,7 +430,7 @@ manifest.json：
 }
 ```
 
-这是文档示例，未附真实WAV或声称已完成ASR。WAV的sha256为占位值；VTT/MD的字节数及hash按下列UTF-8、无BOM、LF、末尾一个换行的示例正文计算，指针hash对应上方manifest JSON的两空格缩进及末尾换行。实际发布时用真实文件重新计算全部hash，不能使用占位值。
+这是文档示例，未附真实WAV或声称已完成ASR。WAV的sha256为占位值；VTT/MD的字节数及hash按下列UTF-8、无BOM、LF、末尾一个换行的示例正文计算。实际发布使用真实文件重新计算hash，不能使用占位值。
 
 最终WAV为16kHz、单声道PCM16：`(300 + 300 + 42) × 16000 = 10,272,000`个样本；标准44字节PCM WAV头时文件大小为`10,272,000 × 2 + 44 = 20,544,044`字节。
 
@@ -491,9 +468,9 @@ transcript.md：
 
 上例仅用三句话展示文件格式。第二段起点为05:00，第三段起点为10:00；VTT使用整条录音的时间，不在每段重新从零开始。`s001_A`、`s002_A`、`s003_A`分别对应片段1、2、3中的局部A，不能据此断言是同一个人。
 
-来源owner来自已验证收件，不查询accounts。设备后来解绑不改变历史成品归属。接收完成后的内部处理不重新要求旧设备凭证仍active，但不能据此接收新的撤销后来源。已发布revision不可变；维护性重建使用新revision，完整三件套通过后才切指针，旧成品继续可读。清理不删除任何当前指针、在途读取或处理引用的文件。
+来源owner来自已验证收件，不查询accounts。设备后来解绑不改变历史成品归属。接收完成后的内部处理不重新要求旧设备凭证仍active，但不能据此接收新的撤销后来源。正式成品目录不参与临时文件清理，本版不提供在线覆盖或多版本管理。
 
-![成品文件与发布指针提交](docs/assets/diagrams/06-file-database-publication.svg)
+![完整录音目录发布](docs/assets/diagrams/06-file-database-publication.svg)
 
 ### 4.12 设备报告与健康模块
 
@@ -795,7 +772,7 @@ GET `/devices` 返回 `{items:[设备对象]}`；POST `/devices/activate` 返回
 - 移除：撤销上传凭证；device_cleanup_pending 沿用现有维护确认；已上传录音保留原 owner
 - Wi-Fi：Clip 扫描 `{ssid,rssi,security}[]`，选择结果后经 BLE 写入密码，读取 saved/connected/error；密码在调用结束后清空
 - 设备能力：以真实 capability 为准；已保存网络最多 5 个，基线为 2.4 GHz WPA2
-- 请求管理：切换用户/数据时取消旧请求，退出清理音频和定时器；409 recording_revision_changed 时重新取版本
+- 请求管理：切换用户/数据时取消旧请求，退出清理音频和定时器；录音暂不可用时提示并重试读取
 - 轮询：录音可见 5 秒、设备可见 15 秒；隐藏后 30 秒，恢复可见立即刷新
 
 Clip Wi-Fi 扫描结果由 Web 的 BLE 适配层读取：
@@ -824,23 +801,20 @@ Clip Wi-Fi 扫描结果由 Web 的 BLE 适配层读取：
 
 **输入与输出**：当前会话、查询条件及成品指针 → 本人完整录音列表与详情。
 
-**处理流程与边界**：共享state锁内捕获current引用及revision，释放锁后受控打开不可变manifest和文件。校验schema、recording_id、owner、revision、manifest hash及三件套字段，拒绝根外路径、符号链接和非普通文件。列表仅返回state=ready且清单完整的成品；不存在current则未发布，不出现在列表，直接查询返回404 recording_not_found。
+**处理流程与边界**：扫描`results/`下的正式recording目录，忽略以`.`开头的临时目录。读取目录内`recording.json`，校验schema、recording_id、owner、state=ready，以及完整WAV/VTT/MD的固定文件名和size/hash信息；拒绝根外路径、符号链接和非普通文件。缺少目录时返回404 recording_not_found，缺少信息或文件时返回503 result_unavailable并告警，不把半成品加入列表。
 
-Web按会话用户过滤manifest.owner，并核验账号有效；不根据设备当前owner改写或过滤历史录音，不扫描raw/recordings/jobs生成内容。清单损坏或产物不可用返回503 result_unavailable并告警，不能转给Web自动修复、转码或重新生成。
-
-列表可使用可丢弃的内存缓存加速，但每次媒体请求重新鉴权并核对发布指针；缓存不是新数据库、结果索引文件或持久任务表。
+Web按会话用户过滤录音信息中的owner，并核验账号有效；不根据设备当前owner改写历史录音，不扫描raw、内部recordings或jobs。列表可以用可丢弃的内存缓存加速，每次媒体请求仍须重新鉴权，不另建录音表、持久索引或处理任务。
 
 ```jsonc
 {
   "recording_id": "rec-example",
-  "revision": 1,
   "state": "ready",
-  "duration_ms": 350000,
-  "published_at": 1793577600000,
+  "duration_ms": 642000,
+  "published_at": 1793584800000,
   "files": {
-    "wav": "/api/boa/v1/recordings/rec-example/audio.wav?revision=1",
-    "vtt": "/api/boa/v1/recordings/rec-example/transcript.vtt?revision=1",
-    "md": "/api/boa/v1/recordings/rec-example/transcript.md?revision=1"
+    "wav": "/api/boa/v1/recordings/rec-example/audio.wav",
+    "vtt": "/api/boa/v1/recordings/rec-example/transcript.vtt",
+    "md": "/api/boa/v1/recordings/rec-example/transcript.md"
   }
 }
 ```
@@ -849,21 +823,21 @@ Web按会话用户过滤manifest.owner，并核验账号有效；不根据设备
 
 **职责**：鉴权后读取现成WAV/VTT/MD字节，提供整条录音播放和下载。
 
-**输入与输出**：当前用户、recording_id、revision、媒体范围 → 预生成文件流。
+**输入与输出**：当前用户、recording_id、媒体范围 → 对应正式目录内的预生成文件流。
 
-**处理流程与边界**：GET/HEAD均检查会话和owner、确认revision与已捕获成品版本一致。不同revision返回409 recording_revision_changed，前端重新获取详情；已经打开的旧版本文件句柄允许读完，不混用新旧音频/字幕。Web不序列化字幕、拼接文件、转写或生成Markdown。
+**处理流程与边界**：GET/HEAD均检查会话和录音owner，读取同一recording目录的固定成品。目录发布后只读，不需要版本查询参数或文件切换指针。Web不序列化字幕、拼接文件、转写或生成Markdown。
 
 - GET `/recordings`：from/to/cursor/limit，返回本人已发布完整成品。
-- GET `/recordings/{id}`：返回成品详情及同revision三件套URL。
-- GET/HEAD `/recordings/{id}/audio.wav?revision=N`：完整WAV，支持单范围Range及下载。
-- GET/HEAD `/recordings/{id}/transcript.vtt?revision=N`：读取完整VTT，可作为播放器字幕或下载。
-- GET/HEAD `/recordings/{id}/transcript.md?revision=N`：读取完整Markdown并作为附件下载。
+- GET `/recordings/{id}`：返回录音信息和三件套URL。
+- GET/HEAD `/recordings/{id}/audio.wav`：完整WAV，支持单范围Range及下载。
+- GET/HEAD `/recordings/{id}/transcript.vtt`：读取完整VTT，可作为播放器字幕或下载。
+- GET/HEAD `/recordings/{id}/transcript.md`：读取完整Markdown并作为附件下载。
 
-WAV支持bytes=start-end、start-和-suffix，裁剪end到文件长度；非法/越界416并返回`Content-Range: bytes */size`，多范围退回整文件200。HEAD忽略Range、空body。VTT/MD忽略Range，GET与HEAD使用同一实际文件大小及hash；不因HEAD而触发处理。
+WAV支持bytes=start-end、start-和-suffix，裁剪end到文件长度；非法/越界416并返回`Content-Range: bytes */size`，多范围退回整文件200。HEAD忽略Range、空body。VTT/MD忽略Range，GET与HEAD使用同一文件大小和hash；不因HEAD触发处理。
 
-受控打开同一文件句柄验证类型、size后流式读取；hash由Clip在发布前全量校验，Web校验manifest及文件不可变性，发现内容校验异常则停止读取。ETag为成品文件SHA-256；返回X-Recording-Revision、private,no-store和nosniff，附件名称由服务端生成。每owner最多4个并发媒体请求，超额429及Retry-After: 1。
+受控打开同一文件句柄验证类型、size后流式读取；hash由Clip发布前全量校验，Web发现内容异常则停止读取。ETag使用文件SHA-256；响应设private,no-store和nosniff，附件名称由服务端生成。每owner最多4个并发媒体请求，超额429及Retry-After: 1。
 
-前端使用一个完整WAV播放器和同revision的VTT，不切换分段音频。文字按VTT句子显示，使用textContent；下载直接读取对应预生成文件。设备配置与录音页面分离；未发布/失败录音不在成品列表中伪装ready，处理告警归Clip和OP观察。
+前端直接播放该recording目录的完整WAV并加载完整VTT，文字用textContent显示；下载读取现成文件。Web不切换分段音频，不处理内部job，也不展示尚未发布的录音。
 
 <a id="sql"></a>
 <a id="business-sql"></a>
@@ -939,7 +913,7 @@ firmware/capabilities/telemetry 来自已验证的 Clip 上报，Web 可将最�
 | 设备授权及凭证材料 | Web设备用例/受控部署 | Clip只读，Web对账 |
 | progress、ready、session-events、raw | Clip | Clip内部处理 |
 | recording/job、逐段转写、分段WAV | Clip | Clip内部处理 |
-| 完整WAV/VTT/MD、manifest和current | Clip | Web只读成品，Clip对账 |
+| 完整WAV/VTT/MD及成品recording.json | Clip | Web只读成品，Clip对账 |
 | device-reports | Clip | Web设备遥测及OP |
 | status/clip.json、status/web.json | 各自进程 | OP观察 |
 
@@ -949,13 +923,13 @@ firmware/capabilities/telemetry 来自已验证的 Clip 上报，Web 可将最�
 
 每角色持固定instance.lock，短时元数据提交共用固定state.lock，并配合各进程mutex。锁inode不删除或替换；不能锁随后被rename的业务JSON。JSON用同目录临时文件→fsync→原子替换→fsync父目录；耗时音频I/O、模型、hash和数据库等待不占state锁。
 
-统一锁顺序为角色锁→Web设备配置mutex（如涉及授权）→本进程state mutex→state flock。Web配置mutex覆盖deny-first文件/SQL流程；SQLite短事务与文件发布不冒充跨存储原子事务。Clip内部结果提交用attempt_id/generation/输入hash拒绝旧执行，最终以current指针发布同版本三件套。
+统一锁顺序为角色锁→Web设备配置mutex（如涉及授权）→本进程state mutex→state flock。Web配置mutex覆盖deny-first文件/SQL流程；SQLite短事务与文件发布不冒充跨存储原子事务。Clip内部结果提交用attempt_id/generation/输入hash拒绝旧执行，最终将包含完整三件套和录音信息的目录原子发布。
 
 ### 6.3 数据契约与版本
 
-授权/来源/recording/job/manifest各自维护schema_version，SQLite用user_version；未知必填版本拒绝处理，不猜字段。所有时间统一UTC毫秒，音频内部偏移优先使用整数样本数。文件引用均为受控根下相对路径，不接收任意绝对路径、URL或模型位置。
+授权/来源/recording/job及成品录音信息各自维护schema_version，SQLite用user_version；未知必填版本拒绝处理，不猜字段。所有时间统一UTC毫秒，音频内部偏移优先使用整数样本数。文件引用均为受控根下相对路径，不接收任意绝对路径、URL或模型位置。
 
-接口分工：AuthorizationReader验证身份；RecordingRepository/JobRepository在Clip保存内部状态；Decoder/Transcriber/RecordingAssembler/ResultPublisher在Clip处理并发布；PublishedResultReader在Web读取manifest；MediaReader仅打开已授权的成品。模块间通过明确数据契约协作，不传递底层网络/数据库连接。
+接口分工：AuthorizationReader验证身份；RecordingRepository/JobRepository在Clip保存内部状态；Decoder/Transcriber/RecordingAssembler/ResultPublisher在Clip处理并发布；PublishedResultReader在Web读取成品录音信息；MediaReader仅打开已授权的成品。模块间通过明确数据契约协作，不传递底层网络/数据库连接。
 
 <a id="web-api"></a>
 
@@ -1070,13 +1044,13 @@ Web提供`/api/boa/v1/health`，只报告自身及成品目录读取状态；不
 
 Web验证Google身份和当前账号状态，设备配置使用deny-first文件/SQL流程。Clip验证设备身份、owner、绑定及epoch，在握手、续传和原件最终接受前复核授权；不能用旧连接绕过撤销。不查询数据库或要求来源表，已接受录音的owner固定，设备换绑不转移旧结果。
 
-成品列表、GET、HEAD、Range、字幕和附件每次核验会话和manifest.owner。前端状态、URL中的recording_id、设备当前归属都不能替代成品授权。设备凭证只在受保护配置页短暂用于BLE，不写入localStorage、URL、日志或成品。
+成品列表、GET、HEAD、Range、字幕和附件每次核验会话和成品录音信息中的owner。前端状态、URL中的recording_id、设备当前归属都不能替代成品授权。设备凭证只在受保护配置页短暂用于BLE，不写入localStorage、URL、日志或成品。
 
 ### 8.2 文件路径与并发
 
-所有引用以服务端生成ID及受控相对路径表示，通过根目录句柄逐级打开，拒绝根外路径、符号链接、非普通文件和任意URL。检查和读取使用同一文件句柄。JSON和manifest严格限制体积与版本；未知字段/版本按契约拒绝，不猜owner。
+所有引用以服务端生成ID及受控相对路径表示，通过根目录句柄逐级打开，拒绝根外路径、符号链接、非普通文件和任意URL。检查和读取使用同一文件句柄。JSON及成品录音信息严格限制体积与格式版本；未知字段/版本按契约拒绝，不猜owner。
 
-短时文件锁只解决并发，不替代fsync、原子发布或SQLite事务。大文件在锁外校验和生成，提交时核对执行代次和输入版本。Web不写录音/job、不生成导出；Clip不连接数据库。完整三件套全部持久化后才切current，避免浏览器读到只有音频或只有字幕的版本。
+短时文件锁只解决并发，不替代fsync、原子发布或SQLite事务。大文件在锁外校验和生成，提交时核对执行代次和输入版本。Web不写录音/job、不生成导出；Clip不连接数据库。完整三件套和录音信息全部持久化后才原子发布整个目录，避免浏览器读到只有音频或只有字幕的版本。
 
 ### 8.3 不可信音频与模型输出
 
@@ -1092,7 +1066,7 @@ DTLS有界连接/握手缓存，默认全局32个上传、每设备1个。片段
 
 ### 8.5 秘密、日志与OP边界
 
-Google秘密仅Web读取，DTLS私钥及模型仅Clip读取，HTTPS私钥由OP的Nginx管理；设备校验材料按角色授权。秘密不放入ready、job、manifest、源码、命令行或journal。日志排除Cookie、token、Wi-Fi密码、原始录音及转写正文。
+Google秘密仅Web读取，DTLS私钥及模型仅Clip读取，HTTPS私钥由OP的Nginx管理；设备校验材料按角色授权。秘密不放入ready、job、成品录音信息、源码、命令行或journal。日志排除Cookie、token、Wi-Fi密码、原始录音及转写正文。
 
 ![文件与服务访问边界](docs/assets/diagrams/07-storage-security.svg)
 
