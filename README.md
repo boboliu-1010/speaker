@@ -101,15 +101,7 @@ owner来自已验证授权，Web读取时来自登录会话。不同用户、不
 
 录音等待收齐时为`waiting_files`，转码/ASR及合并时为`processing`，发布时为`publishing`；正式成品目录发布后为`completed`，本录音处理结束。等待不算执行次数，重启复用成功结果；这些均为Server任务状态。
 
-成品目录示例，根目录由配置决定：
-
-```text
-${SPEAKER_DATA_ROOT}/users/demo-user/clips/demo-device/recordings/rec-demo-20261102-001/
-├── recording.wav
-├── transcript.vtt
-├── transcript.md
-└── recording.json
-```
+成品目录见第4.6节。
 
 recording.json只含录音ID、归属、开始时间（UTC毫秒）和完整时长（毫秒）；缺少设备时间时用首段接收时间：
 
