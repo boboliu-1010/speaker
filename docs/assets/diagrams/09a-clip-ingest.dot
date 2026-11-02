@@ -1,0 +1,14 @@
+digraph G {
+graph [rankdir=LR, bgcolor="white", pad="0.35", nodesep="0.4", ranksep="0.55", splines=line, fontname="PingFang SC", fontsize=23, labelloc=t, label="Clip Server · 设备接入与录音聚合"];
+node [shape=box, style="rounded,filled", fillcolor="#267bb9", color="#2366a0", fontcolor=white, fontname="PingFang SC", fontsize=17, margin="0.22,0.18"];
+edge [fontname="PingFang SC", fontsize=13, color="#53667c", fontcolor="#34465d", arrowsize=0.85];
+n0 [width=2.85, label="DTLS与协议 §4.2\n解析上传 / 结束消息"];
+n1 [width=3.21, label="身份验证 §4.3\n授权 / owner / epoch"];
+n2 [width=3.26, label="原件收件 §4.4\n容量预留 / 续传 / 校验"];
+n3 [width=3.16, label="录音聚合 §4.5\n段号 / 最终N / 完整性"];
+n4 [width=3.31, label="文件仓储 §4.6\nrecording / 待处理job"];
+n0 -> n1 [label="校验消息"];
+n1 -> n2 [label="已验证身份"];
+n2 -> n3 [label="完整raw / ready及声明"];
+n3 -> n4 [label="聚合状态 / 创建任务"];
+}

@@ -1,0 +1,12 @@
+digraph G {
+graph [rankdir=LR, bgcolor="white", pad="0.35", nodesep="0.4", ranksep="0.55", splines=line, fontname="PingFang SC", fontsize=23, labelloc=t, label="Clip Server · 单个片段的处理顺序"];
+node [shape=box, style="rounded,filled", fillcolor="#267bb9", color="#2366a0", fontcolor=white, fontname="PingFang SC", fontsize=17, margin="0.22,0.18"];
+edge [fontname="PingFang SC", fontsize=13, color="#53667c", fontcolor="#34465d", arrowsize=0.85];
+n0 [width=3.26, label="任务调度 §4.7\n领取 / 重试 / 执行代次"];
+n1 [width=2.96, label="Opus解码 §4.8\n原始片段 → PCM WAV"];
+n2 [width=3.50, label="内置转写 §4.9\n模型 / 断句 / 匿名说话人"];
+n3 [width=3.26, label="结果提交 §4.6–4.7\n片段结果 / job提交标识"];
+n0 -> n1 [label="执行当前片段"];
+n1 -> n2 [label="已验证分段WAV"];
+n2 -> n3 [label="文字 / 时间戳 / 样本数"];
+}

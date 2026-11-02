@@ -85,8 +85,6 @@ Clip独占音频处理和成品写入；Web独占数据库和授权变更。请�
 
 ## 4. Clip Server 模块说明
 
-![Clip Server模块调用关系](docs/assets/diagrams/09-clip-components.svg)
-
 ### 4.1 启动与生命周期模块
 
 **职责**：组装收件、文件仓储、后台调度、解码执行器和内置模型，管理一个Clip实例。
@@ -98,6 +96,8 @@ Clip独占音频处理和成品写入；Web独占数据库和授权变更。请�
 SIGTERM先停止新连接和job领取，保存已确认进度、取消排队任务，再等待正在执行的解码/推理/合并。释放角色锁前必须确认旧执行不能再提交；默认停机窗口45秒，OP托管器超时终止整个进程组。Clip崩溃后按持久job预算恢复，不重跑已提交识别结果。
 
 ### 4.2 DTLS与协议模块
+
+![设备接入与录音聚合](docs/assets/diagrams/09a-clip-ingest.svg)
 
 **职责**：处理既有固件的DTLS连接及v3协议，将有界网络输入转换为已验证消息。
 
@@ -271,6 +271,8 @@ stage为decode/asr/assemble/export/publish/repair；录音级阶段segment_id=nu
 
 ### 4.7 调度、重试与中断对账模块
 
+![单个片段的处理顺序](docs/assets/diagrams/09b-clip-processing.svg)
+
 **职责**：在Clip进程内按依赖执行处理链，失败只重试相应阶段。
 
 **输入与输出**：ready来源、内部recording/job → 分段结果及可发布成品。
@@ -321,6 +323,8 @@ A/B/C仅表示匿名说话人，不做姓名识别。首版沿用片段内聚类
 此前短音频测试仅证明候选组合能运行；300秒输入、中英混合、多人切换和最终长录音仍须真实样本验收，不用模型名代替准确率或吞吐保证。
 
 ### 4.10 整条录音合并与格式生成模块
+
+![整条录音合并与成品交接](docs/assets/diagrams/09c-clip-publication.svg)
 
 **职责**：从完整recording的成功片段生成一个连续WAV和同时间轴的完整VTT、MD。
 
