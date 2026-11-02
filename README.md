@@ -89,15 +89,6 @@ ${SPEAKER_DATA_ROOT}/
 
 owner来自已验证授权，Web读取时来自登录会话。不同用户、不同Clip分别隔离；设备换绑不搬迁旧文件，也不改变旧录音权限。
 
-ID示例：
-
-```text
-owner        = demo-user
-device_id    = demo-device
-recording_id = rec-demo-20261102-001
-segment_no   = 1
-```
-
 ### 4.7 调度与重试
 
 ![片段处理模块调用关系](docs/assets/diagrams/09b-clip-processing.svg)
