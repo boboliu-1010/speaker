@@ -3,7 +3,7 @@
 <rect width="1280" height="100%" fill="white"/>
 <g font-family="PingFang SC,Microsoft YaHei,Noto Sans CJK SC,Arial,sans-serif">
 <text x="40" y="55" font-size="30" font-weight="600" fill="#17283f">原件导入</text>
-<text x="40" y="88" font-size="17" font-weight="400" fill="#607088">读取 ready 来源，校验原件和归属，写入业务记录后标记导入完成。</text>
+<text x="40" y="88" font-size="17" font-weight="400" fill="#607088">读取 ready 来源，原件及来源描述两盘校验成功后，再提交业务记录。</text>
 <line x1="40" y1="112" x2="1240" y2="112" stroke="#d8e0ea" stroke-width="1.5"/>
 <rect x="40" y="150" width="760" height="738" rx="8" fill="white" stroke="#d8e0ea"/>
 <text x="62" y="189" font-size="23" font-weight="600" fill="#17283f">registry.sources · 已就绪原件的来源记录</text>
@@ -42,15 +42,16 @@
 <text x="862" y="276" font-size="18" font-weight="400" fill="#607088">原件已由接入组件可靠保存</text>
 <rect x="840" y="334" width="400" height="140" rx="8" fill="white" stroke="#d8e0ea"/>
 <rect x="840" y="334" width="5" height="140" rx="0" fill="#245cca" stroke="#245cca"/>
-<text x="862" y="368" font-size="21" font-weight="600" fill="#17283f">2 · 校验原件与归属</text>
-<text x="862" y="404" font-size="18" font-weight="400" fill="#607088">验证文件存在、类型、大小和 hash</text>
-<text x="862" y="432" font-size="18" font-weight="400" fill="#607088">异常保留来源，暂不创建业务片段</text>
+<text x="862" y="368" font-size="21" font-weight="600" fill="#17283f">2 · 校验并保存两盘</text>
+<text x="862" y="404" font-size="18" font-weight="400" fill="#607088">校验文件、归属与账户恢复信息</text>
+<text x="862" y="432" font-size="18" font-weight="400" fill="#607088">raw 与来源描述分别写入两盘</text>
+<text x="862" y="460" font-size="18" font-weight="400" fill="#607088">两盘 fsync、hash 通过才继续导入</text>
 <rect x="840" y="500" width="400" height="178" rx="8" fill="white" stroke="#d8e0ea"/>
 <rect x="840" y="500" width="5" height="178" rx="0" fill="#087f74" stroke="#087f74"/>
-<text x="862" y="534" font-size="21" font-weight="600" fill="#17283f">3 · 后台导入业务库</text>
+<text x="862" y="534" font-size="21" font-weight="600" fill="#17283f">3 · 提交业务记录</text>
 <text x="862" y="570" font-size="18" font-weight="400" fill="#607088">binding 映射为片段 source_namespace</text>
 <text x="862" y="598" font-size="18" font-weight="400" fill="#607088">id 映射为片段 source_id</text>
-<text x="862" y="626" font-size="18" font-weight="400" fill="#607088">同一事务保存原件并递增内容版本</text>
+<text x="862" y="626" font-size="18" font-weight="400" fill="#607088">两盘就绪后提交并递增内容版本</text>
 <text x="862" y="654" font-size="18" font-weight="400" fill="#607088">重复导入同一来源不再增加版本</text>
 <rect x="840" y="704" width="400" height="184" rx="8" fill="white" stroke="#d8e0ea"/>
 <rect x="840" y="704" width="5" height="184" rx="0" fill="#245cca" stroke="#245cca"/>

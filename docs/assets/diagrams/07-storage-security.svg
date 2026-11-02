@@ -35,7 +35,7 @@
 <text x="62" y="520" font-size="18" font-weight="400" fill="#607088">raw / 来源描述 / WAV 各有副盘副本</text>
 <text x="62" y="548" font-size="18" font-weight="400" fill="#607088">两个 SQLite 库仅在主盘在线运行</text>
 <text x="62" y="576" font-size="18" font-weight="400" fill="#607088">文件两盘校验成功后提交业务索引</text>
-<text x="62" y="604" font-size="18" font-weight="400" fill="#607088">数据库关键提交申请更新检查点</text>
+<text x="62" y="604" font-size="18" font-weight="400" fill="#607088">检查点只有一个定时生成任务</text>
 <text x="62" y="632" font-size="18" font-weight="400" fill="#607088">由专用服务账号访问加密数据卷</text>
 <text x="62" y="660" font-size="18" font-weight="400" fill="#607088">目录权限 0700，文件权限 0600</text>
 <text x="62" y="688" font-size="18" font-weight="400" fill="#607088">文件位于 Web 静态目录之外</text>
@@ -56,9 +56,9 @@
 <text x="882" y="484" font-size="21" font-weight="600" fill="#17283f">副本盘 · 文件与恢复点</text>
 <text x="882" y="520" font-size="18" font-weight="400" fill="#607088">raw / 来源描述 / WAV 保持第二份</text>
 <text x="882" y="548" font-size="18" font-weight="400" fill="#607088">SQLite backup API 生成数据库检查点</text>
-<text x="882" y="576" font-size="18" font-weight="400" fill="#607088">默认每 60 秒检查待同步的数据库</text>
-<text x="882" y="604" font-size="18" font-weight="400" fill="#607088">关键提交后立即申请更新检查点</text>
-<text x="882" y="632" font-size="18" font-weight="400" fill="#607088">至少保留两份验证成功检查点</text>
+<text x="882" y="576" font-size="18" font-weight="400" fill="#607088">启动先生成，此后每 60 秒检查</text>
+<text x="882" y="604" font-size="18" font-weight="400" fill="#607088">新成功点发布后才淘汰旧检查点</text>
+<text x="882" y="632" font-size="18" font-weight="400" fill="#607088">保留最近两份验证成功检查点</text>
 <text x="882" y="660" font-size="18" font-weight="400" fill="#607088">每日完整版本备份保留最近 7 份</text>
 <text x="882" y="688" font-size="18" font-weight="400" fill="#607088">默认 backups/ 同盘，仅保护单盘故障</text>
 <text x="882" y="716" font-size="18" font-weight="400" fill="#607088">双盘损坏须另有第三处或离线备份</text>

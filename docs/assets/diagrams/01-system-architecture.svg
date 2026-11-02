@@ -98,9 +98,9 @@
 <rect x="860" y="1095" width="380" height="255" rx="8" fill="white" stroke="#d8e0ea"/>
 <rect x="860" y="1095" width="5" height="255" rx="0" fill="#087f74" stroke="#087f74"/>
 <text x="882" y="1129" font-size="21" font-weight="600" fill="#17283f">双盘文件存储</text>
-<text x="882" y="1165" font-size="18" font-weight="400" fill="#607088">PRIMARY_ROOT：主盘文件与在线数据库</text>
-<text x="882" y="1193" font-size="18" font-weight="400" fill="#607088">REPLICA_ROOT：原件、WAV 与检查点</text>
-<text x="882" y="1221" font-size="18" font-weight="400" fill="#607088">VTT / Markdown：从 JSON 即时生成</text>
-<text x="882" y="1249" font-size="18" font-weight="400" fill="#607088">两根目录须为独立磁盘或存储卷</text>
+<text x="882" y="1165" font-size="18" font-weight="400" fill="#607088">SPEAKER_PRIMARY_ROOT：主盘</text>
+<text x="882" y="1193" font-size="18" font-weight="400" fill="#607088">SPEAKER_REPLICA_ROOT：副本盘</text>
+<text x="882" y="1221" font-size="18" font-weight="400" fill="#607088">SPEAKER_BACKUP_ROOT：每日版本备份</text>
+<text x="882" y="1249" font-size="18" font-weight="400" fill="#607088">两盘独立，数据库只在主盘在线</text>
 </g>
 </svg>

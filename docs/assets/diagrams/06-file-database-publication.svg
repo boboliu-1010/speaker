@@ -57,9 +57,10 @@
 <text x="62" y="808" font-size="18" font-weight="400" fill="#607088">字幕由已提交 JSON 生成，不单独保存文件。</text>
 <rect x="655" y="710" width="585" height="145" rx="8" fill="white" stroke="#d8e0ea"/>
 <rect x="655" y="710" width="5" height="145" rx="0" fill="#087f74" stroke="#087f74"/>
-<text x="677" y="744" font-size="21" font-weight="600" fill="#17283f">文件缺失或损坏</text>
-<text x="677" y="780" font-size="18" font-weight="400" fill="#607088">优先从另一盘校验后恢复，两份均丢失才从 raw 重建。</text>
-<text x="677" y="808" font-size="18" font-weight="400" fill="#607088">恢复两盘副本后更新索引，保留已有文字与时间区间。</text>
+<text x="677" y="744" font-size="21" font-weight="600" fill="#17283f">单个 WAV 损坏，两盘仍健康</text>
+<text x="677" y="780" font-size="18" font-weight="400" fill="#607088">先从另一盘恢复，否则从 raw 重建；保留识别文字。</text>
+<text x="677" y="808" font-size="18" font-weight="400" fill="#607088">整盘故障暂停业务写入，离线维护只写替换盘。</text>
+<text x="677" y="836" font-size="18" font-weight="400" fill="#607088">两盘校验并生成成功检查点后，再恢复服务。</text>
 <rect x="40" y="895" width="1200" height="125" rx="8" fill="#f3f6fa" stroke="#d8e0ea"/>
 <text x="62" y="932" font-size="23" font-weight="600" fill="#17283f">部分结果与运行限制</text>
 <text x="62" y="970" font-size="19" font-weight="400" fill="#17283f">partial 描述快照缺口；result_stale 表示还有新内容；单进程单工作者禁止多机并行运行。</text>
