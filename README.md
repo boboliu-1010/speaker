@@ -350,34 +350,146 @@ VTT/MD单文件≤64MiB，清单≤1MiB；生成时检查体积和总句数，�
 
 ![完整录音成品交接](docs/assets/diagrams/04-raw-ingest-outbox.svg)
 
+#### 4.11.1 最终存放结构示例
+
+以`demo-user`的一条录音`rec-demo-20261102-001`为例：设备上传3段Opus，时长分别为300秒、300秒和42秒。Clip处理后合并为一条10分42秒的完整录音，发布revision=1。
+
+```text
+/var/lib/speaker/
+├── state/                                      # Clip内部处理状态
+│   ├── sources/ready/
+│   │   ├── source-001.json
+│   │   ├── source-002.json
+│   │   └── source-003.json
+│   ├── session-events/<session_key>/
+│   │   └── <event_id>.json                      # 录完声明：final_segment_no=3
+│   ├── recordings/rec-demo-20261102-001/
+│   │   ├── recording.json                      # 最终state=published
+│   │   └── transcripts/
+│   │       ├── seg-001.json                     # 片段内时间戳
+│   │       ├── seg-002.json
+│   │       └── seg-003.json
+│   └── jobs/
+│       ├── decode-seg-001.json                  # 同样有seg-002、seg-003任务
+│       ├── asr-seg-001.json
+│       ├── assemble-rec-demo-20261102-001.json
+│       ├── export-rec-demo-20261102-001.json
+│       └── publish-rec-demo-20261102-001.json
+└── audio/
+    ├── raw/
+    │   ├── object-001.opus                      # 原始包格式，不是Ogg
+    │   ├── object-002.opus
+    │   └── object-003.opus
+    ├── segments/
+    │   ├── seg-001.wav                          # 300秒
+    │   ├── seg-002.wav                          # 300秒
+    │   └── seg-003.wav                          # 42秒
+    ├── tmp/                                    # 处理临时文件，完成后清理
+    └── results/rec-demo-20261102-001/            # Web唯一读取的录音目录
+        ├── current.json                        # 指向当前已发布revision
+        └── revisions/
+            └── 1/
+                ├── recording.wav               # 完整音频：10分42秒
+                ├── transcript.vtt              # 完整字幕：全局时间轴
+                ├── transcript.md               # 完整文字：每句一行
+                └── manifest.json               # 三件套身份、版本、size/hash
+```
+
+Web从`current.json`读取`manifest_ref`，再按manifest读取同版本的三个文件；不读取上面的raw、segments、recording或job。内部状态和中间文件不因成品发布立即删除，保留与清理仍按第4.4、4.8节执行。
+
+#### 4.11.2 current.json与manifest.json示例
+
+`current.json`中的`manifest_ref`相对于该recording的results目录；manifest中各artifact.path相对于所在revision目录，不是相对于进程工作目录。
+
+current.json：
+
 ```jsonc
 {
   "schema_version": 1,
-  "recording_id": "rec-example",
+  "recording_id": "rec-demo-20261102-001",
   "owner": "demo-user",
   "revision": 1,
   "manifest_ref": "revisions/1/manifest.json",
-  "manifest_sha256": "example-manifest-hash",
-  "publish_commit": {"job_id":"publish-rec-example","attempt_id":"attempt-p1"}
+  "manifest_sha256": "2fdcc82fbb3ce4266c16c1a5834b9324a4e279e90465386e908638e73ba95081",
+  "publish_commit": {
+    "job_id": "publish-rec-demo-20261102-001",
+    "attempt_id": "attempt-p1"
+  }
 }
 ```
 
-manifest采用相同身份和revision，state固定ready，包含完整性依据、total_sample_count、duration_ms、sample_rate=16000、发布时刻及三件套的受控相对路径、size_bytes、sha256。三个artifact全部必填，不能把缺少VTT或MD的版本标ready。
+manifest.json：
 
 ```jsonc
 {
   "schema_version": 1,
-  "recording_id": "rec-example", "owner": "demo-user", "revision": 1,
-  "state": "ready", "integrity": "confirmed_complete", "segment_count": 2,
-  "sample_rate": 16000, "total_sample_count": 5600000, "duration_ms": 350000,
-  "published_at": 1793577600000,
+  "recording_id": "rec-demo-20261102-001",
+  "owner": "demo-user",
+  "revision": 1,
+  "state": "ready",
+  "integrity": "confirmed_complete",
+  "segment_count": 3,
+  "sample_rate": 16000,
+  "total_sample_count": 10272000,
+  "duration_ms": 642000,
+  "published_at": 1793584800000,
   "artifacts": {
-    "wav": {"path":"recording.wav","size_bytes":11200044,"sha256":"example-wav-hash"},
-    "vtt": {"path":"transcript.vtt","size_bytes":320,"sha256":"example-vtt-hash"},
-    "md": {"path":"transcript.md","size_bytes":280,"sha256":"example-md-hash"}
+    "wav": {
+      "path": "recording.wav",
+      "size_bytes": 20544044,
+      "sha256": "<实际完整WAV的SHA-256>"
+    },
+    "vtt": {
+      "path": "transcript.vtt",
+      "size_bytes": 248,
+      "sha256": "3bc1838edff0120cfe653ad62d8fd3de08b517e5979dfb9d59d5717ad81235f4"
+    },
+    "md": {
+      "path": "transcript.md",
+      "size_bytes": 237,
+      "sha256": "5a5cbbf7e5296e7703d764b566b250c91fa34474762a8ac62b271930eb6f4d36"
+    }
   }
 }
 ```
+
+这是文档示例，未附真实WAV或声称已完成ASR。WAV的sha256为占位值；VTT/MD的字节数及hash按下列UTF-8、无BOM、LF、末尾一个换行的示例正文计算，指针hash对应上方manifest JSON的两空格缩进及末尾换行。实际发布时用真实文件重新计算全部hash，不能使用占位值。
+
+最终WAV为16kHz、单声道PCM16：`(300 + 300 + 42) × 16000 = 10,272,000`个样本；标准44字节PCM WAV头时文件大小为`10,272,000 × 2 + 44 = 20,544,044`字节。
+
+#### 4.11.3 完整VTT与MD示例
+
+transcript.vtt：
+
+```vtt
+WEBVTT
+
+1
+00:00:00.800 --> 00:00:04.200
+<v s001_A>我们先确认今天的录音流程。</v>
+
+2
+00:05:00.300 --> 00:05:03.500
+<v s002_A>Next, we review the results.</v>
+
+3
+00:10:40.200 --> 00:10:41.500
+<v s003_A>这次录音到这里结束。</v>
+```
+
+transcript.md：
+
+```markdown
+# 录音：rec-demo-20261102-001
+
+时长：00:10:42
+
+[00:00:00.800] 片段1·A：我们先确认今天的录音流程。
+[00:05:00.300] 片段2·A：Next, we review the results.
+[00:10:40.200] 片段3·A：这次录音到这里结束。
+```
+
+上例仅用三句话展示文件格式。第二段起点为05:00，第三段起点为10:00；VTT使用整条录音的时间，不在每段重新从零开始。`s001_A`、`s002_A`、`s003_A`分别对应片段1、2、3中的局部A，不能据此断言是同一个人。
 
 来源owner来自已验证收件，不查询accounts。设备后来解绑不改变历史成品归属。接收完成后的内部处理不重新要求旧设备凭证仍active，但不能据此接收新的撤销后来源。已发布revision不可变；维护性重建使用新revision，完整三件套通过后才切指针，旧成品继续可读。清理不删除任何当前指针、在途读取或处理引用的文件。
 
