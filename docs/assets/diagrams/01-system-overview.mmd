@@ -10,6 +10,7 @@ C4Container
         ContainerDb(files, "本机文件系统", "同一文件系统，按用户与Clip隔离", "用户 / Clip / recording ID确定目录位置\n完整WAV / VTT / MD及录音信息\nClip负责处理和发布；Web只读成品、写设备授权")
         ContainerDb(database, "用户与设备数据库", "SQLite", "accounts / devices 两张表\n仅 Web Server 访问")
     }
+    Rel(user, device, "本地读取与配置", "BLE / AT")
     Rel(user, nginx, "使用网页和 API", "HTTPS / TCP 443")
     Rel(nginx, web, "反向代理", "HTTP / 127.0.0.1:9529")
     Rel(device, clip, "上传 Opus 与录完声明", "DTLS / UDP 9528")
@@ -26,6 +27,7 @@ C4Container
     %% @position files 130 1160 860 240
     %% @position database 1080 1240 370 175
     %% @boundary 40 540 1430 1010
+    %% @route user device 1162,185 600,185 | 830 150 300
     %% @route user nginx 1205,280 1205,330 | 1510 285 400
     %% @route nginx web 1205,470 1205,660 | 1205 575 370
     %% @route device clip 365,260 365,660 | 365 470 400

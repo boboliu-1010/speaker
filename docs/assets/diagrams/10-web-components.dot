@@ -13,7 +13,7 @@ subgraph cluster_1 { label="设备与授权"; color="#d1dce8"; style=rounded; fo
 device_api [width=3.34, label="请求校验\n会话 / CSRF / 设备归属"];
 device [width=2.79, label="设备管理 §5.3\n激活 / 配置 / 解绑"];
 project [width=3.76, label="授权协调 §5.3\ndeny-first / devices事务"];
-confirm [width=2.85, label="确认与响应\n配置读回 / 撤销结果"];
+confirm [width=3.75, label="HTTP确认与响应\n校验浏览器回报 / 撤销结果"];
 device_api -> device [label="受控设备操作"];
 device -> project [label="协调数据库与授权文件"];
 project -> confirm [label="按设备操作返回"];
