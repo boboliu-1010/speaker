@@ -60,13 +60,10 @@ Web串行执行设备授权变更：先写deny，再更新devices，最后发布
 
 ### 4.6 文件仓储
 
-路径由配置根目录和ID推导，不维护地址映射表：
+以下均为服务端本机目录，由Clip Server写入；Web Server只读取正式成品。路径由配置根目录和ID推导，不维护地址映射表：
 
 ```text
-A = SPEAKER_USER_DATA_ROOT/<owner>/clips/<device_id>
-S = SPEAKER_STATE_ROOT/users/<owner>/clips/<device_id>
-
-A/
+${SPEAKER_USER_DATA_ROOT}/<owner>/clips/<device_id>/
 ├── incoming/<recording_id>/<upload_id>/audio.part
 ├── raw/<recording_id>/<segment_no>.opus
 ├── segments/<recording_id>/<segment_no>.wav
@@ -76,7 +73,7 @@ A/
     ├── transcript.md
     └── recording.json
 
-S/
+${SPEAKER_STATE_ROOT}/users/<owner>/clips/<device_id>/
 ├── incoming/<recording_id>/<upload_id>/progress.json
 ├── sources/ready/<recording_id>/<source_id>.json
 ├── session-events/<recording_id>/<event_id>.json
