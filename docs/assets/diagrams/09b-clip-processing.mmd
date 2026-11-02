@@ -1,0 +1,50 @@
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"PingFang SC, Microsoft YaHei, sans-serif","fontSize":"17px","primaryColor":"#eaf3ff","primaryTextColor":"#17283f","primaryBorderColor":"#267bb9","actorBkg":"#267bb9","actorTextColor":"#ffffff","actorBorder":"#2366a0","loopTextColor":"#17283f","signalTextColor":"#17283f","signalColor":"#43566e","noteBkgColor":"#f3f6fa","noteTextColor":"#17283f"},"sequence":{"actorMargin":65,"width":180,"messageMargin":28,"noteMargin":15,"mirrorActors":false}}}%%
+sequenceDiagram
+    participant C as Clip设备
+    participant R as Server收件
+    participant W as Server后台处理
+    participant F as 本机文件
+
+    par 持续收件
+    loop 每个上传文件
+        C->>R: 上传Opus片段及录音ID、段号
+        R->>F: 校验文件、持久化原件及pending任务
+        F-->>R: 落盘成功
+        R-->>C: 收件回执，设备无需等待转写
+    end
+
+    and 后台独立调度，每片落盘即可开始
+    loop 逐段转码 → ASR（仅处理未终止的录音）
+        W->>F: 领取可执行的pending任务
+        W->>F: 录音processing，任务running并保存尝试次数
+        W->>W: 转码生成WAV，或ASR生成逐句文本
+        alt 本阶段成功
+            W->>F: 保存结果，任务succeeded
+        else 可重试错误且未满4次
+            W->>F: retry_wait，保存下次执行时间
+            Note over W,F: 到期回到pending；只重试失败阶段
+        else 不可重试或已满4次
+            W->>F: 任务及本录音处理标记failed
+            Note over W,F: 终止本录音后续任务，保留已生成文件
+        end
+    end
+
+    end
+
+    W->>F: 检查最终段号N及所有片段结果
+    alt 本录音已failed
+        Note over W,F: 不启动合并，不发布成品
+    else 未知最终段号或尚缺片段
+        W->>F: 录音waiting_files
+        Note over W,F: 等待上传补齐；不以静默超时结束录音
+    else 尚有任务待重试或依赖未就绪
+        Note over W,F: 保持processing，等待任务可执行
+    else 1..N全部成功
+        W->>F: 创建合并任务，pending → running
+        W->>W: 合并完整WAV、VTT、MD
+        W->>F: 录音publishing，校验四文件并原子发布
+        F-->>W: 正式成品目录就绪
+        W->>F: 合并及发布任务succeeded，录音completed
+        Note over W,F: 本录音处理结束，Web可以读取成品
+    end
+    Note over W,F: 合并、发布失败沿用上述重试规则；Server重启复用成功结果

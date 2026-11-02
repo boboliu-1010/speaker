@@ -91,13 +91,15 @@ owner来自已验证授权，Web读取时来自登录会话。不同用户、不
 
 ### 4.7 音频处理与成品
 
-![转码、ASR与完整成品流程](docs/assets/diagrams/09b-clip-processing.svg)
+![音频任务启动、处理中状态与终止时序](docs/assets/diagrams/09b-clip-processing.svg)
 
 - **转码**：将已收完整的Opus片段逐包解码为16kHz、单声道PCM16 WAV，保留实际样本数。原件是长度前缀Opus包序列，不是Ogg。
 - **ASR**：内置Paraformer-zh + FSMN-VAD + CT-Punc + CAM++候选组合，离线处理中文为主、少量英语。按句末标点断句，每行一句，保留时间戳和匿名说话人A/B/C；标签仅在片段内有效，跨段标作“片段1·A”等。效果需真实录音验收。
 - **合并与发布**：录音收齐且各段处理成功后，按段号拼接PCM并重写WAV头；字幕按实际样本数累加偏移，生成完整VTT和MD。四个成品文件在recordings父目录的隐藏临时目录中写齐、校验并fsync后，原子发布整个录音目录，Web只读取成品。
 
-后台单任务执行，job保存进度；失败最多尝试4次，重启复用已成功的结果。缺片或ASR失败不发布，静音保留真实时长。
+任务在文件校验落盘后创建：`pending`待执行 → `running`处理中 → `succeeded`本阶段结束。失败进入`retry_wait`，按30秒、2分钟、10分钟退避；不可重试或累计4次失败进入`failed`，终止该录音后续处理。
+
+录音等待收齐时为`waiting_files`，转码/ASR及合并时为`processing`，发布时为`publishing`；正式成品目录发布后为`completed`，本录音处理结束。等待不算执行次数，重启复用成功结果；这些均为Server任务状态。
 
 成品目录示例，根目录由配置决定：
 
