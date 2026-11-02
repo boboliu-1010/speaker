@@ -119,16 +119,16 @@ owner、recording_id采用`[a-z0-9][a-z0-9_-]{0,127}`，device_id同样字符但
 
 同一recording目录下先写隐藏临时目录，四文件全部校验、fsync后，在短锁内复核输入并原子重命名整个目录。Web只看正式目录；发布后只读，重试核对后一致则复用，不逐文件覆盖。重启核对已发布目录与内部提交记录，补齐job状态。
 
-配置`SPEAKER_USER_DATA_ROOT=/var/lib/speaker/audio/users`时，第1段原件实际地址：
+录音根目录由`SPEAKER_USER_DATA_ROOT`配置。第1段原件的地址按以下规则计算：
 
 ```text
-/var/lib/speaker/audio/users/demo-user/clips/demo-device/raw/rec-demo-20261102-001/1.opus
+${SPEAKER_USER_DATA_ROOT}/demo-user/clips/demo-device/raw/rec-demo-20261102-001/1.opus
 ```
 
 同一录音的最终目录：
 
 ```text
-/var/lib/speaker/audio/users/demo-user/clips/demo-device/recordings/rec-demo-20261102-001/
+${SPEAKER_USER_DATA_ROOT}/demo-user/clips/demo-device/recordings/rec-demo-20261102-001/
 ├── recording.wav
 ├── transcript.vtt
 ├── transcript.md
@@ -296,19 +296,19 @@ binding_id为32位小写十六进制，epoch/revision为正uint32；token为32�
 
 Web监听`127.0.0.1:9529`，OP用Nginx提供HTTPS；Clip监听DTLS/UDP 9528。两个服务分别启动，模型在Clip进程内加载，解码子进程按需执行。
 
-两服务读取同一份storage.env；下面的根目录都是配置项，改为`/data/recordings`时直接使用该根，不再额外拼audio/users：
+两服务读取同一份storage.env。存储根目录由部署配置决定，不限定父目录或目录名称；直接在配置根下拼接用户、Clip及录音ID。以下路径占位值须替换为实际绝对路径：
 
 ```dotenv
-SPEAKER_USER_DATA_ROOT=/var/lib/speaker/audio/users
-SPEAKER_STATE_ROOT=/var/lib/speaker/state
-SPEAKER_DEVICE_MATERIAL_ROOT=/var/lib/speaker/credentials/devices
+SPEAKER_USER_DATA_ROOT=<absolute-audio-root>
+SPEAKER_STATE_ROOT=<absolute-state-root>
+SPEAKER_DEVICE_MATERIAL_ROOT=<absolute-device-material-root>
 SPEAKER_LOCK_TIMEOUT_SECONDS=2
 ```
 
 web.env：
 
 ```dotenv
-SPEAKER_BUSINESS_DB_PATH=/var/lib/speaker/db/business.sqlite3
+SPEAKER_BUSINESS_DB_PATH=<absolute-database-file>
 SPEAKER_WEB_HOST=127.0.0.1
 SPEAKER_WEB_PORT=9529
 PUBLIC_WEB_ORIGIN=https://speaker.example.com
