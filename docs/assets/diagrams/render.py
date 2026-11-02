@@ -16,7 +16,7 @@ class Plate:
         self.height = height
         self.parts = [f'<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="{height}" viewBox="0 0 1280 {height}">',
                       f'<title>{escape(title)}</title>',
-                      '<rect width="1280" height="100%" fill="white"/>',
+                      f'<rect width="1280" height="{height}" fill="white"/>',
                       '<g font-family="PingFang SC,Microsoft YaHei,Noto Sans CJK SC,Arial,sans-serif">']
         self.text(40, 55, title, 30, INK, '600')
         self.text(40, 88, subtitle, 17, MUTED)
@@ -61,93 +61,61 @@ class Plate:
         (ROOT / (stem + '.svg')).write_text('\n'.join(self.parts) + '\n')
 
 
-# Architecture: each component states what it receives, does, and saves.
-p = Plate('系统架构', '原件就绪后导入业务库，由 Server 完成解码、识别、播放和导出。', 1395)
-p.card(40, 150, 280, 210, '浏览器 Web', ['发起登录并查看本人录音', 'HTTPS 9529：请求业务数据', '通过 BLE 把配置写入 Clip', '按片段播放音频并下载字幕'], BLUE)
-p.card(347, 150, 280, 210, '已就绪原件来源', ['由接入组件提供', 'raw 原件交付后复制到两盘', '来源包含归属、会话与段号', '提供可信来源元数据'], TEAL)
-p.card(654, 150, 280, 210, 'Google 身份服务', ['通过 OIDC 验证 Google 身份', '把授权结果回调给 Server', 'Server 随后创建本站会话'], BLUE)
-p.card(961, 150, 279, 210, '受控 ASR 服务', ['每次识别一份片段 WAV', '返回识别原文和时间戳', 'speaker 表示匿名说话人', '服务地址由 Server 配置'], TEAL)
-p.rect(40, 405, 1200, 650, PALE)
-p.text(62, 445, 'Server · Python FastAPI 单进程', 25, INK, '600')
-p.text(62, 476, 'HTTP：用户、会话、设备、录音、播放与导出；原件导入读取 ready 来源。', 17, MUTED)
-p.card(60, 502, 360, 195, '用户与会话', ['Google 登录并建立本站会话', 'users/me：读取本人资料', '仅允许修改本人的显示名称', 'CSRF：校验写请求的防伪标记', '会话和登录临时状态只保存在内存'], BLUE)
-p.card(460, 502, 360, 195, '设备与绑定', ['验证设备登记与用户归属', '发放设备上传配置', '记录 BLE 写入后的读回确认', '移除设备时撤销上传凭证'], BLUE)
-p.card(860, 502, 360, 195, '已就绪原件校验', ['读取 registry.sources 的 ready 来源', 'owner 与身份来自可信来源记录', '校验原件存在、实际大小与 hash', '两盘原件与描述保存后才导入'], TEAL)
-p.card(60, 710, 360, 185, '原件导入与录音聚合', ['把来源记录导入业务 SQLite', '按绑定与录音会话归并片段', '用来源唯一键避免重复导入', '可见内容变化递增 content_revision'], TEAL)
-p.card(460, 710, 360, 185, '录音查询与媒体读取', ['只查询当前用户拥有的录音', '核对版本后打开已发布文件', 'Range：读取指定音频字节区间', '从同快照生成 VTT 与 Markdown'], BLUE)
-p.card(860, 710, 360, 185, '后台任务与恢复', ['一个工作者持独占锁，顺序处理', '成功片段保留，失败片段单独重试', '有版本差时重建录音结果快照', '保留执行次数，重启恢复未完成片段'], TEAL)
-p.rect(60, 923, 1160, 101, 'white')
-p.text(82, 958, '受控解码子进程', 21, TEAL, '600')
-p.text(82, 994, '设备每 5 分钟生成一段原件，每段解码为一个 WAV 并独立识别；Server 不再二次切块。', 18)
-p.card(40, 1095, 380, 255, '业务 SQLite · 保存录音业务数据', ['accounts：保存本站用户身份', 'recordings：内容/结果版本与 JSON 快照', 'recording_segments：片段与识别结果', '数据库存储独立于两块录音数据盘'], TEAL)
-p.card(450, 1095, 380, 255, '设备与上传 SQLite · registry', ['bindings：保存设备归属与凭证', 'device_uids：映射硬件 UID 与设备', 'binding_profiles：保存上传配置版本', 'sources：记录每份原件及导入进度'], TEAL)
-p.card(860, 1095, 380, 255, '双盘文件存储', ['SPEAKER_PRIMARY_ROOT：主盘', 'SPEAKER_REPLICA_ROOT：副本盘', 'SPEAKER_BACKUP_ROOT：版本备份', '双盘仅存文件，数据库独立存放'], TEAL)
-p.save('01-system-architecture')
 
-# Source receipt: one annotated JSON field per line, plus the import boundaries.
-p = Plate('原件导入', '读取 ready 来源，原件及来源描述两盘校验成功后，再提交业务记录。', 1010)
-p.rect(40, 150, 760, 738)
-p.text(62, 189, 'registry.sources · 已就绪原件的来源记录', 23, INK, '600')
-p.text(62, 221, '每条来源对应一个片段；下面的值仅用于说明字段。', 17, MUTED)
-p.text(64, 255, '{', 18)
-source_fields = [
- ('id', '"source-001"', '来源记录唯一 ID；导入后对应片段的 source_id'),
- ('owner', '"user-001"', '录音所属用户 ID；由验证通过的设备绑定确定'),
- ('binding', '"binding-001"', '设备绑定 ID；导入后对应 source_namespace'),
- ('device', '"clip-001"', '设备 ID；标识这份录音来自哪台 Clip'),
- ('session', '"session-001"', '设备录音会话 ID；与绑定及代次一起归并为一条录音'),
- ('segment', '1', '会话内原件序号；从 1 开始，确定全局时间偏移'),
- ('size', '1024', '原始文件字节数；用于实际文件校验与处理限额'),
- ('sha256', '"' + 'a' * 64 + '"', '原始文件完整 SHA-256；示例值不代表真实文件'),
- ('object_id', '"object-001"', '服务端文件标识；定位原件，不接受客户端文件路径'),
- ('created', '1793318400', '来源建立时间；既有字段使用 Unix 秒，导入业务时转毫秒'),
- ('state', '"ready"', '只导入 ready 来源；其他状态由接入组件管理'),
- ('projected_at', 'null', '业务导入完成时间，Unix 毫秒；null 表示尚未标记导入完成'),
-]
-for i, (key, value, meaning) in enumerate(source_fields):
-    y = 282 + i * 46
-    p.text(80, y, '// ' + meaning, 15, MUTED)
-    p.text(80, y + 21, '"' + key + '": ' + value + (',' if i < len(source_fields)-1 else ''), 16, INK)
-p.text(64, 857, '}', 18)
-p.card(840, 150, 400, 158, '1 · 读取 ready 来源', ['读取原件来源记录', 'owner、会话与段号取可信元数据', '原件已由接入组件可靠保存'], TEAL)
-p.card(840, 334, 400, 140, '2 · 校验并保存两盘', ['校验文件、大小、hash 与来源归属', 'raw 与来源描述分别写入两盘', '两盘 fsync、hash 通过才继续导入'], BLUE)
-p.card(840, 500, 400, 178, '3 · 提交业务记录', ['binding 映射为片段 source_namespace', 'id 映射为片段 source_id', '两盘就绪后提交并递增内容版本', '重复导入同一来源不再增加版本'], TEAL)
-p.card(840, 704, 400, 184, '4 · 标记业务导入完成', ['业务事务提交后填写 projected_at', 'null：尚未标记完成，可重试导入', '非空：记录最近一次完成标记的时间', '启动仍会核对文件与业务记录'], BLUE)
-p.rect(40, 920, 1200, 58, PALE)
-p.text(62, 955, '业务提交后标记失败：重放同一来源并核对片段，避免重复录音与版本递增。', 19)
+# Render the standard C4 container view from its editable Mermaid source.
+import runpy
+runpy.run_path(str(ROOT / 'architecture.py'), run_name='__main__')
+
+p = Plate('Clip 与 Web 的收件交接', 'Clip 验证后信任上报字段，用 ready JSON 交接；不建来源或上传表。', 970)
+p.card(40, 150, 570, 210, '1 · Clip Server 完成接入', ['本地授权文件验证设备凭证与归属', '相信已验证上报，核对实际 size/hash', '原件 fsync 后原子发布 ready JSON', '不连接数据库，不建 Clip 表'], TEAL)
+p.card(650, 150, 590, 210, '2 · Web Server 读取 ready 来源', ['校验归属、原件和处理限额', '复制 raw 与来源描述到两音频盘', '两份均 hash / fsync 通过再继续', '来源未就绪或双盘异常时暂停'], BLUE)
+p.card(40, 405, 570, 210, '3 · 文件锁内幂等导入', ['固定 state.lock 排他锁 + 进程内 mutex', '按来源 ID 去重，按会话聚合录音', '原子更新 recording.json 及内容版本', '按确定 ID 补齐 decode / asr job'], BLUE)
+p.card(650, 405, 590, 210, '4 · 文件对账与幂等重放', ['录音和所需 job 全部 fsync 后完成', 'ready 来源文件保持不可变', '再扫描同一来源时按身份去重', '无需 projected_at 或已消费表'], TEAL)
+p.card(40, 660, 1200, 210, '崩溃与服务停止', ['Clip 停止：Web 可导入/解码，ASR 暂停；Web 停止：Clip 仍可收件。', '录音写成但 job 未创建：Web 启动对账，按确定 ID 补建；不重复新增录音。', 'ready 文件与原件不一致：拒绝导入并告警；同来源不同内容不能覆盖。', '启动分批扫描全部 ready JSON；不依赖数据库登记来源或消费进度。'], TEAL)
 p.save('04-raw-ingest-outbox')
 
-# Segment processing and one rebuildable recording snapshot.
-p = Plate('片段处理与结果汇总', '每份原件生成一个 WAV，按五分钟片段识别，汇总后用于播放和字幕导出。', 1070)
-p.card(40, 150, 585, 245, 'recording_segments · 原件与识别结果', ['raw_relative_path：原件位置', 'sample_count：片段样本总数', 'decode_state / decode_attempt：解码状态与次数', 'wav_state / wav_*：WAV 状态与元数据', 'asr_state / asr_attempt：识别状态与次数', 'transcript_json：本片段的识别文字'], TEAL)
-p.card(655, 150, 585, 245, 'recordings · 缓存一份结果快照', ['content_revision：当前可见内容版本', 'result_revision：已汇总到哪个内容版本', 'result_json：清单、时间轴、覆盖状态和原文', '内容版本与结果版本不同时重新汇总', '查询时根据片段计算进度'], BLUE)
-for x, title, lines in [
- (40, '1 · 解码片段', ['一份原件独立流式解码', 'WAV 写两盘并校验、fsync', '校验完成后提交片段索引', '不合成整条大音频']),
- (347, '2 · 片段识别', ['每段 ASR 调用前记录次数', '成功原文立即入库', '失败只重试当前片段', '中断不清空已执行次数']),
- (654, '3 · 更新快照', ['按实际样本数累计全局偏移', '缺号后的结果先缓存', 'CAS 核对当前内容版本', '一个事务替换整份快照']),
- (961, '4 · 播放与导出', ['按片段 WAV 清单播放', '从同一 JSON 生成字幕', 'VTT / Markdown 不落盘', 'HEAD 与 GET 使用同字节']),
-]: p.card(x, 435, 279 if x == 961 else 280, 235, title, lines, BLUE)
-p.card(40, 710, 585, 145, '识别成功但汇总中断', ['版本差仍然存在，重新汇总即可，不重跑成功片段。', '字幕由已提交 JSON 生成，不单独保存文件。'], TEAL)
-p.card(655, 710, 585, 145, '单个 WAV 损坏，两盘仍健康', ['先从另一盘恢复，否则从 raw 重建；保留识别文字。', '整盘故障暂停录音处理，离线维护只写替换盘。', '两盘文件对账通过后恢复，数据库与文字沿用。'], TEAL)
-p.rect(40, 895, 1200, 125, PALE)
-p.text(62, 932, '部分结果与运行限制', 23, INK, '600')
-p.text(62, 970, 'partial 描述快照缺口；result_stale 表示还有新内容；单进程单工作者禁止多机并行运行。', 19)
-p.text(62, 1003, 'speaker 编号仅在本片段内有效；原件边界识别与播放切换效果需实机验证。', 18, MUTED)
+p = Plate('录音文件与 job 文件提交', '文件锁解决并发；原子替换解决半写 JSON；提交顺序和对账解决多文件中断。', 1090)
+p.card(40, 150, 570, 215, 'recording.json · 可见结果提交点', ['owner、可信来源、片段信息与 WAV 引用', '不可变识别原文 JSON 的路径 / size / hash', 'content_revision / result_revision / result_json', 'last_*_commit 保存 job_id 与 attempt_id'], BLUE)
+p.card(650, 150, 590, 215, 'jobs/id.json · 可重建调度记录', ['阶段、代次、状态、attempt 与 run_after', 'attempt_id / 输入 hash / 错误码', 'decode、asr、merge、repair 各自定位', '不保存真实凭证，不新增 job 表'], TEAL)
+for x,title,lines in [
+ (40,'1 · 锁内领取',['复核输入与预算','次数加一并写 running','生成唯一 attempt_id','释放 state 锁']),
+ (347,'2 · 锁外执行',['解码或调用 ASR','双盘 WAV 校验发布','原文 JSON 持久化','不阻塞 Web 事件循环']),
+ (654,'3 · 锁内提交',['再次核对 attempt_id','原子替换录音 JSON','再把 job 标 ready','补齐下一阶段 job']),
+ (961,'4 · 读取与导出',['共享锁捕获一致视图','释放锁后读取音频','从快照生成 VTT / MD','不暴露磁盘路径']),
+]: p.card(x,410,279 if x==961 else 280,220,title,lines,BLUE)
+p.card(40,675,570,220,'结果已保存，job 尚未完成',['启动核对录音中的执行提交标识','匹配时补标 job ready，不重复 ASR','若无提交结果，保留次数退避重试','Clip 内推理不保证恰好调用一次'],TEAL)
+p.card(650,675,590,220,'快照与修复',['锁外构建，锁内复核 content_revision','版本变化则重新汇总，不重识别','repair 独立预算，保留成功文字','状态根损坏不能当空数据覆盖'],TEAL)
+p.rect(40,935,1200,100,PALE)
+p.text(62,974,'固定锁 inode 不删除、不替换；不能直接锁将被 rename 的 JSON。',22)
+p.text(62,1010,'JSON 写入：同目录临时文件 → fsync → os.replace → fsync 目录；无录音 / 片段 / job 表。',19,MUTED)
 p.save('06-file-database-publication')
 
-# Security boundaries: each component describes its concrete checks and responsibility.
-p = Plate('文件访问与数据保护', '浏览器不能直接访问存储目录；Server 核对用户归属和版本后，才读取或处理对应文件。', 1070)
-p.card(40, 150, 380, 255, '浏览器 · 发起读取请求', ['Cookie：携带本站会话身份', '录音 ID：指定要读取的录音', 'revision：固定音频清单和字幕快照', '通过 HTTPS 请求音频和文字', '退出时清理播放状态与本地会话状态'], BLUE)
-p.card(450, 150, 380, 255, 'Server · 核对会话与归属', ['检查会话有效期和账号状态', 'owner：录音所属的本站用户 ID', '仅允许读取当前用户拥有的录音', '跨用户查询统一返回 404', '每次媒体请求都重新鉴权'], BLUE)
-p.card(860, 150, 380, 255, 'Server · 校验文件并执行任务', ['核对快照版本与片段 WAV 状态', '以受控路径打开普通文件句柄', '拒绝符号链接和存储根之外的路径', '解码使用受限子进程并设置超时', '写索引前核对 WAV 大小与摘要'], BLUE)
-p.card(40, 450, 380, 360, '主盘 · 录音文件', ['raw / 来源描述 / WAV 各有副盘副本', '两个 SQLite 库独立于两块数据盘', '文件两盘校验成功后提交业务索引', '主盘坏时从副本盘恢复文件', '由专用服务账号访问加密数据卷', '目录权限 0700，文件权限 0600', '文件位于 Web 静态目录之外', '任一盘故障暂停录音写入与处理'], TEAL)
-p.card(450, 450, 380, 360, '受控 ASR · 处理音频并返回原文', ['服务地址由 Server 配置', '远程连接使用 HTTPS 并校验证书', '本机端点须明确登记并限制访问', '禁止重定向，出站只放行配置目标', '输入 WAV 须先校验完整摘要', '返回原文、时间戳及说话人标识', '本地临时音频在处理结束后清理', '供应方留存按已核实的约定执行'], TEAL)
-p.card(860, 450, 380, 360, '副本盘 · 第二份录音文件', ['raw / 来源描述 / WAV 保持第二份', '副本盘坏时从主盘恢复文件', '数据库索引与 hash 用于对账', '换盘不回滚数据库或重置账号', '成功识别结果和执行次数保留', '两份文件校验通过后恢复处理', '每日完整备份独立保留最近 7 份', '双盘文件全丢时从完整备份恢复'], TEAL)
-p.rect(40, 850, 1200, 175, PALE)
-p.text(62, 887, '访问控制、存储与恢复', 23, INK, '600')
-p.text(62, 926, '访问控制：阻止其他用户读取录音。加密存储：保护离线数据卷与备份中的内容。', 19)
-p.text(62, 961, '文件双盘写入用于单盘恢复；数据库独立存放，换数据盘不丢失已提交的识别文字。', 19)
-p.text(62, 996, '日志只保留定位信息和错误码，认证凭证与录音正文不写入日志。', 18, MUTED)
+p = Plate('文件访问与数据保护', 'Web 校验 owner / revision；Clip 校验接入身份；元数据文件独立于音频双盘。', 1010)
+p.card(40,150,380,245,'Web Server · 授权读取',['本站会话、账号状态与 CSRF','仅返回当前 owner 的录音','每次 GET / HEAD / Range 鉴权','共享锁内读取录音和 job','锁外执行媒体 I/O 与导出'],BLUE)
+p.card(450,150,380,245,'Clip Server · 可信收件',['只读授权文件及凭证校验材料','验证通过后信任 Clip 上报信息','owner 必须与已验证凭证一致','内置离线 ASR；不加载 Google 凭证','不连接任何数据库'],TEAL)
+p.card(860,150,380,245,'文件发布与受控处理',['路径使用服务端生成 ID','openat / O_NOFOLLOW 检查','拒绝符号链接与根外路径','受限解码子进程与超时','ASR 仅用本机私有 socket'],BLUE)
+p.card(40,440,380,300,'独立元数据卷',['单个 SQLite：accounts / devices','授权 / 收件 / 录音 / job 文件','固定角色锁与共享 state 锁','目录 0700，文件 0600','不部署到 NFS 或公开静态目录','损坏告警，禁止自动覆盖空状态'],TEAL)
+p.card(450,440,380,300,'两个独立音频盘',['raw / 描述 / WAV 双份保存','先两份 fsync 再提交录音引用','一盘故障暂停接入发布及处理','离线只写替换盘，幸存盘只读','保留成功 ASR 和 job 执行预算','不因换盘回滚当前元数据'],TEAL)
+p.card(860,440,380,300,'独立加密版本备份',['同时停两个服务及在途执行','关闭数据库，复制完整状态根','备份 raw / WAV / 配置与清单','核对数据库、JSON 关联和 hash','保留最近 7 份完整版本','恢复不重建账号或撤销授权'],TEAL)
+p.rect(40,785,1200,155,PALE)
+p.text(62,826,'文件锁不代替持久化，也不代替 SQLite 事务。',23,INK,'600')
+p.text(62,866,'音频盘故障不影响健康元数据卷中的既有文字；元数据卷故障从一致备份恢复。',20)
+p.text(62,906,'两个服务各自单实例；无第三个常驻工作进程。日志不记录凭证和录音正文。',19,MUTED)
 p.save('07-storage-security')
-
-print('Generated 4 design SVG plates.')
+# Internal module contracts, without introducing extra services.
+p = Plate('Web Server 与 Clip Server 模块边界', '两个独立入口，各自分层；共享契约和文件工具，不共享数据库访问或进程内状态。', 1290)
+p.card(40,150,1200,145,'共享 contracts / platform',['DTO、文件 schema、错误码；配置、受控路径、flock、原子写和脱敏计量', '不导入 FastAPI / DTLS / SQLite / ASR SDK；不持全局连接，不启动任何监听'],TEAL)
+p.rect(40,335,570,650,PALE)
+p.text(62,377,'Clip Server · 独立进程',25,TEAL,'600')
+p.card(60,410,530,145,'transport / protocol',['DTLS连接、帧解析、消息状态机', '输入有界；不把socket交给业务模块'],TEAL)
+p.card(60,575,530,145,'application / ports',['验证、开始/续传/完成收件用例', '只依赖授权读取、收件、发布接口'],TEAL)
+p.card(60,740,530,200,'文件与授权 adapters',['只读本地授权/凭证材料', '写收件/来源/会话事件与设备报告', '无SQLite、无Web app、无job仓储', '内置模型与本机接口，独立推理线程'],TEAL)
+p.rect(640,335,600,650,PALE)
+p.text(662,377,'Web Server · 独立进程',25,BLUE,'600')
+p.card(660,410,560,145,'API / middleware',['登录、用户设备、录音、媒体、health', '会话、owner、CSRF、限流、错误映射'],BLUE)
+p.card(660,575,560,145,'application / domain / worker',['设备配置、导入、job、识别、汇总用例', '一个后台循环；router/worker不直接I/O'],BLUE)
+p.card(660,740,560,200,'仓储与执行 adapters',['SQLite仅accounts/devices；录音/job文件', '受限解码、Clip ASR客户端、VTT/MD', 'FastAPI lifespan集中启动、恢复和退出', 'bootstrap注入接口实现，禁止反向依赖'],BLUE)
+p.card(40,1020,570,170,'进程交接与所有权',['Clip发布ready/会话事件，Web重放导入', 'Web发布授权文件，Clip只读验证', '固定state锁保护短提交；I/O在锁外'],TEAL)
+p.card(640,1020,600,170,'依赖方向',['入口 → 用例 → port / contracts', 'adapter实现接口，由bootstrap装配', 'Clip不引用Web或任何数据库模块'],BLUE)
+p.save('08-module-boundaries')
+print('Generated 5 design SVG plates.')

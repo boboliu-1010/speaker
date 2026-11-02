@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="1290" viewBox="0 0 1280 1290">
+<title>Web Server 与 Clip Server 模块边界</title>
+<rect width="1280" height="1290" fill="white"/>
+<g font-family="PingFang SC,Microsoft YaHei,Noto Sans CJK SC,Arial,sans-serif">
+<text x="40" y="55" font-size="30" font-weight="600" fill="#17283f">Web Server 与 Clip Server 模块边界</text>
+<text x="40" y="88" font-size="17" font-weight="400" fill="#607088">两个独立入口，各自分层；共享契约和文件工具，不共享数据库访问或进程内状态。</text>
+<line x1="40" y1="112" x2="1240" y2="112" stroke="#d8e0ea" stroke-width="1.5"/>
+<rect x="40" y="150" width="1200" height="145" rx="8" fill="white" stroke="#d8e0ea"/>
+<rect x="40" y="150" width="5" height="145" rx="0" fill="#087f74" stroke="#087f74"/>
+<text x="62" y="184" font-size="21" font-weight="600" fill="#17283f">共享 contracts / platform</text>
+<text x="62" y="220" font-size="18" font-weight="400" fill="#607088">DTO、文件 schema、错误码；配置、受控路径、flock、原子写和脱敏计量</text>
+<text x="62" y="248" font-size="18" font-weight="400" fill="#607088">不导入 FastAPI / DTLS / SQLite / ASR SDK；不持全局连接，不启动任何监听</text>
+<rect x="40" y="335" width="570" height="650" rx="8" fill="#f3f6fa" stroke="#d8e0ea"/>
+<text x="62" y="377" font-size="25" font-weight="600" fill="#087f74">Clip Server · 独立进程</text>
+<rect x="60" y="410" width="530" height="145" rx="8" fill="white" stroke="#d8e0ea"/>
+<rect x="60" y="410" width="5" height="145" rx="0" fill="#087f74" stroke="#087f74"/>
+<text x="82" y="444" font-size="21" font-weight="600" fill="#17283f">transport / protocol</text>
+<text x="82" y="480" font-size="18" font-weight="400" fill="#607088">DTLS连接、帧解析、消息状态机</text>
+<text x="82" y="508" font-size="18" font-weight="400" fill="#607088">输入有界；不把socket交给业务模块</text>
+<rect x="60" y="575" width="530" height="145" rx="8" fill="white" stroke="#d8e0ea"/>
+<rect x="60" y="575" width="5" height="145" rx="0" fill="#087f74" stroke="#087f74"/>
+<text x="82" y="609" font-size="21" font-weight="600" fill="#17283f">application / ports</text>
+<text x="82" y="645" font-size="18" font-weight="400" fill="#607088">验证、开始/续传/完成收件用例</text>
+<text x="82" y="673" font-size="18" font-weight="400" fill="#607088">只依赖授权读取、收件、发布接口</text>
+<rect x="60" y="740" width="530" height="200" rx="8" fill="white" stroke="#d8e0ea"/>
+<rect x="60" y="740" width="5" height="200" rx="0" fill="#087f74" stroke="#087f74"/>
+<text x="82" y="774" font-size="21" font-weight="600" fill="#17283f">文件与授权 adapters</text>
+<text x="82" y="810" font-size="18" font-weight="400" fill="#607088">只读本地授权/凭证材料</text>
+<text x="82" y="838" font-size="18" font-weight="400" fill="#607088">写收件/来源/会话事件与设备报告</text>
+<text x="82" y="866" font-size="18" font-weight="400" fill="#607088">无SQLite、无Web app、无job仓储</text>
+<text x="82" y="894" font-size="18" font-weight="400" fill="#607088">内置模型与本机接口，独立推理线程</text>
+<rect x="640" y="335" width="600" height="650" rx="8" fill="#f3f6fa" stroke="#d8e0ea"/>
+<text x="662" y="377" font-size="25" font-weight="600" fill="#245cca">Web Server · 独立进程</text>
+<rect x="660" y="410" width="560" height="145" rx="8" fill="white" stroke="#d8e0ea"/>
+<rect x="660" y="410" width="5" height="145" rx="0" fill="#245cca" stroke="#245cca"/>
+<text x="682" y="444" font-size="21" font-weight="600" fill="#17283f">API / middleware</text>
+<text x="682" y="480" font-size="18" font-weight="400" fill="#607088">登录、用户设备、录音、媒体、health</text>
+<text x="682" y="508" font-size="18" font-weight="400" fill="#607088">会话、owner、CSRF、限流、错误映射</text>
+<rect x="660" y="575" width="560" height="145" rx="8" fill="white" stroke="#d8e0ea"/>
+<rect x="660" y="575" width="5" height="145" rx="0" fill="#245cca" stroke="#245cca"/>
+<text x="682" y="609" font-size="21" font-weight="600" fill="#17283f">application / domain / worker</text>
+<text x="682" y="645" font-size="18" font-weight="400" fill="#607088">设备配置、导入、job、识别、汇总用例</text>
+<text x="682" y="673" font-size="18" font-weight="400" fill="#607088">一个后台循环；router/worker不直接I/O</text>
+<rect x="660" y="740" width="560" height="200" rx="8" fill="white" stroke="#d8e0ea"/>
+<rect x="660" y="740" width="5" height="200" rx="0" fill="#245cca" stroke="#245cca"/>
+<text x="682" y="774" font-size="21" font-weight="600" fill="#17283f">仓储与执行 adapters</text>
+<text x="682" y="810" font-size="18" font-weight="400" fill="#607088">SQLite仅accounts/devices；录音/job文件</text>
+<text x="682" y="838" font-size="18" font-weight="400" fill="#607088">受限解码、Clip ASR客户端、VTT/MD</text>
+<text x="682" y="866" font-size="18" font-weight="400" fill="#607088">FastAPI lifespan集中启动、恢复和退出</text>
+<text x="682" y="894" font-size="18" font-weight="400" fill="#607088">bootstrap注入接口实现，禁止反向依赖</text>
+<rect x="40" y="1020" width="570" height="170" rx="8" fill="white" stroke="#d8e0ea"/>
+<rect x="40" y="1020" width="5" height="170" rx="0" fill="#087f74" stroke="#087f74"/>
+<text x="62" y="1054" font-size="21" font-weight="600" fill="#17283f">进程交接与所有权</text>
+<text x="62" y="1090" font-size="18" font-weight="400" fill="#607088">Clip发布ready/会话事件，Web重放导入</text>
+<text x="62" y="1118" font-size="18" font-weight="400" fill="#607088">Web发布授权文件，Clip只读验证</text>
+<text x="62" y="1146" font-size="18" font-weight="400" fill="#607088">固定state锁保护短提交；I/O在锁外</text>
+<rect x="640" y="1020" width="600" height="170" rx="8" fill="white" stroke="#d8e0ea"/>
+<rect x="640" y="1020" width="5" height="170" rx="0" fill="#245cca" stroke="#245cca"/>
+<text x="662" y="1054" font-size="21" font-weight="600" fill="#17283f">依赖方向</text>
+<text x="662" y="1090" font-size="18" font-weight="400" fill="#607088">入口 → 用例 → port / contracts</text>
+<text x="662" y="1118" font-size="18" font-weight="400" fill="#607088">adapter实现接口，由bootstrap装配</text>
+<text x="662" y="1146" font-size="18" font-weight="400" fill="#607088">Clip不引用Web或任何数据库模块</text>
+</g>
+</svg>

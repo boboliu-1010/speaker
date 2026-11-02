@@ -1,0 +1,48 @@
+digraph G {
+graph [rankdir=LR, bgcolor="white", pad="0.35", nodesep="0.42", ranksep="0.65", splines=polyline, fontname="PingFang SC", fontsize=22, labelloc=t, label="Clip Server 内部模块与调用关系"];
+node [shape=box, style="filled", fillcolor="#438dd5", color="#2366a0", fontcolor=white, fontname="PingFang SC", fontsize=15, margin="0.18,0.12"];
+edge [fontname="PingFang SC", fontsize=12, color="#516379", fontcolor="#34465d", arrowsize=0.8];
+subgraph cluster_service {
+label="Clip Server · 一个进程，DTLS与ASR独立执行线程"; color="#5a7596"; style=dashed; fontsize=20;
+boot [width=3.67, label="启动与配置 §4.1\nbootstrap / 角色锁 / 资源清理"];
+dtls [width=2.70, label="DTLS传输与协议 §4.2\n有界帧解析 / 设备连接"];
+upload [width=2.70, label="收件用例 §4.4\n开始 / 续传 / 完成"];
+auth [width=2.83, label="身份验证 §4.3\n授权与epoch / 最终复核"];
+files [width=3.29, label="收件与额度仓储 §4.4\nprogress / raw / 容量预留"];
+publish [width=3.24, label="来源与会话发布 §4.5\n原子ready / 不可变录完声明"];
+report [width=3.07, label="报告与健康 §4.6\n设备遥测 / DTLS和ASR就绪"];
+api [width=3.29, label="本机ASR接口 §4.7\npeer UID / WAV引用 / 背压"];
+wavread [width=3.13, label="受控WAV读取 §4.7\n同句柄格式 / size / hash"];
+infer [width=3.76, label="内置模型推理 §4.7\n有界队列 / 单推理槽 / deadline"];
+model [width=4.63, label="FunASR流水线 §4.7\nParaformer / FSMN / CT-Punc / CAM++"];
+}
+device [width=2.82, shape=box, fillcolor="#e8edf3", color="#8b9bb0", fontcolor="#24354a", label="ReSpeaker Clip\nDTLS / UDP 9528"];
+web [width=2.82, shape=box, fillcolor="#e8edf3", color="#8b9bb0", fontcolor="#24354a", label="Web Server\nASR客户端 / 不共享内存"];
+authfile [width=2.82, shape=cylinder, fillcolor="#e8edf3", color="#8b9bb0", fontcolor="#24354a", label="授权与凭证文件\nWeb发布 / Clip只读"];
+raw [width=2.82, shape=cylinder, fillcolor="#e8edf3", color="#8b9bb0", fontcolor="#24354a", label="收件文件与音频原件\nprogress / 原始raw"];
+ready [width=3.06, shape=cylinder, fillcolor="#e8edf3", color="#8b9bb0", fontcolor="#24354a", label="来源与结束事件\nready / session-events"];
+reports [width=3.18, shape=cylinder, fillcolor="#e8edf3", color="#8b9bb0", fontcolor="#24354a", label="报告及进程状态\ndevice-reports / status"];
+wav [width=3.29, shape=cylinder, fillcolor="#e8edf3", color="#8b9bb0", fontcolor="#24354a", label="双盘分段WAV\nWeb发布 / Clip只读derived"];
+weights [width=3.35, shape=cylinder, fillcolor="#e8edf3", color="#8b9bb0", fontcolor="#24354a", label="离线模型目录\nmanifest / 版本 / SHA-256"];
+device -> dtls [label="上传"];
+dtls -> upload [label="验证DTO / 调用用例"];
+upload -> auth [label="验证设备上下文"];
+auth -> authfile [label="只读"];
+upload -> files [label="预留 / 写入 / 校验"];
+files -> raw [label="读写 / fsync"];
+upload -> publish [label="完成收件 / 声明"];
+publish -> auth [label="发布前复核"];
+publish -> ready [label="不可变发布"];
+upload -> report [label="已验证遥测"];
+report -> reports [label="写入"];
+web -> api [label="Unix socket HTTP / 返回Transcript"];
+api -> wavread [label="校验输入"];
+wavread -> wav [label="受控只读"];
+api -> infer [label="提交已验证WAV / config_digest"];
+infer -> model [label="单线程执行 / 逐句A-B-C"];
+model -> weights [label="离线只读加载"];
+api -> report [label="ASR就绪 / 队列状态"];
+boot -> dtls [style=dashed, label="装配/生命周期", constraint=false];
+boot -> api [style=dashed, label="装配/生命周期", constraint=false];
+boot -> report [style=dashed, label="装配/生命周期", constraint=false];
+}

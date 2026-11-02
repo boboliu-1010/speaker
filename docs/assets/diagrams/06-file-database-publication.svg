@@ -1,69 +1,68 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="1070" viewBox="0 0 1280 1070">
-<title>片段处理与结果汇总</title>
-<rect width="1280" height="100%" fill="white"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="1090" viewBox="0 0 1280 1090">
+<title>录音文件与 job 文件提交</title>
+<rect width="1280" height="1090" fill="white"/>
 <g font-family="PingFang SC,Microsoft YaHei,Noto Sans CJK SC,Arial,sans-serif">
-<text x="40" y="55" font-size="30" font-weight="600" fill="#17283f">片段处理与结果汇总</text>
-<text x="40" y="88" font-size="17" font-weight="400" fill="#607088">每份原件生成一个 WAV，按五分钟片段识别，汇总后用于播放和字幕导出。</text>
+<text x="40" y="55" font-size="30" font-weight="600" fill="#17283f">录音文件与 job 文件提交</text>
+<text x="40" y="88" font-size="17" font-weight="400" fill="#607088">文件锁解决并发；原子替换解决半写 JSON；提交顺序和对账解决多文件中断。</text>
 <line x1="40" y1="112" x2="1240" y2="112" stroke="#d8e0ea" stroke-width="1.5"/>
-<rect x="40" y="150" width="585" height="245" rx="8" fill="white" stroke="#d8e0ea"/>
-<rect x="40" y="150" width="5" height="245" rx="0" fill="#087f74" stroke="#087f74"/>
-<text x="62" y="184" font-size="21" font-weight="600" fill="#17283f">recording_segments · 原件与识别结果</text>
-<text x="62" y="220" font-size="18" font-weight="400" fill="#607088">raw_relative_path：原件位置</text>
-<text x="62" y="248" font-size="18" font-weight="400" fill="#607088">sample_count：片段样本总数</text>
-<text x="62" y="276" font-size="18" font-weight="400" fill="#607088">decode_state / decode_attempt：解码状态与次数</text>
-<text x="62" y="304" font-size="18" font-weight="400" fill="#607088">wav_state / wav_*：WAV 状态与元数据</text>
-<text x="62" y="332" font-size="18" font-weight="400" fill="#607088">asr_state / asr_attempt：识别状态与次数</text>
-<text x="62" y="360" font-size="18" font-weight="400" fill="#607088">transcript_json：本片段的识别文字</text>
-<rect x="655" y="150" width="585" height="245" rx="8" fill="white" stroke="#d8e0ea"/>
-<rect x="655" y="150" width="5" height="245" rx="0" fill="#245cca" stroke="#245cca"/>
-<text x="677" y="184" font-size="21" font-weight="600" fill="#17283f">recordings · 缓存一份结果快照</text>
-<text x="677" y="220" font-size="18" font-weight="400" fill="#607088">content_revision：当前可见内容版本</text>
-<text x="677" y="248" font-size="18" font-weight="400" fill="#607088">result_revision：已汇总到哪个内容版本</text>
-<text x="677" y="276" font-size="18" font-weight="400" fill="#607088">result_json：清单、时间轴、覆盖状态和原文</text>
-<text x="677" y="304" font-size="18" font-weight="400" fill="#607088">内容版本与结果版本不同时重新汇总</text>
-<text x="677" y="332" font-size="18" font-weight="400" fill="#607088">查询时根据片段计算进度</text>
-<rect x="40" y="435" width="280" height="235" rx="8" fill="white" stroke="#d8e0ea"/>
-<rect x="40" y="435" width="5" height="235" rx="0" fill="#245cca" stroke="#245cca"/>
-<text x="62" y="469" font-size="21" font-weight="600" fill="#17283f">1 · 解码片段</text>
-<text x="62" y="505" font-size="18" font-weight="400" fill="#607088">一份原件独立流式解码</text>
-<text x="62" y="533" font-size="18" font-weight="400" fill="#607088">WAV 写两盘并校验、fsync</text>
-<text x="62" y="561" font-size="18" font-weight="400" fill="#607088">校验完成后提交片段索引</text>
-<text x="62" y="589" font-size="18" font-weight="400" fill="#607088">不合成整条大音频</text>
-<rect x="347" y="435" width="280" height="235" rx="8" fill="white" stroke="#d8e0ea"/>
-<rect x="347" y="435" width="5" height="235" rx="0" fill="#245cca" stroke="#245cca"/>
-<text x="369" y="469" font-size="21" font-weight="600" fill="#17283f">2 · 片段识别</text>
-<text x="369" y="505" font-size="18" font-weight="400" fill="#607088">每段 ASR 调用前记录次数</text>
-<text x="369" y="533" font-size="18" font-weight="400" fill="#607088">成功原文立即入库</text>
-<text x="369" y="561" font-size="18" font-weight="400" fill="#607088">失败只重试当前片段</text>
-<text x="369" y="589" font-size="18" font-weight="400" fill="#607088">中断不清空已执行次数</text>
-<rect x="654" y="435" width="280" height="235" rx="8" fill="white" stroke="#d8e0ea"/>
-<rect x="654" y="435" width="5" height="235" rx="0" fill="#245cca" stroke="#245cca"/>
-<text x="676" y="469" font-size="21" font-weight="600" fill="#17283f">3 · 更新快照</text>
-<text x="676" y="505" font-size="18" font-weight="400" fill="#607088">按实际样本数累计全局偏移</text>
-<text x="676" y="533" font-size="18" font-weight="400" fill="#607088">缺号后的结果先缓存</text>
-<text x="676" y="561" font-size="18" font-weight="400" fill="#607088">CAS 核对当前内容版本</text>
-<text x="676" y="589" font-size="18" font-weight="400" fill="#607088">一个事务替换整份快照</text>
-<rect x="961" y="435" width="279" height="235" rx="8" fill="white" stroke="#d8e0ea"/>
-<rect x="961" y="435" width="5" height="235" rx="0" fill="#245cca" stroke="#245cca"/>
-<text x="983" y="469" font-size="21" font-weight="600" fill="#17283f">4 · 播放与导出</text>
-<text x="983" y="505" font-size="18" font-weight="400" fill="#607088">按片段 WAV 清单播放</text>
-<text x="983" y="533" font-size="18" font-weight="400" fill="#607088">从同一 JSON 生成字幕</text>
-<text x="983" y="561" font-size="18" font-weight="400" fill="#607088">VTT / Markdown 不落盘</text>
-<text x="983" y="589" font-size="18" font-weight="400" fill="#607088">HEAD 与 GET 使用同字节</text>
-<rect x="40" y="710" width="585" height="145" rx="8" fill="white" stroke="#d8e0ea"/>
-<rect x="40" y="710" width="5" height="145" rx="0" fill="#087f74" stroke="#087f74"/>
-<text x="62" y="744" font-size="21" font-weight="600" fill="#17283f">识别成功但汇总中断</text>
-<text x="62" y="780" font-size="18" font-weight="400" fill="#607088">版本差仍然存在，重新汇总即可，不重跑成功片段。</text>
-<text x="62" y="808" font-size="18" font-weight="400" fill="#607088">字幕由已提交 JSON 生成，不单独保存文件。</text>
-<rect x="655" y="710" width="585" height="145" rx="8" fill="white" stroke="#d8e0ea"/>
-<rect x="655" y="710" width="5" height="145" rx="0" fill="#087f74" stroke="#087f74"/>
-<text x="677" y="744" font-size="21" font-weight="600" fill="#17283f">单个 WAV 损坏，两盘仍健康</text>
-<text x="677" y="780" font-size="18" font-weight="400" fill="#607088">先从另一盘恢复，否则从 raw 重建；保留识别文字。</text>
-<text x="677" y="808" font-size="18" font-weight="400" fill="#607088">整盘故障暂停录音处理，离线维护只写替换盘。</text>
-<text x="677" y="836" font-size="18" font-weight="400" fill="#607088">两盘文件对账通过后恢复，数据库与文字沿用。</text>
-<rect x="40" y="895" width="1200" height="125" rx="8" fill="#f3f6fa" stroke="#d8e0ea"/>
-<text x="62" y="932" font-size="23" font-weight="600" fill="#17283f">部分结果与运行限制</text>
-<text x="62" y="970" font-size="19" font-weight="400" fill="#17283f">partial 描述快照缺口；result_stale 表示还有新内容；单进程单工作者禁止多机并行运行。</text>
-<text x="62" y="1003" font-size="18" font-weight="400" fill="#607088">speaker 编号仅在本片段内有效；原件边界识别与播放切换效果需实机验证。</text>
+<rect x="40" y="150" width="570" height="215" rx="8" fill="white" stroke="#d8e0ea"/>
+<rect x="40" y="150" width="5" height="215" rx="0" fill="#245cca" stroke="#245cca"/>
+<text x="62" y="184" font-size="21" font-weight="600" fill="#17283f">recording.json · 可见结果提交点</text>
+<text x="62" y="220" font-size="18" font-weight="400" fill="#607088">owner、可信来源、片段信息与 WAV 引用</text>
+<text x="62" y="248" font-size="18" font-weight="400" fill="#607088">不可变识别原文 JSON 的路径 / size / hash</text>
+<text x="62" y="276" font-size="18" font-weight="400" fill="#607088">content_revision / result_revision / result_json</text>
+<text x="62" y="304" font-size="18" font-weight="400" fill="#607088">last_*_commit 保存 job_id 与 attempt_id</text>
+<rect x="650" y="150" width="590" height="215" rx="8" fill="white" stroke="#d8e0ea"/>
+<rect x="650" y="150" width="5" height="215" rx="0" fill="#087f74" stroke="#087f74"/>
+<text x="672" y="184" font-size="21" font-weight="600" fill="#17283f">jobs/id.json · 可重建调度记录</text>
+<text x="672" y="220" font-size="18" font-weight="400" fill="#607088">阶段、代次、状态、attempt 与 run_after</text>
+<text x="672" y="248" font-size="18" font-weight="400" fill="#607088">attempt_id / 输入 hash / 错误码</text>
+<text x="672" y="276" font-size="18" font-weight="400" fill="#607088">decode、asr、merge、repair 各自定位</text>
+<text x="672" y="304" font-size="18" font-weight="400" fill="#607088">不保存真实凭证，不新增 job 表</text>
+<rect x="40" y="410" width="280" height="220" rx="8" fill="white" stroke="#d8e0ea"/>
+<rect x="40" y="410" width="5" height="220" rx="0" fill="#245cca" stroke="#245cca"/>
+<text x="62" y="444" font-size="21" font-weight="600" fill="#17283f">1 · 锁内领取</text>
+<text x="62" y="480" font-size="18" font-weight="400" fill="#607088">复核输入与预算</text>
+<text x="62" y="508" font-size="18" font-weight="400" fill="#607088">次数加一并写 running</text>
+<text x="62" y="536" font-size="18" font-weight="400" fill="#607088">生成唯一 attempt_id</text>
+<text x="62" y="564" font-size="18" font-weight="400" fill="#607088">释放 state 锁</text>
+<rect x="347" y="410" width="280" height="220" rx="8" fill="white" stroke="#d8e0ea"/>
+<rect x="347" y="410" width="5" height="220" rx="0" fill="#245cca" stroke="#245cca"/>
+<text x="369" y="444" font-size="21" font-weight="600" fill="#17283f">2 · 锁外执行</text>
+<text x="369" y="480" font-size="18" font-weight="400" fill="#607088">解码或调用 ASR</text>
+<text x="369" y="508" font-size="18" font-weight="400" fill="#607088">双盘 WAV 校验发布</text>
+<text x="369" y="536" font-size="18" font-weight="400" fill="#607088">原文 JSON 持久化</text>
+<text x="369" y="564" font-size="18" font-weight="400" fill="#607088">不阻塞 Web 事件循环</text>
+<rect x="654" y="410" width="280" height="220" rx="8" fill="white" stroke="#d8e0ea"/>
+<rect x="654" y="410" width="5" height="220" rx="0" fill="#245cca" stroke="#245cca"/>
+<text x="676" y="444" font-size="21" font-weight="600" fill="#17283f">3 · 锁内提交</text>
+<text x="676" y="480" font-size="18" font-weight="400" fill="#607088">再次核对 attempt_id</text>
+<text x="676" y="508" font-size="18" font-weight="400" fill="#607088">原子替换录音 JSON</text>
+<text x="676" y="536" font-size="18" font-weight="400" fill="#607088">再把 job 标 ready</text>
+<text x="676" y="564" font-size="18" font-weight="400" fill="#607088">补齐下一阶段 job</text>
+<rect x="961" y="410" width="279" height="220" rx="8" fill="white" stroke="#d8e0ea"/>
+<rect x="961" y="410" width="5" height="220" rx="0" fill="#245cca" stroke="#245cca"/>
+<text x="983" y="444" font-size="21" font-weight="600" fill="#17283f">4 · 读取与导出</text>
+<text x="983" y="480" font-size="18" font-weight="400" fill="#607088">共享锁捕获一致视图</text>
+<text x="983" y="508" font-size="18" font-weight="400" fill="#607088">释放锁后读取音频</text>
+<text x="983" y="536" font-size="18" font-weight="400" fill="#607088">从快照生成 VTT / MD</text>
+<text x="983" y="564" font-size="18" font-weight="400" fill="#607088">不暴露磁盘路径</text>
+<rect x="40" y="675" width="570" height="220" rx="8" fill="white" stroke="#d8e0ea"/>
+<rect x="40" y="675" width="5" height="220" rx="0" fill="#087f74" stroke="#087f74"/>
+<text x="62" y="709" font-size="21" font-weight="600" fill="#17283f">结果已保存，job 尚未完成</text>
+<text x="62" y="745" font-size="18" font-weight="400" fill="#607088">启动核对录音中的执行提交标识</text>
+<text x="62" y="773" font-size="18" font-weight="400" fill="#607088">匹配时补标 job ready，不重复 ASR</text>
+<text x="62" y="801" font-size="18" font-weight="400" fill="#607088">若无提交结果，保留次数退避重试</text>
+<text x="62" y="829" font-size="18" font-weight="400" fill="#607088">Clip 内推理不保证恰好调用一次</text>
+<rect x="650" y="675" width="590" height="220" rx="8" fill="white" stroke="#d8e0ea"/>
+<rect x="650" y="675" width="5" height="220" rx="0" fill="#087f74" stroke="#087f74"/>
+<text x="672" y="709" font-size="21" font-weight="600" fill="#17283f">快照与修复</text>
+<text x="672" y="745" font-size="18" font-weight="400" fill="#607088">锁外构建，锁内复核 content_revision</text>
+<text x="672" y="773" font-size="18" font-weight="400" fill="#607088">版本变化则重新汇总，不重识别</text>
+<text x="672" y="801" font-size="18" font-weight="400" fill="#607088">repair 独立预算，保留成功文字</text>
+<text x="672" y="829" font-size="18" font-weight="400" fill="#607088">状态根损坏不能当空数据覆盖</text>
+<rect x="40" y="935" width="1200" height="100" rx="8" fill="#f3f6fa" stroke="#d8e0ea"/>
+<text x="62" y="974" font-size="22" font-weight="400" fill="#17283f">固定锁 inode 不删除、不替换；不能直接锁将被 rename 的 JSON。</text>
+<text x="62" y="1010" font-size="19" font-weight="400" fill="#607088">JSON 写入：同目录临时文件 → fsync → os.replace → fsync 目录；无录音 / 片段 / job 表。</text>
 </g>
 </svg>

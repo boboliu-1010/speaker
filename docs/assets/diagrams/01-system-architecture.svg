@@ -1,106 +1,110 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="1395" viewBox="0 0 1280 1395">
-<title>系统架构</title>
-<rect width="1280" height="100%" fill="white"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1590" viewBox="0 0 1800 1590" role="img" aria-labelledby="title desc">
+<title id="title">ReSpeaker Clip 系统架构图</title>
+<desc id="desc">两个独立服务，Clip无数据库访问；Web管理用户设备、文件任务和音频处理。箭头标明协议与数据读写方向。</desc>
+<rect width="1800" height="1590" fill="white"/>
+<defs><marker id="arrow" viewBox="0 0 12 12" refX="11" refY="6" markerWidth="10" markerHeight="10" orient="auto-start-reverse"><path d="M 1 1 L 11 6 L 1 11 Z" fill="#64748b"/></marker></defs>
 <g font-family="PingFang SC,Microsoft YaHei,Noto Sans CJK SC,Arial,sans-serif">
-<text x="40" y="55" font-size="30" font-weight="600" fill="#17283f">系统架构</text>
-<text x="40" y="88" font-size="17" font-weight="400" fill="#607088">原件就绪后导入业务库，由 Server 完成解码、识别、播放和导出。</text>
-<line x1="40" y1="112" x2="1240" y2="112" stroke="#d8e0ea" stroke-width="1.5"/>
-<rect x="40" y="150" width="280" height="210" rx="8" fill="white" stroke="#d8e0ea"/>
-<rect x="40" y="150" width="5" height="210" rx="0" fill="#245cca" stroke="#245cca"/>
-<text x="62" y="184" font-size="21" font-weight="600" fill="#17283f">浏览器 Web</text>
-<text x="62" y="220" font-size="18" font-weight="400" fill="#607088">发起登录并查看本人录音</text>
-<text x="62" y="248" font-size="18" font-weight="400" fill="#607088">HTTPS 9529：请求业务数据</text>
-<text x="62" y="276" font-size="18" font-weight="400" fill="#607088">通过 BLE 把配置写入 Clip</text>
-<text x="62" y="304" font-size="18" font-weight="400" fill="#607088">按片段播放音频并下载字幕</text>
-<rect x="347" y="150" width="280" height="210" rx="8" fill="white" stroke="#d8e0ea"/>
-<rect x="347" y="150" width="5" height="210" rx="0" fill="#087f74" stroke="#087f74"/>
-<text x="369" y="184" font-size="21" font-weight="600" fill="#17283f">已就绪原件来源</text>
-<text x="369" y="220" font-size="18" font-weight="400" fill="#607088">由接入组件提供</text>
-<text x="369" y="248" font-size="18" font-weight="400" fill="#607088">raw 原件交付后复制到两盘</text>
-<text x="369" y="276" font-size="18" font-weight="400" fill="#607088">来源包含归属、会话与段号</text>
-<text x="369" y="304" font-size="18" font-weight="400" fill="#607088">提供可信来源元数据</text>
-<rect x="654" y="150" width="280" height="210" rx="8" fill="white" stroke="#d8e0ea"/>
-<rect x="654" y="150" width="5" height="210" rx="0" fill="#245cca" stroke="#245cca"/>
-<text x="676" y="184" font-size="21" font-weight="600" fill="#17283f">Google 身份服务</text>
-<text x="676" y="220" font-size="18" font-weight="400" fill="#607088">通过 OIDC 验证 Google 身份</text>
-<text x="676" y="248" font-size="18" font-weight="400" fill="#607088">把授权结果回调给 Server</text>
-<text x="676" y="276" font-size="18" font-weight="400" fill="#607088">Server 随后创建本站会话</text>
-<rect x="961" y="150" width="279" height="210" rx="8" fill="white" stroke="#d8e0ea"/>
-<rect x="961" y="150" width="5" height="210" rx="0" fill="#087f74" stroke="#087f74"/>
-<text x="983" y="184" font-size="21" font-weight="600" fill="#17283f">受控 ASR 服务</text>
-<text x="983" y="220" font-size="18" font-weight="400" fill="#607088">每次识别一份片段 WAV</text>
-<text x="983" y="248" font-size="18" font-weight="400" fill="#607088">返回识别原文和时间戳</text>
-<text x="983" y="276" font-size="18" font-weight="400" fill="#607088">speaker 表示匿名说话人</text>
-<text x="983" y="304" font-size="18" font-weight="400" fill="#607088">服务地址由 Server 配置</text>
-<rect x="40" y="405" width="1200" height="650" rx="8" fill="#f3f6fa" stroke="#d8e0ea"/>
-<text x="62" y="445" font-size="25" font-weight="600" fill="#17283f">Server · Python FastAPI 单进程</text>
-<text x="62" y="476" font-size="17" font-weight="400" fill="#607088">HTTP：用户、会话、设备、录音、播放与导出；原件导入读取 ready 来源。</text>
-<rect x="60" y="502" width="360" height="195" rx="8" fill="white" stroke="#d8e0ea"/>
-<rect x="60" y="502" width="5" height="195" rx="0" fill="#245cca" stroke="#245cca"/>
-<text x="82" y="536" font-size="21" font-weight="600" fill="#17283f">用户与会话</text>
-<text x="82" y="572" font-size="18" font-weight="400" fill="#607088">Google 登录并建立本站会话</text>
-<text x="82" y="600" font-size="18" font-weight="400" fill="#607088">users/me：读取本人资料</text>
-<text x="82" y="628" font-size="18" font-weight="400" fill="#607088">仅允许修改本人的显示名称</text>
-<text x="82" y="656" font-size="18" font-weight="400" fill="#607088">CSRF：校验写请求的防伪标记</text>
-<text x="82" y="684" font-size="18" font-weight="400" fill="#607088">会话和登录临时状态只保存在内存</text>
-<rect x="460" y="502" width="360" height="195" rx="8" fill="white" stroke="#d8e0ea"/>
-<rect x="460" y="502" width="5" height="195" rx="0" fill="#245cca" stroke="#245cca"/>
-<text x="482" y="536" font-size="21" font-weight="600" fill="#17283f">设备与绑定</text>
-<text x="482" y="572" font-size="18" font-weight="400" fill="#607088">验证设备登记与用户归属</text>
-<text x="482" y="600" font-size="18" font-weight="400" fill="#607088">发放设备上传配置</text>
-<text x="482" y="628" font-size="18" font-weight="400" fill="#607088">记录 BLE 写入后的读回确认</text>
-<text x="482" y="656" font-size="18" font-weight="400" fill="#607088">移除设备时撤销上传凭证</text>
-<rect x="860" y="502" width="360" height="195" rx="8" fill="white" stroke="#d8e0ea"/>
-<rect x="860" y="502" width="5" height="195" rx="0" fill="#087f74" stroke="#087f74"/>
-<text x="882" y="536" font-size="21" font-weight="600" fill="#17283f">已就绪原件校验</text>
-<text x="882" y="572" font-size="18" font-weight="400" fill="#607088">读取 registry.sources 的 ready 来源</text>
-<text x="882" y="600" font-size="18" font-weight="400" fill="#607088">owner 与身份来自可信来源记录</text>
-<text x="882" y="628" font-size="18" font-weight="400" fill="#607088">校验原件存在、实际大小与 hash</text>
-<text x="882" y="656" font-size="18" font-weight="400" fill="#607088">两盘原件与描述保存后才导入</text>
-<rect x="60" y="710" width="360" height="185" rx="8" fill="white" stroke="#d8e0ea"/>
-<rect x="60" y="710" width="5" height="185" rx="0" fill="#087f74" stroke="#087f74"/>
-<text x="82" y="744" font-size="21" font-weight="600" fill="#17283f">原件导入与录音聚合</text>
-<text x="82" y="780" font-size="18" font-weight="400" fill="#607088">把来源记录导入业务 SQLite</text>
-<text x="82" y="808" font-size="18" font-weight="400" fill="#607088">按绑定与录音会话归并片段</text>
-<text x="82" y="836" font-size="18" font-weight="400" fill="#607088">用来源唯一键避免重复导入</text>
-<text x="82" y="864" font-size="18" font-weight="400" fill="#607088">可见内容变化递增 content_revision</text>
-<rect x="460" y="710" width="360" height="185" rx="8" fill="white" stroke="#d8e0ea"/>
-<rect x="460" y="710" width="5" height="185" rx="0" fill="#245cca" stroke="#245cca"/>
-<text x="482" y="744" font-size="21" font-weight="600" fill="#17283f">录音查询与媒体读取</text>
-<text x="482" y="780" font-size="18" font-weight="400" fill="#607088">只查询当前用户拥有的录音</text>
-<text x="482" y="808" font-size="18" font-weight="400" fill="#607088">核对版本后打开已发布文件</text>
-<text x="482" y="836" font-size="18" font-weight="400" fill="#607088">Range：读取指定音频字节区间</text>
-<text x="482" y="864" font-size="18" font-weight="400" fill="#607088">从同快照生成 VTT 与 Markdown</text>
-<rect x="860" y="710" width="360" height="185" rx="8" fill="white" stroke="#d8e0ea"/>
-<rect x="860" y="710" width="5" height="185" rx="0" fill="#087f74" stroke="#087f74"/>
-<text x="882" y="744" font-size="21" font-weight="600" fill="#17283f">后台任务与恢复</text>
-<text x="882" y="780" font-size="18" font-weight="400" fill="#607088">一个工作者持独占锁，顺序处理</text>
-<text x="882" y="808" font-size="18" font-weight="400" fill="#607088">成功片段保留，失败片段单独重试</text>
-<text x="882" y="836" font-size="18" font-weight="400" fill="#607088">有版本差时重建录音结果快照</text>
-<text x="882" y="864" font-size="18" font-weight="400" fill="#607088">保留执行次数，重启恢复未完成片段</text>
-<rect x="60" y="923" width="1160" height="101" rx="8" fill="white" stroke="#d8e0ea"/>
-<text x="82" y="958" font-size="21" font-weight="600" fill="#087f74">受控解码子进程</text>
-<text x="82" y="994" font-size="18" font-weight="400" fill="#17283f">设备每 5 分钟生成一段原件，每段解码为一个 WAV 并独立识别；Server 不再二次切块。</text>
-<rect x="40" y="1095" width="380" height="255" rx="8" fill="white" stroke="#d8e0ea"/>
-<rect x="40" y="1095" width="5" height="255" rx="0" fill="#087f74" stroke="#087f74"/>
-<text x="62" y="1129" font-size="21" font-weight="600" fill="#17283f">业务 SQLite · 保存录音业务数据</text>
-<text x="62" y="1165" font-size="18" font-weight="400" fill="#607088">accounts：保存本站用户身份</text>
-<text x="62" y="1193" font-size="18" font-weight="400" fill="#607088">recordings：内容/结果版本与 JSON 快照</text>
-<text x="62" y="1221" font-size="18" font-weight="400" fill="#607088">recording_segments：片段与识别结果</text>
-<text x="62" y="1249" font-size="18" font-weight="400" fill="#607088">数据库存储独立于两块录音数据盘</text>
-<rect x="450" y="1095" width="380" height="255" rx="8" fill="white" stroke="#d8e0ea"/>
-<rect x="450" y="1095" width="5" height="255" rx="0" fill="#087f74" stroke="#087f74"/>
-<text x="472" y="1129" font-size="21" font-weight="600" fill="#17283f">设备与上传 SQLite · registry</text>
-<text x="472" y="1165" font-size="18" font-weight="400" fill="#607088">bindings：保存设备归属与凭证</text>
-<text x="472" y="1193" font-size="18" font-weight="400" fill="#607088">device_uids：映射硬件 UID 与设备</text>
-<text x="472" y="1221" font-size="18" font-weight="400" fill="#607088">binding_profiles：保存上传配置版本</text>
-<text x="472" y="1249" font-size="18" font-weight="400" fill="#607088">sources：记录每份原件及导入进度</text>
-<rect x="860" y="1095" width="380" height="255" rx="8" fill="white" stroke="#d8e0ea"/>
-<rect x="860" y="1095" width="5" height="255" rx="0" fill="#087f74" stroke="#087f74"/>
-<text x="882" y="1129" font-size="21" font-weight="600" fill="#17283f">双盘文件存储</text>
-<text x="882" y="1165" font-size="18" font-weight="400" fill="#607088">SPEAKER_PRIMARY_ROOT：主盘</text>
-<text x="882" y="1193" font-size="18" font-weight="400" fill="#607088">SPEAKER_REPLICA_ROOT：副本盘</text>
-<text x="882" y="1221" font-size="18" font-weight="400" fill="#607088">SPEAKER_BACKUP_ROOT：版本备份</text>
-<text x="882" y="1249" font-size="18" font-weight="400" fill="#607088">双盘仅存文件，数据库独立存放</text>
+<text x="50" y="47" text-anchor="start" font-size="32" font-weight="600" fill="#253247">ReSpeaker Clip · 系统架构图</text>
+<text x="50" y="78" text-anchor="start" font-size="20" font-weight="400" fill="#64748b">系统边界、两个服务、外部依赖与数据存储</text>
+<rect x="40" y="340" width="1430" height="1170" rx="8" fill="#fbfdff" stroke="#475569" stroke-width="2" stroke-dasharray="10 7"/>
+<text x="62" y="374" text-anchor="start" font-size="23" font-weight="600" fill="#253247">Speaker Server</text>
+<path d="M 1205 280 L 1205 500" fill="none" stroke="#64748b" stroke-width="2.5" stroke-dasharray="7 5" stroke-linejoin="round"/>
+<polygon points="1205.0,500.0 1197.0,480.0 1213.0,480.0" fill="#64748b"/>
+<rect x="1097.0" y="385" width="216.1" height="62" rx="4" fill="white" fill-opacity="0.97"/>
+<text x="1205" y="408" text-anchor="middle" font-size="19" font-weight="400" fill="#253247">使用网页和 API</text>
+<text x="1205" y="435" text-anchor="middle" font-size="19" font-weight="400" fill="#253247">[HTTPS / TCP 9529]</text>
+<path d="M 365 260 L 365 500" fill="none" stroke="#64748b" stroke-width="2.5" stroke-dasharray="7 5" stroke-linejoin="round"/>
+<polygon points="365.0,500.0 357.0,480.0 373.0,480.0" fill="#64748b"/>
+<rect x="253.1" y="385" width="223.7" height="62" rx="4" fill="white" fill-opacity="0.97"/>
+<text x="365" y="408" text-anchor="middle" font-size="19" font-weight="400" fill="#253247">上传 Opus 与会话声明</text>
+<text x="365" y="435" text-anchor="middle" font-size="19" font-weight="400" fill="#253247">[DTLS / UDP 9528]</text>
+<path d="M 1340 500 L 1340 385 L 1640 385 L 1640 510" fill="none" stroke="#64748b" stroke-width="2.5" stroke-dasharray="7 5" stroke-linejoin="round"/>
+<polygon points="1640.0,510.0 1632.0,490.0 1648.0,490.0" fill="#64748b"/>
+<rect x="1425.5" y="303" width="199.0" height="62" rx="4" fill="white" fill-opacity="0.97"/>
+<text x="1525" y="326" text-anchor="middle" font-size="19" font-weight="400" fill="#253247">交换并验证登录身份</text>
+<text x="1525" y="353" text-anchor="middle" font-size="19" font-weight="400" fill="#253247">[OIDC / HTTPS]</text>
+<path d="M 970 560 L 600 560" fill="none" stroke="#64748b" stroke-width="2.5" stroke-dasharray="7 5" stroke-linejoin="round"/>
+<polygon points="600.0,560.0 620.0,552.0 620.0,568.0" fill="#64748b"/>
+<rect x="642.3" y="427" width="285.4" height="62" rx="4" fill="white" fill-opacity="0.97"/>
+<text x="785" y="450" text-anchor="middle" font-size="19" font-weight="400" fill="#253247">调用内置ASR，读取逐句结果</text>
+<text x="785" y="477" text-anchor="middle" font-size="19" font-weight="400" fill="#253247">[本机 Unix socket / HTTP]</text>
+<path d="M 600 620 L 780 620 L 780 900" fill="none" stroke="#64748b" stroke-width="2.5" stroke-dasharray="7 5" stroke-linejoin="round"/>
+<polygon points="780.0,900.0 772.0,880.0 788.0,880.0" fill="#64748b"/>
+<polygon points="600.0,620.0 620.0,612.0 620.0,628.0" fill="#64748b"/>
+<rect x="567.4" y="780" width="365.2" height="62" rx="4" fill="white" fill-opacity="0.97"/>
+<text x="750" y="803" text-anchor="middle" font-size="19" font-weight="400" fill="#253247">读设备授权；写收件、ready及会话事件</text>
+<text x="750" y="830" text-anchor="middle" font-size="19" font-weight="400" fill="#253247">[文件 I/O + flock]</text>
+<path d="M 1080 710 L 1080 900" fill="none" stroke="#64748b" stroke-width="2.5" stroke-dasharray="7 5" stroke-linejoin="round"/>
+<polygon points="1080.0,900.0 1072.0,880.0 1088.0,880.0" fill="#64748b"/>
+<polygon points="1080.0,710.0 1088.0,730.0 1072.0,730.0" fill="#64748b"/>
+<rect x="944.2" y="779" width="341.5" height="89" rx="4" fill="white" fill-opacity="0.97"/>
+<text x="1115" y="802" text-anchor="middle" font-size="19" font-weight="400" fill="#253247">读 ready/声明；写授权、录音、job</text>
+<text x="1115" y="829" text-anchor="middle" font-size="19" font-weight="400" fill="#253247">及原文</text>
+<text x="1115" y="856" text-anchor="middle" font-size="19" font-weight="400" fill="#253247">[文件 I/O + flock]</text>
+<path d="M 250 700 L 250 1230" fill="none" stroke="#64748b" stroke-width="2.5" stroke-dasharray="7 5" stroke-linejoin="round"/>
+<polygon points="250.0,1230.0 242.0,1210.0 258.0,1210.0" fill="#64748b"/>
+<polygon points="250.0,700.0 258.0,720.0 242.0,720.0" fill="#64748b"/>
+<rect x="117.8" y="1127" width="324.4" height="62" rx="4" fill="white" fill-opacity="0.97"/>
+<text x="280" y="1150" text-anchor="middle" font-size="19" font-weight="400" fill="#253247">写原始 raw；只读 WAV 供内置ASR</text>
+<text x="280" y="1177" text-anchor="middle" font-size="19" font-weight="400" fill="#253247">[文件 I/O]</text>
+<path d="M 1440 675 L 1460 675 L 1460 1430 L 470 1430 L 470 1405" fill="none" stroke="#64748b" stroke-width="2.5" stroke-dasharray="7 5" stroke-linejoin="round"/>
+<polygon points="470.0,1405.0 478.0,1425.0 462.0,1425.0" fill="#64748b"/>
+<polygon points="1440.0,675.0 1460.0,667.0 1460.0,683.0" fill="#64748b"/>
+<rect x="818.2" y="1435" width="263.6" height="62" rx="4" fill="white" fill-opacity="0.97"/>
+<text x="950" y="1458" text-anchor="middle" font-size="19" font-weight="400" fill="#253247">读取 raw；写入并读取 WAV</text>
+<text x="950" y="1485" text-anchor="middle" font-size="19" font-weight="400" fill="#253247">[文件 I/O]</text>
+<path d="M 1340 710 L 1340 1230" fill="none" stroke="#64748b" stroke-width="2.5" stroke-dasharray="7 5" stroke-linejoin="round"/>
+<polygon points="1340.0,1230.0 1332.0,1210.0 1348.0,1210.0" fill="#64748b"/>
+<rect x="1223.0" y="1127" width="218.0" height="62" rx="4" fill="white" fill-opacity="0.97"/>
+<text x="1332" y="1150" text-anchor="middle" font-size="19" font-weight="400" fill="#253247">查询和更新用户与设备</text>
+<text x="1332" y="1177" text-anchor="middle" font-size="19" font-weight="400" fill="#253247">[SQL / SQLite]</text>
+<circle cx="1205.0" cy="123" r="21" fill="#08427b"/>
+<path d="M 1162.0 188 Q 1162.0 150 1205.0 150 Q 1248.0 150 1248.0 188 Z" fill="#08427b"/>
+<text x="1205.0" y="220" text-anchor="middle" font-size="25" font-weight="600" fill="#08427b">用户 / 浏览器</text>
+<text x="1205.0" y="248" text-anchor="middle" font-size="17" font-weight="400" fill="#64748b">用户</text>
+<text x="1205.0" y="276" text-anchor="middle" font-size="19" font-weight="400" fill="#253247">登录、配置设备、播放与导出</text>
+<rect x="130" y="110" width="470" height="150" rx="6" fill="#6b7280" stroke="#6b7280" stroke-width="2"/>
+<text x="365.0" y="150" text-anchor="middle" font-size="25" font-weight="600" fill="white">ReSpeaker Clip</text>
+<text x="365.0" y="179" text-anchor="middle" font-size="16" font-weight="400" fill="#edf4fb">设备</text>
+<text x="365.0" y="214" text-anchor="middle" font-size="19" font-weight="400" fill="white">原始 Opus 与会话声明</text>
+<rect x="1510" y="510" width="260" height="140" rx="6" fill="#6b7280" stroke="#6b7280" stroke-width="2"/>
+<text x="1640.0" y="550" text-anchor="middle" font-size="25" font-weight="600" fill="white">Google OIDC</text>
+<text x="1640.0" y="579" text-anchor="middle" font-size="16" font-weight="400" fill="#edf4fb">外部服务</text>
+<text x="1640.0" y="614" text-anchor="middle" font-size="19" font-weight="400" fill="white">外部身份服务</text>
+<rect x="130" y="500" width="470" height="200" rx="6" fill="#1168bd" stroke="#1168bd" stroke-width="2"/>
+<text x="365.0" y="540" text-anchor="middle" font-size="25" font-weight="600" fill="white">Clip Server</text>
+<text x="365.0" y="569" text-anchor="middle" font-size="16" font-weight="400" fill="#edf4fb">Python / DTLS + FunASR</text>
+<text x="365.0" y="604" text-anchor="middle" font-size="19" font-weight="400" fill="white">设备验证、收件与内置ASR</text>
+<text x="365.0" y="631" text-anchor="middle" font-size="19" font-weight="400" fill="white">不连接数据库</text>
+<rect x="970" y="500" width="470" height="210" rx="6" fill="#1168bd" stroke="#1168bd" stroke-width="2"/>
+<text x="1205.0" y="540" text-anchor="middle" font-size="25" font-weight="600" fill="white">Web Server</text>
+<text x="1205.0" y="569" text-anchor="middle" font-size="16" font-weight="400" fill="#edf4fb">Python / FastAPI + 静态 Web</text>
+<text x="1205.0" y="604" text-anchor="middle" font-size="19" font-weight="400" fill="white">用户设备、API与一个后台循环</text>
+<text x="1205.0" y="631" text-anchor="middle" font-size="19" font-weight="400" fill="white">解码、调用ASR、播放与导出</text>
+<path d="M570 916 C570 893,1220 893,1220 916 L1220 1094 C1220 1117,570 1117,570 1094 Z" fill="#1168bd" stroke="#0b4f90" stroke-width="2"/>
+<path d="M570 916 C570 939,1220 939,1220 916" fill="none" stroke="white" stroke-opacity=".7" stroke-width="1.5"/>
+<text x="895.0" y="957" text-anchor="middle" font-size="25" font-weight="600" fill="white">共享状态文件</text>
+<text x="895.0" y="986" text-anchor="middle" font-size="16" font-weight="400" fill="#edf4fb">JSON / 本机文件系统 / flock</text>
+<text x="895.0" y="1021" text-anchor="middle" font-size="19" font-weight="400" fill="white">设备授权；progress、ready与会话事件</text>
+<text x="895.0" y="1048" text-anchor="middle" font-size="19" font-weight="400" fill="white">录音、job、识别原文与健康状态</text>
+<path d="M1050 1246 C1050 1223,1420 1223,1420 1246 L1420 1389 C1420 1412,1050 1412,1050 1389 Z" fill="#1168bd" stroke="#0b4f90" stroke-width="2"/>
+<path d="M1050 1246 C1050 1269,1420 1269,1420 1246" fill="none" stroke="white" stroke-opacity=".7" stroke-width="1.5"/>
+<text x="1235.0" y="1287" text-anchor="middle" font-size="25" font-weight="600" fill="white">用户与设备数据库</text>
+<text x="1235.0" y="1316" text-anchor="middle" font-size="16" font-weight="400" fill="#edf4fb">SQLite</text>
+<text x="1235.0" y="1351" text-anchor="middle" font-size="19" font-weight="400" fill="white">accounts / devices 两张表</text>
+<text x="1235.0" y="1378" text-anchor="middle" font-size="19" font-weight="400" fill="white">仅 Web Server 访问</text>
+<path d="M150 1246 C150 1223,800 1223,800 1246 L800 1389 C800 1412,150 1412,150 1389 Z" fill="#1168bd" stroke="#0b4f90" stroke-width="2"/>
+<path d="M150 1246 C150 1269,800 1269,800 1246" fill="none" stroke="white" stroke-opacity=".7" stroke-width="1.5"/>
+<text x="475.0" y="1287" text-anchor="middle" font-size="25" font-weight="600" fill="white">音频文件存储</text>
+<text x="475.0" y="1316" text-anchor="middle" font-size="16" font-weight="400" fill="#edf4fb">文件系统 / 双副本</text>
+<text x="475.0" y="1351" text-anchor="middle" font-size="19" font-weight="400" fill="white">原始 raw Opus / 分段 WAV</text>
+<text x="475.0" y="1378" text-anchor="middle" font-size="19" font-weight="400" fill="white">元数据独立于音频盘保存</text>
+<text x="60" y="1557" text-anchor="start" font-size="20" font-weight="600" fill="#253247">图例</text>
+<rect x="145" y="1540" width="30" height="24" rx="3" fill="#08427b"/>
+<text x="190" y="1559" text-anchor="start" font-size="19" font-weight="400" fill="#253247">人员</text>
+<rect x="365" y="1540" width="30" height="24" rx="3" fill="#6b7280"/>
+<text x="410" y="1559" text-anchor="start" font-size="19" font-weight="400" fill="#253247">外部系统</text>
+<rect x="655" y="1540" width="30" height="24" rx="3" fill="#1168bd"/>
+<text x="700" y="1559" text-anchor="start" font-size="19" font-weight="400" fill="#253247">服务 / 数据存储</text>
 </g>
 </svg>
