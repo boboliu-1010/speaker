@@ -30,7 +30,7 @@
 <rect x="650" y="405" width="5" height="210" rx="0" fill="#245cca" stroke="#245cca"/>
 <text x="672" y="439" font-size="21" font-weight="600" fill="#17283f">4 · Web 只读完整三件套</text>
 <text x="672" y="475" font-size="18" font-weight="400" fill="#607088">读取正式目录及录音信息</text>
-<text x="672" y="503" font-size="18" font-weight="400" fill="#607088">核验会话、owner和成品完整性</text>
+<text x="672" y="503" font-size="18" font-weight="400" fill="#607088">会话校验，按用户 / Clip / ID定位</text>
 <text x="672" y="531" font-size="18" font-weight="400" fill="#607088">完整WAV播放、VTT字幕和MD下载</text>
 <text x="672" y="559" font-size="18" font-weight="400" fill="#607088">不读取半成品，不现场生成文件</text>
 <rect x="40" y="660" width="1200" height="210" rx="8" fill="white" stroke="#d8e0ea"/>
@@ -39,6 +39,6 @@
 <text x="62" y="730" font-size="18" font-weight="400" fill="#607088">Clip写完整WAV / VTT / MD，全部校验并fsync后原子发布整个录音目录。</text>
 <text x="62" y="758" font-size="18" font-weight="400" fill="#607088">Web写设备授权，Clip只读验证；Clip不访问数据库，Web不处理录音job。</text>
 <text x="62" y="786" font-size="18" font-weight="400" fill="#607088">Web停止：Clip继续收件、处理和发布；Clip停止：Web仍可读取已发布成品。</text>
-<text x="62" y="814" font-size="18" font-weight="400" fill="#607088">同一本机文件系统按目录分工，没有音频存储服务、双写或副本复制。</text>
+<text x="62" y="814" font-size="18" font-weight="400" fill="#607088">同一本机文件系统按用户与Clip隔离，前端只用ID构造固定API请求。</text>
 </g>
 </svg>

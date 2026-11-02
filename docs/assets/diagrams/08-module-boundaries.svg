@@ -38,8 +38,8 @@
 <rect x="660" y="550" width="560" height="160" rx="8" fill="white" stroke="#d8e0ea"/>
 <rect x="660" y="550" width="5" height="160" rx="0" fill="#245cca" stroke="#245cca"/>
 <text x="682" y="584" font-size="21" font-weight="600" fill="#17283f">成品目录与读取</text>
-<text x="682" y="620" font-size="18" font-weight="400" fill="#607088">只读Clip已发布录音目录与信息</text>
-<text x="682" y="648" font-size="18" font-weight="400" fill="#607088">按owner核验成品目录归属</text>
+<text x="682" y="620" font-size="18" font-weight="400" fill="#607088">只读本人Clip下的正式录音目录</text>
+<text x="682" y="648" font-size="18" font-weight="400" fill="#607088">仅返回ID；后台推导目录并鉴权</text>
 <text x="682" y="676" font-size="18" font-weight="400" fill="#607088">不读原件、内部recording或job</text>
 <rect x="660" y="730" width="560" height="160" rx="8" fill="white" stroke="#d8e0ea"/>
 <rect x="660" y="730" width="5" height="160" rx="0" fill="#245cca" stroke="#245cca"/>
@@ -51,6 +51,6 @@
 <rect x="40" y="970" width="5" height="155" rx="0" fill="#087f74" stroke="#087f74"/>
 <text x="62" y="1004" font-size="21" font-weight="600" fill="#17283f">同一本机文件系统</text>
 <text x="62" y="1040" font-size="18" font-weight="400" fill="#607088">Web写设备授权 → Clip只读；Clip写完整成品 → Web只读</text>
-<text x="62" y="1068" font-size="18" font-weight="400" fill="#607088">原件、中间状态和成品按目录区分；无双写、副本或额外音频存储服务</text>
+<text x="62" y="1068" font-size="18" font-weight="400" fill="#607088">原件、中间态及成品均按owner / device_id隔离，地址按录音ID推导</text>
 </g>
 </svg>

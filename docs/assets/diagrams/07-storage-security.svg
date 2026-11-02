@@ -19,7 +19,7 @@
 <text x="472" y="184" font-size="21" font-weight="600" fill="#17283f">Web Server</text>
 <text x="472" y="220" font-size="18" font-weight="400" fill="#607088">管理登录、用户和设备</text>
 <text x="472" y="248" font-size="18" font-weight="400" fill="#607088">写设备授权，采用deny-first</text>
-<text x="472" y="276" font-size="18" font-weight="400" fill="#607088">只读录音信息及完整三件套</text>
+<text x="472" y="276" font-size="18" font-weight="400" fill="#607088">按用户作用域只读完整三件套</text>
 <text x="472" y="304" font-size="18" font-weight="400" fill="#607088">GET / HEAD / Range每次鉴权</text>
 <text x="472" y="332" font-size="18" font-weight="400" fill="#607088">不访问原件、中间态或job</text>
 <text x="472" y="360" font-size="18" font-weight="400" fill="#607088">不生成字幕、MD或音频</text>
@@ -27,7 +27,7 @@
 <rect x="860" y="150" width="5" height="280" rx="0" fill="#087f74" stroke="#087f74"/>
 <text x="882" y="184" font-size="21" font-weight="600" fill="#17283f">本机文件系统</text>
 <text x="882" y="220" font-size="18" font-weight="400" fill="#607088">授权、来源与状态都是文件</text>
-<text x="882" y="248" font-size="18" font-weight="400" fill="#607088">原件、中间和成品按目录划分</text>
+<text x="882" y="248" font-size="18" font-weight="400" fill="#607088">原件、中间与成品均按用户/Clip隔离</text>
 <text x="882" y="276" font-size="18" font-weight="400" fill="#607088">路径受控，拒绝符号链接</text>
 <text x="882" y="304" font-size="18" font-weight="400" fill="#607088">目录0700，文件0600</text>
 <text x="882" y="332" font-size="18" font-weight="400" fill="#607088">临时文件校验后原子发布</text>
