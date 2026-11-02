@@ -26,7 +26,7 @@
 <rect x="40" y="435" width="5" height="235" rx="0" fill="#245cca" stroke="#245cca"/>
 <text x="62" y="469" font-size="21" font-weight="600" fill="#17283f">1 · 解码片段</text>
 <text x="62" y="505" font-size="18" font-weight="400" fill="#607088">一份原件独立流式解码</text>
-<text x="62" y="533" font-size="18" font-weight="400" fill="#607088">WAV 先落盘、校验与 fsync</text>
+<text x="62" y="533" font-size="18" font-weight="400" fill="#607088">WAV 写两盘并校验、fsync</text>
 <text x="62" y="561" font-size="18" font-weight="400" fill="#607088">校验完成后提交片段索引</text>
 <text x="62" y="589" font-size="18" font-weight="400" fill="#607088">不合成整条大音频</text>
 <rect x="347" y="435" width="280" height="235" rx="8" fill="white" stroke="#d8e0ea"/>
@@ -57,9 +57,9 @@
 <text x="62" y="808" font-size="18" font-weight="400" fill="#607088">字幕由已提交 JSON 生成，不单独保存文件。</text>
 <rect x="655" y="710" width="585" height="145" rx="8" fill="white" stroke="#d8e0ea"/>
 <rect x="655" y="710" width="5" height="145" rx="0" fill="#087f74" stroke="#087f74"/>
-<text x="677" y="744" font-size="21" font-weight="600" fill="#17283f">片段 WAV 缺失或损坏</text>
-<text x="677" y="780" font-size="18" font-weight="400" fill="#607088">按原件和冻结配置重建，验证原摘要与样本范围。</text>
-<text x="677" y="808" font-size="18" font-weight="400" fill="#607088">保留已有文字和缺失片段的时间区间。</text>
+<text x="677" y="744" font-size="21" font-weight="600" fill="#17283f">文件缺失或损坏</text>
+<text x="677" y="780" font-size="18" font-weight="400" fill="#607088">优先从另一盘校验后恢复，两份均丢失才从 raw 重建。</text>
+<text x="677" y="808" font-size="18" font-weight="400" fill="#607088">恢复两盘副本后更新索引，保留已有文字与时间区间。</text>
 <rect x="40" y="895" width="1200" height="125" rx="8" fill="#f3f6fa" stroke="#d8e0ea"/>
 <text x="62" y="932" font-size="23" font-weight="600" fill="#17283f">部分结果与运行限制</text>
 <text x="62" y="970" font-size="19" font-weight="400" fill="#17283f">partial 描述快照缺口；result_stale 表示还有新内容；单进程单工作者禁止多机并行运行。</text>

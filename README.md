@@ -13,7 +13,7 @@ Server / Web 负责用户和设备管理、录音处理、播放与导出。原�
 - **Web**：通过同源 HTTPS 调用用户、设备和录音接口，通过 BLE 配置设备。
 - **Server**：使用 Python / FastAPI 单进程部署。一个后台工作者持有独占锁，顺序处理解码、识别和恢复；解码在受资源限制的子进程中执行。多 Uvicorn worker 和多机共享数据目录暂不支持。
 - **外部服务**：Google 验证登录身份，Server 管理本站会话。ASR 接收每段 WAV，返回文字、时间戳和说话人标识；未配置 ASR 时仍可解码和播放音频。
-- **存储**：设备与上传 SQLite（registry）保存绑定、凭证和来源记录；业务 SQLite 保存用户、录音、片段及处理结果。两个库分别提交事务。raw 原件与片段 WAV 存在私有目录，VTT 和 Markdown 从 JSON 快照生成。登录临时状态和会话只保存在内存。
+- **存储**：设备与上传 SQLite（registry）保存绑定、凭证和来源记录；业务 SQLite 保存用户、录音、片段及处理结果。两个库分别提交事务，在线数据库位于主盘。raw 原件和片段 WAV 在主盘、副本盘各保存一份；副本盘另存 SQLite 一致性检查点。VTT 和 Markdown 从 JSON 快照生成。登录临时状态和会话只保存在内存。
 
 Web 服务端口为 9529，对外使用 HTTPS。Google 回调地址须与部署配置一致。当前为设计稿，尚未完成实现和实机验收。
 
@@ -27,7 +27,7 @@ Web 服务端口为 9529，对外使用 HTTPS。Google 回调地址须与部署�
 - 音频解码：将每份原件独立、流式解码为一个 WAV。[音频存储与解码](docs/audio-processing.md#storage)
 - 转写与汇总：逐片段识别并保存结果，换算全局时间后生成录音快照；VTT 和 Markdown 在下载时生成。[转写设计](docs/audio-processing.md#transcript)
 - 录音与媒体接口：按用户查询录音和快照，校验权限后读取音频、文字及导出内容，音频支持 Range。[Web API](#web-api)、[媒体 API](docs/audio-processing.md#media-api)
-- 存储与备份：管理两个 SQLite 库、私有文件、加密备份及恢复，保证文件与索引的提交顺序。[数据模型](#data-model)、[存储安全](docs/audio-processing.md#security)
+- 存储与备份：管理两个 SQLite 库、双盘文件副本、数据库检查点和版本备份，保证文件与索引的提交顺序。[数据模型](#data-model)、[存储安全](docs/audio-processing.md#security)
 
 <a id="data-model"></a>
 
@@ -566,17 +566,23 @@ Server 使用以下环境变量。启动程序尚未实现，ExecStart 命令待
 
 ### 7.1 数据库与文件地址
 
-配置文件为 `/etc/speaker/server.env`，由启动项加载。两个 DB 地址填写 SQLite 文件的绝对路径，音频和备份地址填写目录绝对路径。
+配置文件为 `/etc/speaker/server.env`，由启动项加载。主盘和副本盘必须是独立磁盘或独立存储卷；同一磁盘的两个目录不能提供坏盘保护。DB 地址填写主盘 SQLite 文件的绝对路径，音频和备份填写目录绝对路径。
 
 ```dotenv
-# 设备与上传 SQLite（registry）：设备绑定、凭证、来源记录。
-SPEAKER_REGISTRY_DB_PATH=/var/lib/speaker/db/registry.sqlite3
+# 两个独立磁盘的挂载目录，启动时须确认均已挂载。
+SPEAKER_PRIMARY_ROOT=/mnt/speaker-primary
+SPEAKER_REPLICA_ROOT=/mnt/speaker-replica
+# 在线数据库仅在主盘打开；副本通过 SQLite backup API 生成。
+SPEAKER_REGISTRY_DB_PATH=/mnt/speaker-primary/db/registry.sqlite3
 # 业务 SQLite：账号、录音、原始片段、片段处理状态及转写 JSON。
-SPEAKER_BUSINESS_DB_PATH=/var/lib/speaker/db/business.sqlite3
+SPEAKER_BUSINESS_DB_PATH=/mnt/speaker-primary/db/business.sqlite3
 # 私有音频目录：raw 原件、每段 WAV 和处理临时文件；字幕不落盘。
-SPEAKER_STORAGE_ROOT=/var/lib/speaker/audio
-# 独立加密备份的挂载目录；加密密钥由部署环境单独提供。
-SPEAKER_BACKUP_ROOT=/mnt/speaker-backup
+SPEAKER_STORAGE_ROOT=/mnt/speaker-primary/audio
+# 副本中的相对目录相同，例如 /mnt/speaker-replica/audio/derived/...。
+# 数据库检查点保存在副本盘 checkpoints/；默认每 60 秒检查一次是否需要更新。
+SPEAKER_DB_REPLICA_INTERVAL_SECONDS=60
+# 每日保留完整版本备份，避免误修改直接影响所有恢复点。
+SPEAKER_BACKUP_ROOT=/mnt/speaker-replica/backups
 
 # 设备每段最多 5 分钟，Server 直接识别整段；超时按 ASR 服务性能调整。
 SPEAKER_ASR_TIMEOUT_SECONDS=600
@@ -590,8 +596,8 @@ GOOGLE_CLIENT_SECRET=replace-with-google-client-secret
 ```
 
 - `SPEAKER_REGISTRY_DB_PATH` 与 `SPEAKER_BUSINESS_DB_PATH` 指向两个不同的文件；`registry.sources` 是 registry 库中的表引用，不是文件名。
-- Server 所有导入、查询和后台任务模块共用这里解析出的路径；数据库连接统一设置第 6 节规定的 PRAGMA。
-- 数据库父目录须允许服务账号创建 SQLite 的 WAL/SHM 文件；数据库、音频和临时目录位于已解锁的加密数据卷，备份使用独立存储。
+- 数据库和音频目录必须位于 SPEAKER_PRIMARY_ROOT 下，副本按相对路径写入 SPEAKER_REPLICA_ROOT。数据库副本写入 checkpoints/，不会作为另一组在线数据库同时打开。数据库连接使用第 6 节的 PRAGMA。
+- 两个挂载点须可读写并启用存储加密，数据库目录允许服务账号创建 WAL/SHM。启动检查挂载标识以排除同一文件系统，并在部署时确认两者具有独立故障域；不能在挂载缺失时创建普通目录继续运行。
 - 数据目录权限为 0700，数据库及 WAL/SHM、音频和配置文件权限为 0600。配置文件由服务端受控保存，真实凭证不提交到仓库。
 
 ### 7.2 启动项加载配置
@@ -605,11 +611,11 @@ EnvironmentFile=/etc/speaker/server.env
 
 将以上配置加入 Server 的 systemd 服务单元，ExecStart 填写实际启动命令。EnvironmentFile 路径不加 `-` 前缀，文件缺失时启动失败。所有数据路径从环境变量读取，与启动目录无关。
 
-修改配置或启动项后，重启对应 Server 服务；修改 systemd 单元时先执行 `systemctl daemon-reload`。数据库文件地址变更须先停写并按一致性备份/恢复规则迁移两个库和关联文件，再修改路径；仅修改环境变量不会迁移已有数据。
+修改配置或启动项后，重启对应 Server 服务；修改 systemd 单元时先执行 `systemctl daemon-reload`。磁盘或数据库地址变更须先停写，按[双盘恢复流程](docs/audio-processing.md#disk-recovery)校验并迁移两个库和关联文件，再修改路径；仅修改环境变量不会复制或修复数据。
 
 ### 7.3 启动检查
 
-- 检查必填路径为绝对路径，两个数据库不指向同一文件，数据卷已解锁，服务账号具有所需读写权限。
+- 检查绝对路径、主盘/副本盘挂载与独立性、加密卷及权限，两个在线数据库不得指向同一文件。任一盘不可写时拒绝启动；运行中失效则暂停新增持久写入并告警，主盘仍完好时可继续已有结果读取。
 - 首次部署按第 6 节初始化数据库；已有部署检查数据库版本并执行迁移。配置指向的既有数据库缺失时应报错，避免误建空库后继续运行。
 - 校验备份目录、加密密钥与用户额度配置；要求与[音频存储及恢复设计](docs/audio-processing.md#security)一致，未满足时拒绝启动。
 - 配置 ASR 时确认服务支持 300 秒、16 kHz 单声道 PCM16 WAV（PCM 为 9,600,000 字节，另加文件头）；能力不足时拒绝启用该配置，不自动细分片段。首次识别前固定配置，失败重试沿用原模型。

@@ -16,7 +16,7 @@
 <rect x="347" y="150" width="5" height="210" rx="0" fill="#087f74" stroke="#087f74"/>
 <text x="369" y="184" font-size="21" font-weight="600" fill="#17283f">已就绪原件来源</text>
 <text x="369" y="220" font-size="18" font-weight="400" fill="#607088">由接入组件提供</text>
-<text x="369" y="248" font-size="18" font-weight="400" fill="#607088">raw 文件已经可靠保存</text>
+<text x="369" y="248" font-size="18" font-weight="400" fill="#607088">raw 原件交付后复制到两盘</text>
 <text x="369" y="276" font-size="18" font-weight="400" fill="#607088">来源包含归属、会话与段号</text>
 <text x="369" y="304" font-size="18" font-weight="400" fill="#607088">提供可信来源元数据</text>
 <rect x="654" y="150" width="280" height="210" rx="8" fill="white" stroke="#d8e0ea"/>
@@ -56,7 +56,7 @@
 <text x="882" y="572" font-size="18" font-weight="400" fill="#607088">读取 registry.sources 的 ready 来源</text>
 <text x="882" y="600" font-size="18" font-weight="400" fill="#607088">owner 与身份来自可信来源记录</text>
 <text x="882" y="628" font-size="18" font-weight="400" fill="#607088">校验原件存在、实际大小与 hash</text>
-<text x="882" y="656" font-size="18" font-weight="400" fill="#607088">检查处理限额，异常来源暂不导入</text>
+<text x="882" y="656" font-size="18" font-weight="400" fill="#607088">两盘原件与描述保存后才导入</text>
 <rect x="60" y="710" width="360" height="185" rx="8" fill="white" stroke="#d8e0ea"/>
 <rect x="60" y="710" width="5" height="185" rx="0" fill="#087f74" stroke="#087f74"/>
 <text x="82" y="744" font-size="21" font-weight="600" fill="#17283f">原件导入与录音聚合</text>
@@ -87,7 +87,7 @@
 <text x="62" y="1165" font-size="18" font-weight="400" fill="#607088">accounts：保存本站用户身份</text>
 <text x="62" y="1193" font-size="18" font-weight="400" fill="#607088">recordings：内容/结果版本与 JSON 快照</text>
 <text x="62" y="1221" font-size="18" font-weight="400" fill="#607088">recording_segments：片段与识别结果</text>
-<text x="62" y="1249" font-size="18" font-weight="400" fill="#607088">每段保存一份 WAV 和识别结果</text>
+<text x="62" y="1249" font-size="18" font-weight="400" fill="#607088">在线数据库在主盘，副盘保存检查点</text>
 <rect x="450" y="1095" width="380" height="255" rx="8" fill="white" stroke="#d8e0ea"/>
 <rect x="450" y="1095" width="5" height="255" rx="0" fill="#087f74" stroke="#087f74"/>
 <text x="472" y="1129" font-size="21" font-weight="600" fill="#17283f">设备与上传 SQLite · registry</text>
@@ -97,10 +97,10 @@
 <text x="472" y="1249" font-size="18" font-weight="400" fill="#607088">sources：记录每份原件及导入进度</text>
 <rect x="860" y="1095" width="380" height="255" rx="8" fill="white" stroke="#d8e0ea"/>
 <rect x="860" y="1095" width="5" height="255" rx="0" fill="#087f74" stroke="#087f74"/>
-<text x="882" y="1129" font-size="21" font-weight="600" fill="#17283f">私有文件存储 · 保存文件内容</text>
-<text x="882" y="1165" font-size="18" font-weight="400" fill="#607088">raw：保留设备上传原件</text>
-<text x="882" y="1193" font-size="18" font-weight="400" fill="#607088">片段 WAV：同时用于播放和 ASR</text>
+<text x="882" y="1129" font-size="21" font-weight="600" fill="#17283f">双盘文件存储</text>
+<text x="882" y="1165" font-size="18" font-weight="400" fill="#607088">PRIMARY_ROOT：主盘文件与在线数据库</text>
+<text x="882" y="1193" font-size="18" font-weight="400" fill="#607088">REPLICA_ROOT：原件、WAV 与检查点</text>
 <text x="882" y="1221" font-size="18" font-weight="400" fill="#607088">VTT / Markdown：从 JSON 即时生成</text>
-<text x="882" y="1249" font-size="18" font-weight="400" fill="#607088">通过鉴权接口读取，路径不对外公开</text>
+<text x="882" y="1249" font-size="18" font-weight="400" fill="#607088">两根目录须为独立磁盘或存储卷</text>
 </g>
 </svg>
