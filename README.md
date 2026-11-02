@@ -42,7 +42,7 @@ Web停止不影响Clip按有效授权处理录音；Clip停止不影响Web读取
 
 ### 4.3 身份与凭证验证
 
-读取Web发布的`SPEAKER_STATE_ROOT/device-authorizations/<device_id>.json`，验证设备凭证、owner、binding_id和epoch。握手、续传及最终接受均复核；缺失、损坏或撤销一律拒绝。
+读取Web发布的`SPEAKER_DATA_ROOT/device-authorizations/<device_id>.json`，验证设备凭证、owner、binding_id和epoch。握手、续传及最终接受均复核；缺失、损坏或撤销一律拒绝。
 
 Web串行执行设备授权变更：先写deny，再更新devices，最后发布匹配的active；解绑保持deny。中断后默认拒绝，不能自动恢复未完成授权。已接受录音保留原owner。
 
@@ -60,33 +60,38 @@ Web串行执行设备授权变更：先写deny，再更新devices，最后发布
 
 ### 4.6 文件仓储
 
-以下均为服务端本机目录，由Clip Server写入；Web Server只读取正式成品。路径由配置根目录和ID推导，不维护地址映射表：
+服务端只配置一个存储根`SPEAKER_DATA_ROOT`，音频和处理状态放在同一用户、Clip目录下。路径由ID推导，不维护地址映射表：
 
 ```text
-${SPEAKER_USER_DATA_ROOT}/<owner>/clips/<device_id>/
-├── incoming/<recording_id>/<upload_id>/audio.part
-├── raw/<recording_id>/<segment_no>.opus
-├── segments/<recording_id>/<segment_no>.wav
-└── recordings/<recording_id>/
-    ├── recording.wav
-    ├── transcript.vtt
-    ├── transcript.md
-    └── recording.json
-
-${SPEAKER_STATE_ROOT}/users/<owner>/clips/<device_id>/
-├── incoming/<recording_id>/<upload_id>/progress.json
-├── sources/ready/<recording_id>/<source_id>.json
-├── session-events/<recording_id>/<event_id>.json
-├── recordings/<recording_id>/recording.json
-├── recordings/<recording_id>/transcripts/<segment_no>.json
-└── jobs/<recording_id>/<job_id>.json
+${SPEAKER_DATA_ROOT}/
+├── db/business.sqlite3                         # Web专用
+├── device-authorizations/<device_id>.json       # Web写，Clip读
+├── credentials/devices/                        # 私有设备凭证材料
+├── locks/                                     # 两个角色锁及state.lock
+└── users/<owner>/clips/<device_id>/
+    ├── incoming/<recording_id>/<upload_id>/
+    │   ├── audio.part
+    │   └── progress.json
+    ├── raw/<recording_id>/<segment_no>.opus
+    ├── segments/<recording_id>/<segment_no>.wav
+    ├── processing/<recording_id>/              # Clip内部状态
+    │   ├── state.json
+    │   ├── sources/<source_id>.json
+    │   ├── session-events/<event_id>.json
+    │   ├── transcripts/<segment_no>.json
+    │   └── jobs/<job_id>.json
+    └── recordings/<recording_id>/              # 正式成品，Web只读
+        ├── recording.wav
+        ├── transcript.vtt
+        ├── transcript.md
+        └── recording.json
 ```
 
 owner来自已验证授权，Web读取时来自登录会话。不同用户、不同Clip分别隔离；设备换绑不搬迁旧文件，也不改变旧录音权限。
 
 owner、recording_id采用`[a-z0-9][a-z0-9_-]{0,127}`，device_id同样字符但最多32位；段号1..999999999。禁止任意路径及符号链接。生产recording_id为紧凑UTF-8 JSON数组`[owner,device_id,binding_id,epoch,source_session]`的SHA-256小写十六进制，epoch为整数；本文短ID仅作示意。
 
-内部录音文件保存归属、段号、原件hash、各阶段结果及发布状态；job只需保存阶段、输入摘要、状态、尝试次数、执行标识和下次执行时间。它们不提供给Web。
+processing内的state.json保存归属、段号、原件hash、各阶段结果及发布状态；job只需保存阶段、输入摘要、状态、尝试次数、执行标识和下次执行时间。它们不提供给Web。
 
 ### 4.7 调度与重试
 
@@ -116,16 +121,16 @@ owner、recording_id采用`[a-z0-9][a-z0-9_-]{0,127}`，device_id同样字符但
 
 同一recording目录下先写隐藏临时目录，四文件全部校验、fsync后，在短锁内复核输入并原子重命名整个目录。Web只看正式目录；发布后只读，重试核对后一致则复用，不逐文件覆盖。重启核对已发布目录与内部提交记录，补齐job状态。
 
-录音根目录由`SPEAKER_USER_DATA_ROOT`配置。第1段原件的地址按以下规则计算：
+录音根目录由`SPEAKER_DATA_ROOT`配置。第1段原件的地址按以下规则计算：
 
 ```text
-${SPEAKER_USER_DATA_ROOT}/demo-user/clips/demo-device/raw/rec-demo-20261102-001/1.opus
+${SPEAKER_DATA_ROOT}/users/demo-user/clips/demo-device/raw/rec-demo-20261102-001/1.opus
 ```
 
 同一录音的最终目录：
 
 ```text
-${SPEAKER_USER_DATA_ROOT}/demo-user/clips/demo-device/recordings/rec-demo-20261102-001/
+${SPEAKER_DATA_ROOT}/users/demo-user/clips/demo-device/recordings/rec-demo-20261102-001/
 ├── recording.wav
 ├── transcript.vtt
 ├── transcript.md
@@ -291,19 +296,16 @@ binding_id为32位小写十六进制，epoch/revision为正uint32；token为32�
 
 Web监听`127.0.0.1:9529`，OP用Nginx提供HTTPS；Clip监听DTLS/UDP 9528。两个服务分别启动，模型在Clip进程内加载，解码子进程按需执行。
 
-两服务读取同一份storage.env。存储根目录由部署配置决定，不限定父目录或目录名称；直接在配置根下拼接用户、Clip及录音ID。以下路径占位值须替换为实际绝对路径：
+两服务读取同一份storage.env。只配置一个服务端存储根，不限定父目录或目录名称；其下目录按第4.6节统一推导。以下占位值须替换为实际绝对路径：
 
 ```dotenv
-SPEAKER_USER_DATA_ROOT=<absolute-audio-root>
-SPEAKER_STATE_ROOT=<absolute-state-root>
-SPEAKER_DEVICE_MATERIAL_ROOT=<absolute-device-material-root>
+SPEAKER_DATA_ROOT=<absolute-storage-root>
 SPEAKER_LOCK_TIMEOUT_SECONDS=2
 ```
 
 web.env：
 
 ```dotenv
-SPEAKER_BUSINESS_DB_PATH=<absolute-database-file>
 SPEAKER_WEB_HOST=127.0.0.1
 SPEAKER_WEB_PORT=9529
 PUBLIC_WEB_ORIGIN=https://speaker.example.com
@@ -328,7 +330,7 @@ SPEAKER_ASR_MODEL_MANIFEST=/opt/speaker/models/manifest.json
 
 SPEAKER_UPLOAD_ENDPOINT是设备可达的公开DTLS地址，区别于Clip监听地址；Google回调固定为`PUBLIC_WEB_ORIGIN/api/boa/v1/auth/google/callback`。Web只信任配置的代理地址；HTTPS私钥由OP管理。
 
-数据根、状态根互不包含；数据库和凭证不放用户数据根或静态目录。首版两个进程使用同一个非root专用系统账号`speaker`，目录0700、文件0600，因此可互读授权及成品，无需额外共享权限配置。
+整个存储根均不对外静态暴露；数据库、凭证、处理状态和成品按上述子目录区分。首版两个进程使用同一个非root专用系统账号`speaker`，目录0700、文件0600，因此可互读授权及成品，无需额外共享权限配置。
 
 读写职责由模块约束：Clip写处理数据和成品，Web写数据库和授权、只读成品；Clip不加载Google秘密或数据库配置。两进程属于同一系统账号信任域，此处不提供操作系统级的相互隔离。
 
