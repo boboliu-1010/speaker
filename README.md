@@ -181,32 +181,32 @@ ready schema_version=1，包含source_id、device_id/device_uid、owner、bindin
 **处理流程与边界**：Clip为唯一写入方。录音是内部处理结果的提交点；job保存运行状态和预算。Web不读取recording/job/逐段转写，公开查询只读第4.11节的正式成品目录。
 
 ```text
-/var/lib/speaker/
-├── db/business.sqlite3                         # Web专用
-├── credentials/devices/                        # Web管理，Clip只读
-├── state/
-│   ├── locks/                                  # 两个角色锁及固定state锁
-│   ├── device-authorizations/<device_id>.json   # 当前设备授权
-│   ├── device-reports/<device_id>.json          # 当前设备遥测
-│   ├── status/                                 # 各自进程健康状态
-│   └── users/<owner>/clips/<device_id>/         # Clip内部状态隔离根
-│       ├── incoming/<recording_id>/<upload_id>/progress.json
-│       ├── sources/ready/<recording_id>/<source_id>.json
-│       ├── session-events/<recording_id>/<event_id>.json
-│       ├── recordings/<recording_id>/
-│       │   ├── recording.json                  # 内部处理状态
-│       │   └── transcripts/<segment_no>.json
-│       └── jobs/<recording_id>/<job_id>.json
-└── audio/
-    └── users/<owner>/clips/<device_id>/         # Clip录音文件隔离根
-        ├── incoming/<recording_id>/<upload_id>/audio.part
-        ├── raw/<recording_id>/<segment_no>.opus
-        ├── segments/<recording_id>/<segment_no>.wav
-        └── recordings/<recording_id>/          # Web只读此正式成品目录
-            ├── recording.wav
-            ├── transcript.vtt
-            ├── transcript.md
-            └── recording.json                  # 必要录音信息
+<SPEAKER_BUSINESS_DB_PATH>                       # Web专用数据库文件
+<SPEAKER_DEVICE_MATERIAL_ROOT>/                  # Web管理，Clip只读
+<SPEAKER_STATE_ROOT>/
+├── locks/                                      # 两个角色锁及固定state锁
+├── device-authorizations/<device_id>.json       # 当前设备授权
+├── device-reports/<device_id>.json              # 当前设备遥测
+├── status/                                     # 各自进程健康状态
+└── users/<owner>/clips/<device_id>/             # Clip内部状态隔离根
+    ├── incoming/<recording_id>/<upload_id>/progress.json
+    ├── sources/ready/<recording_id>/<source_id>.json
+    ├── session-events/<recording_id>/<event_id>.json
+    ├── recordings/<recording_id>/
+    │   ├── recording.json                      # 内部处理状态
+    │   └── transcripts/<segment_no>.json
+    └── jobs/<recording_id>/<job_id>.json
+
+<SPEAKER_USER_DATA_ROOT>/                        # 可配置的用户录音数据根
+└── <owner>/clips/<device_id>/                   # Clip录音文件隔离根
+    ├── incoming/<recording_id>/<upload_id>/audio.part
+    ├── raw/<recording_id>/<segment_no>.opus
+    ├── segments/<recording_id>/<segment_no>.wav
+    └── recordings/<recording_id>/              # Web只读此正式成品目录
+        ├── recording.wav
+        ├── transcript.vtt
+        ├── transcript.md
+        └── recording.json                      # 必要录音信息
 ```
 
 目录都在同一本机文件系统上；每个用户、每台Clip分别有自己的录音与内部状态根。设备授权、遥测和角色锁是控制数据，不混入录音目录；Web显示设备遥测时仍核验报告归属与当前授权上下文。
@@ -217,10 +217,10 @@ ready schema_version=1，包含source_id、device_id/device_uid、owner、bindin
 
 三个ID只使用小写字母、数字、下划线和连字符，限定为`[a-z0-9][a-z0-9_-]{0,127}`；段号必须为正整数。部署迁移先核验历史ID，不允许把不兼容ID静默截断、转小写或清洗成另一个ID。输入按框架解码后的值校验，拒绝斜杠、反斜杠、点、百分号、空白及二次解码；客户端不能提交目录、文件名或完整磁盘路径。
 
-后台只使用以下固定规则，不维护“ID→文件地址”映射表：
+绝对根目录由部署配置提供，后端只固定根目录以下的ID层级；`/var/lib/speaker/audio/users`不是代码常量，也不要求目录一定叫audio或users。后台使用以下规则，不维护“ID→文件地址”映射表：
 
 ```text
-A = SPEAKER_STORAGE_ROOT/users/<owner>/clips/<device_id>
+A = SPEAKER_USER_DATA_ROOT/<owner>/clips/<device_id>
 S = SPEAKER_STATE_ROOT/users/<owner>/clips/<device_id>
 
 上传中的字节： A/incoming/<recording_id>/<upload_id>/audio.part
@@ -230,6 +230,8 @@ S = SPEAKER_STATE_ROOT/users/<owner>/clips/<device_id>
 内部录音状态： S/recordings/<recording_id>/recording.json
 任务状态：     S/jobs/<recording_id>/<job_id>.json
 ```
+
+例如将`SPEAKER_USER_DATA_ROOT`改为`/data/recordings`后，成品位置自动成为`/data/recordings/<owner>/clips/<device_id>/recordings/<recording_id>/`，不再额外拼接audio/users。前端ID和请求URL保持不变。
 
 `A`和`S`仅表示本节规则的前缀，不是额外目录或配置。Clip接收原件时先将验证上下文的owner/device_id/recording_id固定到progress及ready，所有后续任务沿用它们推导路径，不根据设备后来的绑定重算用户归属。内部任务以所在owner/device_id目录为上下文，来源和录音中的身份必须与目录一致方可处理。后台打开文件时还须验证受控根、普通文件及非符号链接，不能只做字符串拼接。
 
@@ -377,7 +379,7 @@ VTT/MD单文件≤64MiB，成品录音信息≤1MiB；生成时检查体积和�
 
 #### 4.11.1 实际落盘地址示例
 
-以下使用示意ID：用户`demo-user`、Clip `demo-device`、录音`rec-demo-20261102-001`。设备上传3段Opus，分别300秒、300秒和42秒，最终合并为10分42秒。默认`SPEAKER_STORAGE_ROOT=/var/lib/speaker/audio`。
+以下使用示意ID：用户`demo-user`、Clip `demo-device`、录音`rec-demo-20261102-001`。设备上传3段Opus，分别300秒、300秒和42秒，最终合并为10分42秒。以下实际地址以`SPEAKER_USER_DATA_ROOT=/var/lib/speaker/audio/users`、`SPEAKER_STATE_ROOT=/var/lib/speaker/state`为例，都是部署配置值。
 
 第1段完成上传后的原始文件实际地址：
 
@@ -795,7 +797,7 @@ Clip Wi-Fi 扫描结果由 Web 的 BLE 适配层读取：
 
 **输入与输出**：当前会话及筛选条件 → device_id和recording_id列表；不返回服务器磁盘路径、下载URL或路径映射字段。
 
-**处理流程与边界**：先取会话用户`owner`，只扫描`SPEAKER_STORAGE_ROOT/users/<owner>/clips/`内各Clip的recordings正式目录，忽略隐藏临时目录。读取成品recording.json，验证owner与会话一致、recording_id与目录一致、时间/时长合法，并检查三个固定成品文件存在。禁止先扫描所有用户再过滤。
+**处理流程与边界**：先取会话用户`owner`，只扫描`SPEAKER_USER_DATA_ROOT/<owner>/clips/`内各Clip的recordings正式目录，忽略隐藏临时目录。读取成品recording.json，验证owner与会话一致、recording_id与目录一致、时间/时长合法，并检查三个固定成品文件存在。禁止先扫描所有用户再过滤。
 
 GET `/recordings`成功响应示例：
 
@@ -996,11 +998,13 @@ PUBLIC_WEB_ORIGIN为对外HTTPS域名，Google回调使用该origin追加`/api/b
 #### 7.3.1 storage.env
 
 ```dotenv
-SPEAKER_STORAGE_ROOT=/var/lib/speaker/audio
+SPEAKER_USER_DATA_ROOT=/var/lib/speaker/audio/users
 SPEAKER_STATE_ROOT=/var/lib/speaker/state
 SPEAKER_DEVICE_MATERIAL_ROOT=/var/lib/speaker/credentials/devices
 SPEAKER_LOCK_TIMEOUT_SECONDS=2
 ```
+
+两服务加载同一份storage.env，使用一致的用户数据根和状态根。上述绝对地址都是示例，可由OP改为其他本机目录；应用从配置读取，不硬编码部署路径。启动校验路径为绝对路径、权限正确且不在Web静态目录下。变更配置不自动搬迁已有数据，目录迁移由OP在维护窗口安排。
 
 <a id="web-env"></a>
 
