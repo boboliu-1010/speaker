@@ -225,15 +225,38 @@ Web负责激活、下发配置、确认、改名和撤销，按第4.3节发布�
 
 先订阅TX再写RX。命令串行发送，单条UTF-8最多255字节；通知可能分片，拼成完整JSON再解析。超时重连读回状态，不能盲目重发。响应按具体命令读取ok/data或error/msg，事件另行处理。
 
-| AT命令 | 用途 |
-| --- | --- |
-| AT+IDENTITY? | 读设备UID及绑定协议能力 |
-| AT+BINDING? | 读绑定ID、epoch、revision及保存状态 |
-| AT+BINDCFG=host,port,device_id,token,binding_id,epoch,revision | 保存服务器配置和绑定 |
-| AT+BINDCLR=binding_id,revision | 清理本机绑定 |
-| AT+NETSCAN | 扫描Wi-Fi，以wifi_scan事件返回ssid_hex、rssi等 |
-| AT+NETCFG=ssid,password / AT+NETCFG? | 保存、读回Wi-Fi配置；saved不代表已联网 |
-| AT+NETCHECK / AT+NETCHECK? | 启动、查询联网检查；不代表上传端点一定可达 |
+返回JSON示例（键为命令，值为响应；仅列主要字段）：
+
+```json
+{
+  "AT+IDENTITY?": {"ok":true,"data":{"device_uid":"0011223344556677","binding_protocol_version":1}},
+  "AT+BINDING? / AT+BINDCFG=host,port,device_id,token,binding_id,epoch,revision": {
+    "ok":true,"data":{"device_uid":"0011223344556677","bound":true,"saved":true,"binding_id":"00112233445566778899aabbccddeeff","epoch":1,"revision":1}
+  },
+  "AT+BINDCLR=binding_id,revision": {"ok":true,"data":{"bound":false,"saved":true,"cleared_binding_id":"00112233445566778899aabbccddeeff"}},
+  "AT+NETCFG=ssid,password / AT+NETCFG?": {"ok":true,"data":{"configured":true,"saved":true,"networks":[{"slot":1,"ssid_hex":"44656d6f"}]}},
+  "AT+NETSCAN": {"ok":true,"data":{"accepted":true,"job":1,"state":"scanning"}},
+  "AT+NETCHECK": {"ok":true,"data":{"accepted":true,"job":2,"state":"checking","scope":"wifi_dhcp"}},
+  "AT+NETCHECK?": {"ok":true,"data":{"job":2,"state":"succeeded","scope":"wifi_dhcp","ip":"192.168.1.20","error":0}},
+  "不支持的命令": {"ok":false,"msg":"Unknown command"}
+}
+```
+
+Wi-Fi扫描结果通过异步事件返回，job对应上面的扫描请求：
+
+```json
+{
+  "event": "wifi_scan",
+  "job": 1,
+  "state": "succeeded",
+  "error": 0,
+  "cleanup_error": 0,
+  "truncated": false,
+  "networks": [{"ssid_hex":"44656d6f","rssi":-55}]
+}
+```
+
+ssid_hex为SSID的UTF-8字节十六进制，示例为Demo；Wi-Fi配置saved不代表已联网，NETCHECK成功也不代表上传端点一定可达。
 
 **BINDING/BINDCFG/BINDCLR是绑定v1目标契约。** 参考客户端已有约定，基础固件尚缺对应注册和能力标记；须确认固件支持`binding_protocol_version=1`再启用，缺失提示升级。
 
@@ -246,59 +269,3 @@ binding_id为32位小写十六进制，epoch/revision为正uint32；token为32�
 绑定前确保设备空闲；写入后读回UID、binding_id、epoch、revision及saved，全部匹配才提交HTTP确认。BLE失败保留待配置状态，不显示成功。
 
 解绑先经HTTP撤销服务端授权，再经BLE清理设备；设备离线保留device_cleanup_pending，不恢复上传权限。Wi-Fi扫描及写入全部在浏览器与设备之间完成。
-
-## 7. 单机配置与运行
-
-Web监听`127.0.0.1:9529`，OP用Nginx提供HTTPS；Clip监听DTLS/UDP 9528。两个服务分别启动，模型在Clip进程内加载，解码子进程按需执行。
-
-两服务读取同一份storage.env。只配置一个服务端存储根，不限定父目录或目录名称；其下目录按第4.6节统一推导。以下占位值须替换为实际绝对路径：
-
-```dotenv
-SPEAKER_DATA_ROOT=<absolute-storage-root>
-SPEAKER_LOCK_TIMEOUT_SECONDS=2
-```
-
-web.env：
-
-```dotenv
-SPEAKER_WEB_HOST=127.0.0.1
-SPEAKER_WEB_PORT=9529
-PUBLIC_WEB_ORIGIN=https://speaker.example.com
-SPEAKER_TRUSTED_PROXY_IPS=127.0.0.1
-SPEAKER_UPLOAD_ENDPOINT=upload.example.com:9528
-GOOGLE_CLIENT_ID=replace-with-client-id
-GOOGLE_CLIENT_SECRET_FILE=/etc/speaker/secrets/web/google-client-secret
-```
-
-clip.env：
-
-```dotenv
-SPEAKER_CLIP_HOST=0.0.0.0
-SPEAKER_CLIP_PORT=9528
-SPEAKER_CLIP_TRANSPORT=dtls
-SPEAKER_CLIP_CERT_FILE=/etc/speaker/tls/clip/server-chain.pem
-SPEAKER_CLIP_KEY_FILE=/etc/speaker/tls/clip/server.key
-SPEAKER_USER_QUOTA_BYTES=10737418240
-SPEAKER_ASR_MODEL_ROOT=/opt/speaker/models
-SPEAKER_ASR_MODEL_MANIFEST=/opt/speaker/models/manifest.json
-```
-
-SPEAKER_UPLOAD_ENDPOINT是设备可达的公开DTLS地址，区别于Clip监听地址；Google回调固定为`PUBLIC_WEB_ORIGIN/api/boa/v1/auth/google/callback`。Web只信任配置的代理地址；HTTPS私钥由OP管理。
-
-整个存储根均不对外静态暴露；数据库、凭证、处理状态和成品按上述子目录区分。首版两个进程使用同一个非root专用系统账号`speaker`，目录0700、文件0600，因此可互读授权及成品，无需额外共享权限配置。
-
-读写职责由模块约束：Clip写处理数据和成品，Web写数据库和授权、只读成品；Clip不加载Google秘密或数据库配置。两进程属于同一系统账号信任域，此处不提供操作系统级的相互隔离。
-
-## 8. 文件一致性与故障处理
-
-使用固定instance.lock保证每角色单实例，固定state.lock保护短元数据提交，锁文件不删除或替换。JSON通过同目录临时文件、fsync及原子替换提交；音频、模型、hash和SQL不占state锁。所有临时产物与目标位于同一文件系统。
-
-| 情况 | 处理 |
-| --- | --- |
-| 模型未就绪或失败 | 保存原件，等待识别；不发布缺文字成品 |
-| 缺片或无录完声明 | 保留分段结果，等待补齐，不进入Web列表 |
-| 进程中断 | 按持久文件、执行标识和成品目录对账续跑 |
-| 空间不足、文件损坏 | 停止相关处理并告警，不覆盖为空或猜测成功 |
-| 模型原生库崩溃 | 可能使整个Clip重启；Web继续读取已有成品 |
-
-状态文件维护schema_version，未知版本拒绝处理；成品recording.json仍只保留四字段。模型离线固定版本，文本安全转义；日志排除凭证和录音正文。应用不实现备份任务、磁盘复制或整体恢复流程。
