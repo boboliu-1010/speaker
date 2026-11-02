@@ -1,38 +1,30 @@
 digraph G {
-graph [rankdir=LR, bgcolor="white", pad="0.35", nodesep="0.42", ranksep="0.7", splines=polyline, fontname="PingFang SC", fontsize=22, labelloc=t, label="Web Server：用户设备管理与成品读取"];
-node [shape=box, style=filled, fillcolor="#438dd5", color="#2366a0", fontcolor=white, fontname="PingFang SC", fontsize=15, margin="0.18,0.12"];
-edge [fontname="PingFang SC", fontsize=12, color="#516379", fontcolor="#34465d", arrowsize=0.8];
-subgraph cluster_service { label="Web Server · 无音频处理或job调度"; color="#5a7596"; style=dashed; fontsize=20;
-boot [width=3.01, label="启动与生命周期 §5.1\nHTTP / 会话 / 读取资源"];
-api [width=3.62, label="API与请求校验\n会话 / Origin-CSRF / owner"];
-users [width=2.23, label="登录与用户 §5.2\nOIDC / 本人资料"];
-devices [width=2.89, label="设备管理 §5.3\n配置 / BLE确认 / 解绑"];
-authpub [width=3.71, label="授权发布 §5.3\ndeny-first / epoch / 原子写"];
-query [width=3.04, label="成品目录与查询 §5.4\n用户作用域 / 仅返回ID"];
-media [width=2.92, label="播放与下载 §5.5\n完整WAV / 现成VTT和MD"];
-dbport [width=2.93, label="用户设备数据库 §5.6\n仅accounts / devices"];
-page [width=3.57, label="Web页面 §5.5\n完整录音播放器 / 字幕 / 下载"];
+graph [rankdir=LR, bgcolor="white", pad="0.35", nodesep="0.45", ranksep="0.55", splines=line, fontname="PingFang SC", fontsize=23, labelloc=t, label="Web Server · 三条请求流程"];
+node [shape=box, style="rounded,filled", fillcolor="#267bb9", color="#2366a0", fontcolor=white, fontname="PingFang SC", fontsize=17, margin="0.22,0.18"];
+edge [fontname="PingFang SC", fontsize=13, color="#53667c", fontcolor="#34465d", arrowsize=0.85];
+subgraph cluster_0 { label="用户与登录"; color="#d1dce8"; style=rounded; fontsize=19; margin=20;
+auth_api [width=3.09, label="登录入口\n创建 / 校验登录临时态"];
+user [width=3.41, label="登录与用户 §5.2\nGoogle OIDC / 本站会话"];
+account [width=3.00, label="用户设备数据库 §5.6\naccounts / 本人资料"];
+auth_api -> user [label="登录请求"];
+user -> account [label="核验身份 / 用户读写"];
 }
-browser [shape=box, width=2.78, fillcolor="#e8edf3", color="#8b9bb0", fontcolor="#24354a", label="用户 / 浏览器\nNginx HTTPS 443入口"];
-google [shape=box, width=1.88, fillcolor="#e8edf3", color="#8b9bb0", fontcolor="#24354a", label="Google OIDC\n外部身份服务"];
-database [shape=cylinder, width=2.72, fillcolor="#e8edf3", color="#8b9bb0", fontcolor="#24354a", label="SQLite\naccounts / devices"];
-fs [shape=cylinder, width=4.08, fillcolor="#e8edf3", color="#8b9bb0", fontcolor="#24354a", label="本机文件系统\n设备授权 / 用户与Clip隔离目录\n完整WAV / 完整VTT / 完整MD"];
-browser -> page [label="使用页面"];
-page -> api [label="同源API / Nginx代理"];
-api -> users [label="登录 / 资料"];
-api -> devices [label="设备请求"];
-users -> google [label="OIDC HTTPS"];
-users -> dbport [label="读写用户"];
-devices -> dbport [label="读写设备"];
-devices -> authpub [label="发布 / 撤销授权"];
-authpub -> fs [label="写设备授权文件"];
-api -> query [label="查询本人录音ID"];
-query -> fs [label="按用户作用域读录音信息"];
-api -> media [label="GET / HEAD / Range"];
-media -> query [label="会话归属 / 按ID推导位置"];
-media -> fs [label="只读现成WAV / VTT / MD"];
-dbport -> database [label="参数化SQL"];
-boot -> api [style=dashed, label="启动 / 生命周期", constraint=false];
-boot -> dbport [style=dashed, label="启动 / 生命周期", constraint=false];
-boot -> query [style=dashed, label="启动 / 生命周期", constraint=false];
+subgraph cluster_1 { label="设备与授权"; color="#d1dce8"; style=rounded; fontsize=19; margin=20;
+device_api [width=3.34, label="请求校验\n会话 / CSRF / 设备归属"];
+device [width=2.79, label="设备管理 §5.3\n激活 / 配置 / 解绑"];
+project [width=3.76, label="授权协调 §5.3\ndeny-first / devices事务"];
+confirm [width=2.85, label="确认与响应\n配置读回 / 撤销结果"];
+device_api -> device [label="受控设备操作"];
+device -> project [label="协调数据库与授权文件"];
+project -> confirm [label="按设备操作返回"];
+}
+subgraph cluster_2 { label="录音查询与读取"; color="#d1dce8"; style=rounded; fontsize=19; margin=20;
+record_api [width=3.65, label="请求校验\n会话owner / Clip与录音ID"];
+directory [width=3.56, label="成品目录 §5.4\n本人作用域 / 规则推导路径"];
+read [width=2.95, label="成品读取 §5.5\nID列表或四种固定文件"];
+page [width=3.26, label="Web页面 §5.5\n录音信息 / 播放 / 下载"];
+record_api -> directory [label="限定用户范围"];
+directory -> read [label="校验成品归属与完整性"];
+read -> page [label="返回ID或已生成文件"];
+}
 }

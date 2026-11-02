@@ -11,7 +11,7 @@ import re
 import unicodedata
 
 ROOT = Path(__file__).resolve().parent
-SOURCE = ROOT / '01-system-architecture-v10.mmd'
+SOURCE = ROOT / '01-system-overview.mmd'
 FONT = 'PingFang SC,Microsoft YaHei,Noto Sans CJK SC,Arial,sans-serif'
 BLUE, DARK, GREY, INK = '#1168bd', '#08427b', '#6b7280', '#253247'
 
@@ -60,7 +60,7 @@ def render():
     assert not any(r[1] == 'clip' and r[2] == 'database' for r in relations)
     parts = [f'<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1750" viewBox="0 0 1800 1750" role="img" aria-labelledby="title desc">',
         '<title id="title">ReSpeaker Clip 系统架构图</title>',
-        '<desc id="desc">两个独立服务，Clip无数据库访问；Web管理用户设备、文件任务和音频处理。箭头标明协议与数据读写方向。</desc>',
+        '<desc id="desc">两个应用进程；Clip处理并发布完整WAV、VTT和MD，不连接数据库；Web管理用户设备并只读成品。按用户和Clip隔离目录。</desc>',
         '<rect width="1800" height="1750" fill="white"/>',
         '<defs><marker id="arrow" viewBox="0 0 12 12" refX="11" refY="6" markerWidth="10" markerHeight="10" orient="auto-start-reverse"><path d="M 1 1 L 11 6 L 1 11 Z" fill="#64748b"/></marker></defs>',
         f'<g font-family="{FONT}">']
@@ -128,7 +128,7 @@ def render():
         parts.append(f'<rect x="{x}" y="1700" width="30" height="24" rx="3" fill="{fill}"/>')
         text(x+45,1719,label,19,anchor='start')
     parts.extend(['</g>','</svg>'])
-    (ROOT/'01-system-architecture-v10.svg').write_text('\n'.join(parts)+'\n')
+    (ROOT/'01-system-overview.svg').write_text('\n'.join(parts)+'\n')
 
 
 if __name__ == '__main__':
