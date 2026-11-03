@@ -14,7 +14,7 @@ BEGIN IMMEDIATE;
 
 CREATE TABLE accounts (
     user_id       TEXT PRIMARY KEY NOT NULL,
-    google_sub    TEXT NOT NULL UNIQUE,                -- Google用户标识
+    google_sub    TEXT NOT NULL UNIQUE,
     email         TEXT NOT NULL UNIQUE COLLATE NOCASE,
     display_name  TEXT NOT NULL DEFAULT '',
     status        TEXT NOT NULL DEFAULT 'active'
@@ -25,27 +25,20 @@ CREATE TABLE accounts (
 );
 
 CREATE TABLE devices (
-    id                        TEXT PRIMARY KEY NOT NULL, -- API中的device_id
-    device_uid                TEXT NOT NULL UNIQUE,      -- 硬件UID
-    owner                     TEXT REFERENCES accounts(user_id), -- 解绑后为NULL
-    display_name              TEXT NOT NULL DEFAULT '',
-    binding_id                TEXT UNIQUE,
-    epoch                     INTEGER NOT NULL DEFAULT 0 CHECK (epoch >= 0),
-    revision                  INTEGER NOT NULL DEFAULT 0 CHECK (revision >= 0),
-    confirmed_revision        INTEGER NOT NULL DEFAULT 0
-                              CHECK (confirmed_revision >= 0 AND confirmed_revision <= revision),
-    state                     TEXT NOT NULL DEFAULT 'provisioning'
-                              CHECK (state IN ('provisioning', 'provisioned', 'revoked')),
-    verification_material_ref TEXT,                       -- 上传凭证材料的相对引用，不存明文token
-    device_cleanup_pending    INTEGER NOT NULL DEFAULT 0
-                              CHECK (device_cleanup_pending IN (0, 1)),
-    created_at                INTEGER NOT NULL,
-    updated_at                INTEGER NOT NULL,
-    CHECK (state NOT IN ('provisioning', 'provisioned') OR
-        (owner IS NOT NULL AND binding_id IS NOT NULL AND epoch > 0 AND revision > 0
-         AND verification_material_ref IS NOT NULL)),
-    CHECK (state != 'provisioned' OR confirmed_revision = revision),
-    CHECK (state != 'revoked' OR owner IS NULL)
+    id                 TEXT PRIMARY KEY NOT NULL,     -- 硬件UID，API中的device_id/device_uid
+    owner              TEXT REFERENCES accounts(user_id),
+    display_name       TEXT NOT NULL DEFAULT '',
+    state              TEXT NOT NULL DEFAULT 'bound'
+                       CHECK (state IN ('bound', 'revoked')),
+    token_hash         TEXT UNIQUE CHECK (token_hash IS NULL OR length(token_hash) = 64),
+    token_material_ref TEXT,                          -- 当前token私有配置文件的相对引用
+    created_at         INTEGER NOT NULL,
+    updated_at         INTEGER NOT NULL,
+    CHECK (
+        (state = 'bound' AND owner IS NOT NULL AND token_hash IS NOT NULL AND token_material_ref IS NOT NULL)
+        OR
+        (state = 'revoked' AND owner IS NULL AND token_hash IS NULL AND token_material_ref IS NULL)
+    )
 );
 
 CREATE INDEX devices_owner ON devices(owner, id);
@@ -55,11 +48,11 @@ COMMIT;
 
 ## 字段约定
 
-- 时间均为UTC毫秒；`auth_version`用于使旧会话失效。
-- 校验设备持有证明后自动建档为`provisioning`，蓝牙确认后为`provisioned`；不预登记，也不新增绑定或挑战表。挑战只保存在Web内存。
-- `owner`是当前用户；解绑时撤销授权、设为NULL并进入`revoked`。`device_cleanup_pending`表示设备端仍待蓝牙清理；原用户解绑且设备清理完成后才允许新用户绑定。
-- `binding_id`、`epoch`标识绑定及代次；`revision`为配置版本，`confirmed_revision`为蓝牙读回确认的版本。
-- 有效绑定的本人重复激活复用原行及绑定；解绑后重新认领复用设备ID，生成新binding_id，递增epoch/revision，重置confirmed_revision及清理标记。历史录音归属不变；领取归属须在同一事务内检查，不能覆盖其他用户。
-- 凭证引用由服务端生成，限定在`credentials/devices/`内；不保存设备运行状态或遥测。
+- 时间为UTC毫秒；auth_version用于使旧登录会话失效。
+- id直接使用硬件UID，不重复保存device_uid列；Server在同一事务内核对当前owner，拒绝覆盖其他用户。
+- 首次绑定自动建档为bound；本人重复激活复用当前token。bound只表示Server归属有效，不表示设备已配置或在线。
+- 解绑先撤销授权，清空owner、token_hash及token_material_ref并标记revoked；旧token及已有上传连接不能继续提交文件。
+- 重新绑定复用设备ID，但生成新随机token。token_hash为token的SHA-256十六进制；当前配置仅保存在credentials/devices/私有文件中，供本人重试，不存数据库明文；读取配置时核对hash，不一致则拒绝返回。
+- 历史录音owner保留在文件中；转交前由用户上传完旧录音或明确确认删除，避免新token上传旧录音。
 
-连接数据库时设置上述PRAGMA，业务读写使用参数化SQL；初始化、迁移由Web本机维护入口执行。
+初始化、迁移由Web本机维护入口执行；连接时设置上述PRAGMA，业务使用参数化SQL。

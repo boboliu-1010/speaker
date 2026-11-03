@@ -22,7 +22,7 @@
 <title>n1</title>
 <path fill="#267bb9" stroke="#2366a0" d="M503.32,-66.72C503.32,-66.72 296.2,-66.72 296.2,-66.72 290.2,-66.72 284.2,-60.72 284.2,-54.72 284.2,-54.72 284.2,-12 284.2,-12 284.2,-6 290.2,0 296.2,0 296.2,0 503.32,0 503.32,0 509.32,0 515.32,-6 515.32,-12 515.32,-12 515.32,-54.72 515.32,-54.72 515.32,-60.72 509.32,-66.72 503.32,-66.72"/>
 <text xml:space="preserve" text-anchor="middle" x="399.76" y="-38.46" font-family="PingFang SC" font-size="17.00" fill="white">身份验证 §2.3</text>
-<text xml:space="preserve" text-anchor="middle" x="399.76" y="-18.06" font-family="PingFang SC" font-size="17.00" fill="white">授权 / owner / epoch</text>
+<text xml:space="preserve" text-anchor="middle" x="399.76" y="-18.06" font-family="PingFang SC" font-size="17.00" fill="white">UID / 当前token / 授权</text>
 </g>
 <!-- n0&#45;&gt;n1 -->
 <g id="edge1" class="edge">

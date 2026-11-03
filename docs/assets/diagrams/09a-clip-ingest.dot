@@ -3,7 +3,7 @@ graph [rankdir=LR, bgcolor="white", pad="0.35", nodesep="0.4", ranksep="0.55", s
 node [shape=box, style="rounded,filled", fillcolor="#267bb9", color="#2366a0", fontcolor=white, fontname="PingFang SC", fontsize=17, margin="0.22,0.18"];
 edge [fontname="PingFang SC", fontsize=13, color="#53667c", fontcolor="#34465d", arrowsize=0.85];
 n0 [width=2.85, label="DTLS与协议 §2.2\n解析上传 / 结束消息"];
-n1 [width=3.21, label="身份验证 §2.3\n授权 / owner / epoch"];
+n1 [width=3.21, label="身份验证 §2.3\nUID / 当前token / 授权"];
 n2 [width=3.26, label="原件收件 §2.4\n落盘 / 校验 / 回执"];
 n3 [width=3.16, label="录音聚合 §2.5\n段号 / 最终N / 完整性"];
 n4 [width=3.31, label="文件仓储 §2.6\nrecording / 待处理job"];

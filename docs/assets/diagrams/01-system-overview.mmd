@@ -6,11 +6,11 @@ C4Container
     System_Ext(google, "Google OIDC", "外部身份服务")
     System_Boundary(speaker, "Speaker Server") {
         Container(clip, "Clip Server", "设备接入 / 音频处理", "Opus → 分段WAV → 转写\n按recording合并完整WAV / VTT / MD\n发布成品；不连接数据库")
-        Container(web, "Web Server", "用户设备 / 成品读取", "管理用户设备及授权文件\n只读完整录音、播放与下载\n不解码、不转写、不合并")
+        Container(web, "Web Server", "用户设备 / 成品读取", "Server管理归属及token授权\n只读完整录音、播放与下载\n不解码、不转写、不合并")
         ContainerDb(files, "本机文件系统", "一个可配置根，按用户与Clip隔离", "SPEAKER_DATA_ROOT统一存储根\n按用户 / Clip / recording ID定位\n完整WAV / VTT / MD及录音信息\nClip负责处理和发布；Web只读成品、写设备授权")
         ContainerDb(database, "用户与设备数据库", "SQLite", "accounts / devices 两张表\n仅 Web Server 访问")
     }
-    Rel(user, device, "配对、证明持有与配置", "BLE / AT")
+    Rel(user, device, "读取UID、写入上传配置", "BLE / AT")
     Rel(user, nginx, "使用网页和 API", "HTTPS / TCP 443")
     Rel(nginx, web, "反向代理", "HTTP / 127.0.0.1:9529")
     BiRel(device, clip, "上传 Opus / 返回收件回执", "DTLS / UDP 9528")

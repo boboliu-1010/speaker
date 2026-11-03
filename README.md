@@ -27,9 +27,9 @@
 
 ### 2.3 身份与凭证验证
 
-读取Web发布的`SPEAKER_DATA_ROOT/device-authorizations/<device_id>.json`，验证设备凭证、owner、binding_id和epoch。握手、续传及最终接受均复核；缺失、损坏或撤销一律拒绝。
+读取Web发布的`SPEAKER_DATA_ROOT/device-authorizations/<device_id>.json`，核对设备UID与当前token摘要，owner取Server授权。握手、续传和文件最终接受时均复核；旧token及已建立连接不能绕过撤销。
 
-Web串行执行设备授权变更：先写deny，再更新devices，最后发布匹配的active；解绑保持deny。中断后默认拒绝，不能自动恢复未完成授权。已接受录音保留原owner。
+Web串行变更授权：先写deny，再更新devices及私有token材料，最后发布匹配的active；解绑撤销token并保持deny。中断后默认拒绝，已接受录音保留原owner。
 
 ### 2.4 原件收件与续传
 
@@ -51,8 +51,7 @@ Web串行执行设备授权变更：先写deny，再更新devices，最后发布
 ${SPEAKER_DATA_ROOT}/
 ├── db/business.sqlite3                         # Web专用
 ├── device-authorizations/<device_id>.json       # Web写，Clip读
-├── credentials/trust/                          # Web验证设备证书的信任根
-├── credentials/devices/                        # 私有上传凭证材料
+├── credentials/devices/                        # Web保存当前token配置，供本人重试
 ├── locks/                                     # 两个角色锁及state.lock
 └── users/<owner>/clips/<device_id>/
     ├── incoming/<recording_id>/<upload_id>/
@@ -118,11 +117,13 @@ Google OIDC登录后建立或复用accounts用户，校验回调及账号状态�
 
 ### 3.2 设备管理
 
-用户登录并通过蓝牙连接Clip，Web校验设备持有证明后自动创建devices及device_id，无需OP登记。未绑定设备可认领，已绑定本人则复用；已绑定他人返回409 device_already_bound，不允许覆盖。
+用户登录、蓝牙读取UID后自行绑定；device_id直接使用硬件UID，不另行分配。Server原子检查归属：未绑定则自动建档，已绑定本人复用当前配置，已绑定他人返回409 device_already_bound。
 
-转交时原用户先解绑，Web撤销授权并清空owner；蓝牙清理完成后，新用户重新绑定，复用device_id但生成新binding_id、递增epoch和revision。历史录音仍归原用户。
+原用户解绑时立即撤销旧token、清空owner；新用户绑定生成全新随机token。设备只保存上传地址、UID和token，账号归属只在Server管理；历史录音不随换绑转移。
 
-维护devices并按第2.3节发布授权，配置流程见第4.3节。凭证只在配置响应中返回，不进入列表、日志或前端持久缓存。
+转交前须上传完设备旧录音，或经用户明确确认删除，避免旧录音用新token上传后归到新用户。首版适用于受信任用户的小范围部署，UID不是秘密或设备持有证明。
+
+凭证只在配置响应返回，不进入列表、URL、日志或前端持久缓存。授权文件规则见第2.3节，设备配置流程见第4.3节。
 
 ### 3.3 成品读取
 
@@ -143,36 +144,17 @@ Google OIDC登录后建立或复用accounts用户，校验回调及账号状态�
 | GET /users/me | user_id、email、display_name |
 | PATCH /users/me | 仅修改display_name |
 | GET /devices | 本人设备列表，不含凭证 |
-| POST /devices/binding/challenge | 输入device_uid；返回当前会话的一次性挑战 |
-| POST /devices/activate | 输入device_uid、challenge_id、proof；验证后自动建档或复用，返回configuration |
-| POST /devices/{id}/binding/confirm | 输入device_uid、binding_id、revision、saved=true；核对后确认配置 |
+| POST /devices/activate | 输入device_uid；检查当前归属后绑定或复用，返回configuration |
 | PATCH /devices/{id} | 仅修改display_name |
-| DELETE /devices/{id}/binding | 原用户撤销并清空owner；返回revoked、device_cleanup_pending及旧binding_id/revision供蓝牙清理 |
+| DELETE /devices/{id}/binding | 原用户撤销token、清空owner，返回state=revoked；无需设备在线 |
 | GET /recordings | 返回录音ID列表；支持device_id、from/to、limit、cursor |
 | GET /health | Web自身及成品目录可读状态，不返回秘密 |
 
-POST `/devices/binding/challenge` 返回示例：
+激活时的configuration示例（token为占位值）：
 
 ```json
 {
-  "challenge_id": "challenge-demo",
-  "nonce": "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff",
-  "expires_in": 300
-}
-```
-
-nonce为随机32字节的十六进制；挑战保存在Web内存，绑定当前登录会话及UID，5分钟有效、成功激活后一次消费，重启后重新申请。`proof`取AT+BINDPROOF返回的data；Web验证证书、签名及nonce，proof的UID须与挑战一致；在串行事务内核对当前归属再建档，不能只凭UID认领。无效证明返回403 device_proof_invalid；首次认领或解绑后重绑时proof仍为bound=true，返回409 device_cleanup_required，清理后用新挑战重试。
-
-激活时的configuration示例（凭证为占位值）：
-
-```json
-{
-  "device_id": "demo-device",
-  "device_uid": "0011223344556677",
-  "owner_id": "demo-user",
-  "binding_id": "00112233445566778899aabbccddeeff",
-  "epoch": 1,
-  "revision": 1,
+  "device_id": "0011223344556677",
   "endpoint": "upload.example.com:9528",
   "device_token": "0123456789abcdef0123456789abcdef"
 }
@@ -182,7 +164,7 @@ nonce为随机32字节的十六进制；挑战保存在Web内存，绑定当前�
 
 ```json
 {
-  "items": [{"device_id":"demo-device","recording_id":"rec-demo-20261102-001"}],
+  "items": [{"device_id":"0011223344556677","recording_id":"rec-demo-20261102-001"}],
   "next_cursor": null
 }
 ```
@@ -219,79 +201,96 @@ nonce为随机32字节的十六进制；挑战保存在Web内存，绑定当前�
   "ok": true,
   "data": {
     "device_uid": "0011223344556677",
-    "binding_protocol_version": 1,
-    "binding_proof_version": 1
+    "model": "reSpeaker Clip"
   }
 }
 ```
 
-#### AT+BINDPROOF — 证明持有设备
+#### AT+UPLOADCFG — 保存上传配置
 
-`AT+BINDPROOF=nonce`，经本地配对的BLE调用，返回设备签名的当前绑定快照：
+`AT+UPLOADCFG=host,port,device_id,token`，写入前先关闭自动上传并等待设备空闲。
+
+```json
+{
+  "ok": true,
+  "error": 0
+}
+```
+
+#### AT+UPLOADCFG? — 读取配置保存结果
 
 ```json
 {
   "ok": true,
   "data": {
-    "device_uid": "0011223344556677",
-    "nonce": "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff",
-    "bound": false,
-    "binding_id": null,
-    "epoch": 0,
-    "revision": 0,
-    "signature": "base64url-signature",
-    "certificate_chain": ["base64-der-device-certificate", "base64-der-issuer-certificate"]
+    "configured": true,
+    "saved": true
   }
 }
 ```
 
-签名覆盖紧凑UTF-8 JSON数组`["speaker-bind-v1",device_uid,nonce,bound,binding_id,epoch,revision]`。设备证书须绑定UID且链至Web信任根；每台设备使用独立私钥且仅保存在设备；签名和证书为示例占位值。首次绑定或转交要求bound=false；本人重复配置可返回当前绑定快照。
+#### AT+UPLOADCFG=clear — 清除本机上传配置
 
-#### AT+BINDING? — 读取绑定
+可选本地清理；Server解绑撤销token不依赖此命令成功。
+
+```json
+{
+  "ok": true,
+  "error": 0
+}
+```
+
+#### AT+UPLOADAUTO — 开关自动上传
+
+`AT+UPLOADAUTO=on`或`AT+UPLOADAUTO=off`：
+
+```json
+{
+  "ok": true,
+  "error": 0
+}
+```
+
+#### AT+UPLOADAUTO? — 查询自动上传开关
 
 ```json
 {
   "ok": true,
   "data": {
-    "device_uid": "0011223344556677",
-    "bound": true,
-    "saved": true,
-    "binding_id": "00112233445566778899aabbccddeeff",
-    "epoch": 1,
-    "revision": 1
+    "enabled": true,
+    "paused": false,
+    "config_saved": true
   }
 }
 ```
 
-#### AT+BINDCFG — 保存绑定
-
-`AT+BINDCFG=host,port,device_id,token,binding_id,epoch,revision`
+#### AT+UPLOAD? — 查询上传是否正在执行
 
 ```json
 {
   "ok": true,
   "data": {
-    "device_uid": "0011223344556677",
-    "bound": true,
-    "saved": true,
-    "binding_id": "00112233445566778899aabbccddeeff",
-    "epoch": 1,
-    "revision": 1
+    "active": false,
+    "last_error": 0
   }
 }
 ```
 
-#### AT+BINDCLR — 清理绑定
+#### AT+UPLOADSTATE — 查询指定片段的上传结果
 
-`AT+BINDCLR=binding_id,revision`
+`AT+UPLOADSTATE=session:segment`，App用它核对旧录音是否已上传：
 
 ```json
 {
   "ok": true,
   "data": {
-    "bound": false,
-    "saved": true,
-    "cleared_binding_id": "00112233445566778899aabbccddeeff"
+    "session": "20261103100000",
+    "segment": 1,
+    "state": "uploaded",
+    "size": 1024,
+    "confirmed": 1024,
+    "state_valid": true,
+    "destination_match": true
   }
 }
 ```
@@ -403,7 +402,7 @@ nonce为随机32字节的十六进制；挑战保存在Web内存，绑定当前�
 
 ssid_hex为SSID的UTF-8字节十六进制，示例为Demo；Wi-Fi配置saved不代表已联网，NETCHECK成功也不代表上传端点一定可达。
 
-**绑定及持有证明均为目标固件能力。** 启用前需支持`binding_protocol_version=1`、`binding_proof_version=1`及设备证书签名；基础固件未具备这些能力时提示升级，不降级为仅凭UID绑定。设备身份凭证预置于设备，Web信任根随部署制品提供，无需OP逐台登记用户归属。
+saved只表示配置已保存，不代表联网或上传成功。App读取现有上传状态；Server不据此维护设备内部状态。
 
 Wi-Fi密码仅通过蓝牙写入，不发送Web。
 
@@ -411,4 +410,6 @@ Wi-Fi密码仅通过蓝牙写入，不发送Web。
 
 ![HTTP与蓝牙配置流程](docs/assets/diagrams/11-device-configuration.svg)
 
-浏览器先读设备UID及能力，再执行下图。操作前确保设备空闲；读回UID、binding_id、epoch、revision及saved与configuration匹配后确认，失败保持provisioning。有效绑定的本人重试复用配置；解绑后重新认领才更换绑定及代次。
+App操作设备前确认空闲；先关闭自动上传，写UPLOADCFG，再查询保存结果，成功后开启自动上传。切换账号时取消旧配置流程，不回写旧token；失败保留待配置提示，可用本人当前配置重试，无额外HTTP确认接口。
+
+解绑只撤销Server授权，本机UPLOADCFG清理为可选操作；转交前按第3.2节处理旧录音，再写入新用户的token。

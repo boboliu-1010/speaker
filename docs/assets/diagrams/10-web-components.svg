@@ -65,14 +65,14 @@
 <title>device_api</title>
 <path fill="#267bb9" stroke="#2366a0" d="M296.8,-239.36C296.8,-239.36 40,-239.36 40,-239.36 34,-239.36 28,-233.36 28,-227.36 28,-227.36 28,-184.64 28,-184.64 28,-178.64 34,-172.64 40,-172.64 40,-172.64 296.8,-172.64 296.8,-172.64 302.8,-172.64 308.8,-178.64 308.8,-184.64 308.8,-184.64 308.8,-227.36 308.8,-227.36 308.8,-233.36 302.8,-239.36 296.8,-239.36"/>
 <text xml:space="preserve" text-anchor="middle" x="168.4" y="-211.1" font-family="PingFang SC" font-size="17.00" fill="white">HTTP请求</text>
-<text xml:space="preserve" text-anchor="middle" x="168.4" y="-190.7" font-family="PingFang SC" font-size="17.00" fill="white">挑战 / 激活 / 配置 / 解绑</text>
+<text xml:space="preserve" text-anchor="middle" x="168.4" y="-190.7" font-family="PingFang SC" font-size="17.00" fill="white">绑定 / 配置 / 解绑</text>
 </g>
 <!-- device -->
 <g id="node5" class="node">
 <title>device</title>
 <path fill="#267bb9" stroke="#2366a0" d="M700.25,-239.36C700.25,-239.36 429.05,-239.36 429.05,-239.36 423.05,-239.36 417.05,-233.36 417.05,-227.36 417.05,-227.36 417.05,-184.64 417.05,-184.64 417.05,-178.64 423.05,-172.64 429.05,-172.64 429.05,-172.64 700.25,-172.64 700.25,-172.64 706.25,-172.64 712.25,-178.64 712.25,-184.64 712.25,-184.64 712.25,-227.36 712.25,-227.36 712.25,-233.36 706.25,-239.36 700.25,-239.36"/>
 <text xml:space="preserve" text-anchor="middle" x="564.65" y="-211.1" font-family="PingFang SC" font-size="17.00" fill="white">设备管理 §3.2</text>
-<text xml:space="preserve" text-anchor="middle" x="564.65" y="-190.7" font-family="PingFang SC" font-size="17.00" fill="white">会话 / 持有证明 / 当前归属</text>
+<text xml:space="preserve" text-anchor="middle" x="564.65" y="-190.7" font-family="PingFang SC" font-size="17.00" fill="white">会话 / 当前归属 / token</text>
 </g>
 <!-- device_api&#45;&gt;device -->
 <g id="edge3" class="edge">
@@ -86,7 +86,7 @@
 <title>project</title>
 <path fill="#267bb9" stroke="#2366a0" d="M1083.27,-239.36C1083.27,-239.36 862.47,-239.36 862.47,-239.36 856.47,-239.36 850.47,-233.36 850.47,-227.36 850.47,-227.36 850.47,-184.64 850.47,-184.64 850.47,-178.64 856.47,-172.64 862.47,-172.64 862.47,-172.64 1083.27,-172.64 1083.27,-172.64 1089.27,-172.64 1095.27,-178.64 1095.27,-184.64 1095.27,-184.64 1095.27,-227.36 1095.27,-227.36 1095.27,-233.36 1089.27,-239.36 1083.27,-239.36"/>
 <text xml:space="preserve" text-anchor="middle" x="972.87" y="-211.1" font-family="PingFang SC" font-size="17.00" fill="white">devices及授权文件</text>
-<text xml:space="preserve" text-anchor="middle" x="972.87" y="-190.7" font-family="PingFang SC" font-size="17.00" fill="white">自动建档 / 发布或撤销授权</text>
+<text xml:space="preserve" text-anchor="middle" x="972.87" y="-190.7" font-family="PingFang SC" font-size="17.00" fill="white">自动建档 / 更新token授权</text>
 </g>
 <!-- device&#45;&gt;project -->
 <g id="edge4" class="edge">
