@@ -1,0 +1,50 @@
+{
+  "repo_id": "FireRedTeam/FireRedASR2-AED",
+  "revision": "2304afed56eacfee6256dee5937ed22ffa0b64ec",
+  "gated": false,
+  "files": [
+    {
+      "path": ".gitattributes",
+      "bytes": 1519,
+      "sha256": "11ad7efa24975ee4b0c3c3a38ed18737f0658a5f75a0a96787b576a78a023361",
+      "remote_lfs_sha256": null
+    },
+    {
+      "path": "README.md",
+      "bytes": 3137,
+      "sha256": "53fedc7d3cb8ae87845862d4d5fb94ba32a4f320cbe46393c93b05dd3d1c2e22",
+      "remote_lfs_sha256": null
+    },
+    {
+      "path": "cmvn.ark",
+      "bytes": 1311,
+      "sha256": "6efba6105429d1630c05d818d956bfe4edfad37a04b3b27bb5a029b9adb37945",
+      "remote_lfs_sha256": null
+    },
+    {
+      "path": "config.yaml",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "remote_lfs_sha256": null
+    },
+    {
+      "path": "dict.txt",
+      "bytes": 79172,
+      "sha256": "1bc613de2112d257e61a349c3e72d1b1a9cf19c33d3ca954197ad2171e5ea07b",
+      "remote_lfs_sha256": null
+    },
+    {
+      "path": "model.pth.tar",
+      "bytes": 4731558506,
+      "sha256": "4677cbd30988d63ed3e777f6a42a1e5260a3865317f6e15e488bef40954f7054",
+      "remote_lfs_sha256": "4677cbd30988d63ed3e777f6a42a1e5260a3865317f6e15e488bef40954f7054"
+    },
+    {
+      "path": "train_bpe1000.model",
+      "bytes": 251707,
+      "sha256": "473bbc157cb4eade2059b30a3c877a1c29bd50cadbfbed869ae36eeade7fee07",
+      "remote_lfs_sha256": "473bbc157cb4eade2059b30a3c877a1c29bd50cadbfbed869ae36eeade7fee07"
+    }
+  ],
+  "total_bytes": 4731895352
+}

@@ -1,0 +1,11 @@
+{
+  "status": "artifact and measurement checks passed; no manual listening or sentence-boundary acceptance",
+  "input_samples": 11,
+  "audio_seconds": 780,
+  "pipelines": 3,
+  "complete_transcripts": 33,
+  "primary_cpcer_reference_characters": 1071,
+  "official_DER_crosschecks": 22,
+  "CPU": "rusage delta arithmetic and scope verified",
+  "all_input_hashes_match_previous_batch": true
+}

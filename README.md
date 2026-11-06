@@ -2,7 +2,7 @@
 
 ## ASR 模型实测
 
-[中文会议 CPU 模型对比与完整转写](docs/asr-benchmark/README.md) — 11 场、13 分钟，含质量与速度对比、选型建议和 62 份带时间及 A/B/C 的完整结果。
+[中文会议 CPU 模型对比与完整转写](docs/asr-benchmark/README.md) — 11 场、13 分钟，含质量与速度对比、选型建议和 73 份带时间及 A/B/C 的完整结果，新增 FireRed 和 CPU 占用对比。
 
 
 ## 1. 整体架构
