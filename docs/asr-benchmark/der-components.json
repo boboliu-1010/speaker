@@ -1,0 +1,41 @@
+{
+  "metric": "DER zero collar, overlap included; component units are speaker-seconds",
+  "groups": {
+    "primary": {
+      "nemotron3": {
+        "reference_speaker_seconds": 664.956819,
+        "miss_seconds": 70.37023999999998,
+        "false_alarm_seconds": 13.993420999999996,
+        "confusion_seconds": 5.7714579999999955,
+        "der_percent": 13.555033413380182,
+        "samples_scored": 10
+      },
+      "moss-0.9b": {
+        "reference_speaker_seconds": 664.956819,
+        "miss_seconds": 60.739614999999986,
+        "false_alarm_seconds": 12.972796000000052,
+        "confusion_seconds": 8.09636799999998,
+        "der_percent": 12.302870902659322,
+        "samples_scored": 10
+      }
+    },
+    "long": {
+      "nemotron3": {
+        "reference_speaker_seconds": 173.52999999999994,
+        "miss_seconds": 31.379999999999992,
+        "false_alarm_seconds": 1.4400000000000546,
+        "confusion_seconds": 0.22999999999998977,
+        "der_percent": 19.04569815017579,
+        "samples_scored": 1
+      },
+      "moss-0.9b": {
+        "reference_speaker_seconds": 173.52999999999997,
+        "miss_seconds": 11.799999999999969,
+        "false_alarm_seconds": 6.310000000000095,
+        "confusion_seconds": 0.3400000000000034,
+        "der_percent": 10.632167348585298,
+        "samples_scored": 1
+      }
+    }
+  }
+}

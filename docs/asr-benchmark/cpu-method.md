@@ -1,6 +1,6 @@
 # CPU 测量与本轮运行配置
 
-[返回总览](README.md#firered-追加测试和-cpu-占用)
+[返回总览](README.md#firered-追加测试和-cpu-占用) · [逐项数值释义](metrics.md)
 
 ## CPU 占用口径
 
@@ -43,3 +43,19 @@
 ## 证据文件
 
 [CPU 测量函数](evidence/cpu_usage.py) · [FireRed 运行环境](evidence/firered-requirements-lock.txt) · [产物校验结果](evidence/verification.json) · [权重版本与完整哈希](evidence/firered-checkpoint-verification.json)
+
+## 配置数值怎么读
+
+| 配置 | 含义 |
+| --- | --- |
+| 4 intraop / 1 interop、15 核 | 前者是 Torch 并行设置，后者是主机核数和整机折算分母；不保证四核满载。 |
+| batch=1、beam=3、nbest=1 | 每次一个输入，搜索保留三个候选，返回一个最佳候选；不是三位说话人，也不是只计算返回的候选。 |
+| smoothing=1.25 | logits 除以 1.25 后再求概率，是解码参数，不是性能倍数。 |
+| length penalty=0.6 | 候选长度归一化指数，将候选累积分数除以 `((5 + 长度)/6)^0.6`。 |
+| eos penalty=1.0 | 结束符分数乘数；1.0 为不额外缩放，不表示结束概率 100%。 |
+| 30 秒、2/6 块 | FireRed/Qwen 对每个 60 秒主样本切 2 块，对 180 秒补测切 6 块；不代表一句话长度。 |
+| 2048/4096 token | MOSS 短片/长片的输出长度限制，含其时间和说话人控制标记；不能当作汉字数。 |
+| FP32、GiB、参数和文件字节 | 分别表示计算精度、驻留内存单位、参数元素数量和磁盘文件大小；是不同维度。详见[指标说明](metrics.md#内存-参数与数值精度)。 |
+| 版本号、revision、SHA-256 | 定位软件与文件的标识，不是质量或性能得分。 |
+
+[CSV 和 JSON 全部数值字段](metrics.md#csv-和-json-字段对照)解释逐行阶段记录、六条分组汇总、检查次数和历史保护日志的不同统计范围。
