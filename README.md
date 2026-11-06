@@ -1,5 +1,10 @@
 # ReSpeaker Clip · 架构与模块设计
 
+## ASR 模型实测
+
+[中文会议 CPU 模型对比与完整转写](docs/asr-benchmark/README.md) — 11 场、13 分钟，含质量与速度对比、选型建议和 62 份带时间及 A/B/C 的完整结果。
+
+
 ## 1. 整体架构
 
 ![整体架构](docs/assets/diagrams/01-system-overview.svg)

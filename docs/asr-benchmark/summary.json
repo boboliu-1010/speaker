@@ -1,0 +1,242 @@
+{
+  "date": "2026-11-06",
+  "samples": 10,
+  "audio_seconds": 600,
+  "machine": "Apple M5 Pro, 24 GiB; CPU only, 4 intraop/1 interop; FP32 except Qwen1.7 BF16",
+  "asr": [
+    {
+      "model": "paraformer",
+      "dtype": "float32",
+      "asr_seconds": 29.62848962575663,
+      "alignment_seconds": 4.984177625970915,
+      "diarization_seconds": 3.7960000000000003,
+      "pipeline_seconds": 38.40866725172754,
+      "pipeline_realtime_multiple": 15.621474082077484,
+      "asr_realtime_multiple": 20.250779151374903,
+      "peak_asr_process_rss_gib": 3.5838775634765625,
+      "generation_limit_chunks": 0,
+      "alignment_failed_chunks": 0,
+      "parameters": 220084533,
+      "cpcer_percent": 17.553688141923438,
+      "cpcer_details": {
+        "edit_errors": 188,
+        "reference_characters": 1071,
+        "cpcer_percent": 17.553688141923438,
+        "samples_scored": 5
+      }
+    },
+    {
+      "model": "sensevoice",
+      "dtype": "float32",
+      "asr_seconds": 27.633792793843895,
+      "alignment_seconds": 5.0044740420999005,
+      "diarization_seconds": 3.7960000000000003,
+      "pipeline_seconds": 36.434266835943795,
+      "pipeline_realtime_multiple": 16.468013551684184,
+      "asr_realtime_multiple": 21.712546101657992,
+      "peak_asr_process_rss_gib": 3.6361083984375,
+      "generation_limit_chunks": 0,
+      "alignment_failed_chunks": 0,
+      "parameters": 233999167,
+      "cpcer_percent": 15.406162464985995,
+      "cpcer_details": {
+        "edit_errors": 165,
+        "reference_characters": 1071,
+        "cpcer_percent": 15.406162464985995,
+        "samples_scored": 5
+      }
+    },
+    {
+      "model": "qwen06",
+      "dtype": "float32",
+      "asr_seconds": 71.48377891711425,
+      "alignment_seconds": 4.949748249724507,
+      "diarization_seconds": 3.7960000000000003,
+      "pipeline_seconds": 80.22952716683876,
+      "pipeline_realtime_multiple": 7.478543389047888,
+      "asr_realtime_multiple": 8.393512613479801,
+      "peak_asr_process_rss_gib": 4.8560333251953125,
+      "generation_limit_chunks": 0,
+      "alignment_failed_chunks": 0,
+      "parameters": 782426112,
+      "cpcer_percent": 10.644257703081232,
+      "cpcer_details": {
+        "edit_errors": 114,
+        "reference_characters": 1071,
+        "cpcer_percent": 10.644257703081232,
+        "samples_scored": 5
+      }
+    },
+    {
+      "model": "fun-nano",
+      "dtype": "float32",
+      "asr_seconds": 91.83975499914959,
+      "alignment_seconds": 5.037077330984175,
+      "diarization_seconds": 3.7960000000000003,
+      "pipeline_seconds": 100.67283233013377,
+      "pipeline_realtime_multiple": 5.9598998668522185,
+      "asr_realtime_multiple": 6.533118473645273,
+      "peak_asr_process_rss_gib": 5.1150970458984375,
+      "generation_limit_chunks": 2,
+      "alignment_failed_chunks": 2,
+      "parameters": 829791840,
+      "cpcer_percent": 26.143790849673202,
+      "cpcer_details": {
+        "edit_errors": 280,
+        "reference_characters": 1071,
+        "cpcer_percent": 26.143790849673202,
+        "samples_scored": 5
+      }
+    },
+    {
+      "model": "qwen17-bf16",
+      "dtype": "bfloat16",
+      "asr_seconds": 482.0333895398071,
+      "alignment_seconds": 4.624272790038958,
+      "diarization_seconds": 3.7960000000000003,
+      "pipeline_seconds": 490.45366232984605,
+      "pipeline_realtime_multiple": 1.2233571611021643,
+      "asr_realtime_multiple": 1.2447270521505047,
+      "peak_asr_process_rss_gib": 5.0424957275390625,
+      "generation_limit_chunks": 1,
+      "alignment_failed_chunks": 0,
+      "parameters": 2038052480,
+      "cpcer_percent": 11.11111111111111,
+      "cpcer_details": {
+        "edit_errors": 119,
+        "reference_characters": 1071,
+        "cpcer_percent": 11.11111111111111,
+        "samples_scored": 5
+      }
+    },
+    {
+      "model": "moss",
+      "dtype": "float32",
+      "asr_seconds": 220.222,
+      "alignment_seconds": 24.430092248832807,
+      "diarization_seconds": 0,
+      "pipeline_seconds": 244.65209224883282,
+      "pipeline_realtime_multiple": 2.4524621657015993,
+      "asr_realtime_multiple": 2.7245234354424173,
+      "peak_asr_process_rss_gib": 4.346484375,
+      "generation_limit_chunks": 0,
+      "alignment_failed_chunks": 0,
+      "parameters": 908513280,
+      "cpcer_percent": 8.96358543417367,
+      "cpcer_details": {
+        "edit_errors": 96,
+        "reference_characters": 1071,
+        "cpcer_percent": 8.96358543417367,
+        "samples_scored": 5
+      }
+    }
+  ],
+  "diarization": [
+    {
+      "model": "nemotron3",
+      "der_zero": 13.555033413380182,
+      "der_025": 8.917980823562784,
+      "aishell_der_zero": 6.151754563777391,
+      "ali_der_zero": 18.55753238244039,
+      "inference_seconds": 3.7960000000000003,
+      "task": "diarization only"
+    },
+    {
+      "model": "sortformer-v1",
+      "der_zero": 27.299613570847523,
+      "der_025": 21.802901771729108,
+      "aishell_der_zero": 8.09312278743786,
+      "ali_der_zero": 40.277707776825764,
+      "inference_seconds": 6.681,
+      "task": "diarization only"
+    },
+    {
+      "model": "sortformer-v2.1",
+      "der_zero": 14.302495031636033,
+      "der_025": 9.449527500389118,
+      "aishell_der_zero": 6.905212073840559,
+      "ali_der_zero": 19.3009424928179,
+      "inference_seconds": 12.385,
+      "task": "diarization only"
+    },
+    {
+      "model": "diarizen-large-v2",
+      "der_zero": 13.826995433819285,
+      "der_025": 9.246938235155955,
+      "aishell_der_zero": 10.067080343785243,
+      "ali_der_zero": 16.367622599667346,
+      "inference_seconds": 231.418,
+      "task": "diarization only"
+    },
+    {
+      "model": "moss-0.9b",
+      "der_zero": 12.302870902659322,
+      "der_025": 7.166600149864623,
+      "aishell_der_zero": 10.139890187926799,
+      "ali_der_zero": 13.764427196209864,
+      "inference_seconds": 220.222,
+      "task": "joint ASR+diarization"
+    }
+  ],
+  "missing": {},
+  "limitations": [
+    "10 fixed 60-second multi-speaker stress excerpts; not random corpus-wide statistics",
+    "ASR baselines fixed 30-second chunks, MOSS native full60s; model-specific interfaces documented",
+    "cpCER is ASR+alignment+speaker assignment joint error on AISHELL-4 safe UEM only; not standalone ASR CER",
+    "Native speaker scores independent from forced alignment; overlap included",
+    "Sentence display follows generated punctuation, not human sentence-boundary validation",
+    "No human listening or private meeting audio in this run"
+  ],
+  "unavailable_configurations": {
+    "qwen17-float32": {
+      "exit_code": -15,
+      "aborted_reason": "system swap growth over 2 GiB",
+      "wall_seconds": 6.785590749932453,
+      "sampled_peak_rss_mb": 2103.34375,
+      "rss_limit_mb": 14336,
+      "swap_growth_limit_mb": 2048,
+      "swap_before_mb": 10079.81,
+      "swap_after_mb": 14097.5
+    }
+  },
+  "long_supplement": {
+    "status": "complete",
+    "sample_id": "alimeeting_R8002_M8003_MS803_long180",
+    "meetings": 1,
+    "audio_seconds": 180,
+    "source_start": 60,
+    "source_end": 240,
+    "human_speakers": 4,
+    "text_reference_available": false,
+    "cpCER_not_computed": true,
+    "pipelines": [
+      {
+        "model": "moss",
+        "audio_seconds": 180,
+        "asr_seconds": 123.791,
+        "alignment_seconds": 9.415270667057484,
+        "diarization_seconds": 0,
+        "pipeline_seconds": 133.20627066705748,
+        "realtime_multiple": 1.351287736670454,
+        "alignment_failures": [],
+        "generation_hit_limit": false
+      },
+      {
+        "model": "qwen06",
+        "audio_seconds": 180,
+        "asr_seconds": 20.42836208397057,
+        "alignment_seconds": 1.4747714169789106,
+        "diarization_seconds": 1.13,
+        "pipeline_seconds": 23.03313350094948,
+        "realtime_multiple": 7.814829015452022,
+        "alignment_failures": [],
+        "generation_hit_limit": false
+      }
+    ],
+    "diarization_der_zero": {
+      "nemotron3": 19.04569815017579,
+      "moss-0.9b": 10.632167348585298
+    },
+    "excluded_from_primary_ranking": true
+  }
+}
